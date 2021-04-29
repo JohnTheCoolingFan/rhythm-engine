@@ -1,8 +1,7 @@
 use lyon_geom::CubicBezierSegment;
 use lyon_geom::Point;
 
-use crate::traits::from_end::FromEnd;
-use crate::traits::seekable::Seekable;
+use crate::utils::from_end::FromEnd;
 
 pub struct FreeAnchor(Vec<Point<f32>>, f32, Vec<Point<f32>>, Vec<f32>);
 struct CSplineCache {
@@ -158,25 +157,3 @@ impl ComplexSpline {
         self.depth_0_search(offset)
     }
 }
-
-/*
-impl Seekable<Point<f32>> for ComplexSpline {
-    fn start(&self, offset: f32) -> Point<f32> {
-        let seg_num = &self.cache.seg_num;
-        let point_num = &self.cache.point_num;
-
-        while self.anchor_offsets[self.cache.seg_num] < offset 
-            && self.cache.seg_num < self.anchor_offsets.len() {
-            self.cache.seg_num += 1;
-        }
-        self.cache.seg_num -= if 0 < self.cache.seg_num { 1 } else { 0 };
-
-        let seg_rel_s = (offset - self.anchor_offsets[self.cache.seg_num])
-            / (self.anchor_offsets[self.cache.seg_num + 1] - self.anchor_offsets[self.cache.seg_num]);
-
-        while self.segment_approximations[self.cache.seg_num][self.cache.point_num] {
-
-        }
-    }
-}
-*/

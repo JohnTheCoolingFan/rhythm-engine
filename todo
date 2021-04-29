@@ -13,12 +13,12 @@ Core:
 -Seperate play objects into constituents and make it composable
 
 1. 	Polygon
-2.    CSplines
+2.    -CSplines
 3.      |Rot|scale|
-2.    Fill colour
+2.    -Fill colour
 3.      |R|G|B|A|
-2.    Hit or Avoid
-2.    Friction/Grab
+2.    -Hit or Avoid
+2.    -Friction/Grab
 3.      |Rot|Dir|
-2.    |Rot|Scale|
+2.    -|Rot|Scale|
 
