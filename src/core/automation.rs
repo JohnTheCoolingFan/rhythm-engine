@@ -28,9 +28,12 @@ impl Automation
     }
 
     fn lerp(&self, index: usize/*starting point*/, amount: f32 /*0.0 to 1.0*/) {
-        if self.points.len() <= index { self.points[FromEnd(0)].y() }
-        else {
-
+        let span = self.upper_bound - self.lower_bound;
+        if index < self.points.len() - 1 {
+            self.points[index].lerp(self.points[index + 1], amount) * span
+        }
+        else { 
+            self.points[FromEnd(0)].y() * span
         }
     }
 
