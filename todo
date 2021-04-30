@@ -14,11 +14,11 @@ Core:
 
 1. 	Polygon
 2.    -CSplines
-3.      |Rot|scale|
+3.       |Rot|scale|
 2.    -Fill colour
-3.      |R|G|B|A|
+3.       |R|G|B|A|
 2.    -Hit or Avoid
 2.    -Friction/Grab
-3.      |Rot|Dir|
+3.       |Rot|Dir|
 2.    -|Rot|Scale|
 

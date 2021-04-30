@@ -9,8 +9,11 @@ pub struct AutomationSeekCache {
 pub struct Automation {
     upper_bound: f32,
     lower_bound: f32,
+
     dynamic_bound: bool,
+    
     points: Vec<Vec2>,
+    flattened: Vec<Vec<Vec2>>,
     
     seek_cahce: AutomationSeekCache
 }
@@ -27,21 +30,30 @@ impl Automation
         self.dynamic_bound.then(|| self.lower_bound = v);
     }
 
-    fn lerp(&self, index: usize/*starting point*/, amount: f32 /*0.0 to 1.0*/) {
+    fn lerp(&self, index: usize/*starting point*/, offset: f32 ) {
         let span = self.upper_bound - self.lower_bound;
-        if index < self.points.len() - 1 {
-            self.points[index].lerp(self.points[index + 1], amount) * span
-        }
-        else { 
-            self.points[FromEnd(0)].y() * span
-        }
+        let points = &self.points;
     }
 
     pub fn start(&mut self, offset: f32) {
-        let mut i = &self.seek_cahce.index;
         for i in (0..self.points.len()).step_by(2) {
             if offset < self.points[i].x() {
-
+                self.seek_cahce.index = i;
+                self.lerp(i, offset)
             }
+        }
+        self.seek_cahce.index = self.points.len() - 1;
+        self.lerp(self.points.len() - 1, offset)
+    }
+
+    pub fn advance(&mut self, offset: f32) {
+        for i in (self.seek_cahce.index..self.points.len()).step_by(2) {
+            if offset < self.points[i].x() {
+                self.seek_cahce.index = i;
+                self.lerp(i, offset)
+            }
+        }
+        self.seek_cahce.index = self.points.len() - 1;
+        self.lerp(self.points.len() - 1, offset)
     }
 }
