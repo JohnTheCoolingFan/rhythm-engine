@@ -6,7 +6,7 @@ use crate::utils::from_end::FromEnd;
 pub struct FreeAnchor(Vec<Point<f32>>, f32, Vec<Point<f32>>, Vec<f32>);
 struct CSplineCache {
     seg_num: usize,
-    point_num: usize
+    point_num: usize,
 }
 
 pub struct ComplexSpline {
@@ -25,7 +25,7 @@ pub struct ComplexSpline {
     segment_approximations: Vec<Vec<Point<f32>>>,
     approximation_displacements: Vec<Vec<f32>>,
 
-    cache: CSplineCache
+    cache: CSplineCache,
 }
 
 impl ComplexSpline {

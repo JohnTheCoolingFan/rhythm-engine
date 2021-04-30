@@ -1,36 +1,35 @@
-use glam::Vec2;
-use duplicate::duplicate;
 use crate::utils::from_end::FromEnd;
-
+use crate::core::curves::*;
+use glam::Vec2;
 pub struct AutomationSeekCache {
-    index: usize
+    index: usize,
 }
 
 pub struct Automation {
     upper_bound: f32,
     lower_bound: f32,
-
     dynamic_bound: bool,
-    
-    points: Vec<Vec2>,
-    flattened: Vec<Vec<Vec2>>,
-    
-    seek_cahce: AutomationSeekCache
+    curve: CurveChain,
+
+    seek_cahce: AutomationSeekCache,
 }
 
-impl Automation
-{
-    pub fn get_upper_bound(&self) -> f32 { self.upper_bound }
-    pub fn get_lower_bound(&self) -> f32 { self.lower_bound }
-
-    pub fn set_upper_bound(&mut self, v: f32) { 
-        self.dynamic_bound.then(|| self.upper_bound = v);
+impl Automation {
+    pub fn get_upper_bound(&self) -> f32 {
+        self.upper_bound
     }
-    pub fn set_lower_bound(&mut self, v: f32) { 
-        self.dynamic_bound.then(|| self.lower_bound = v);
+    pub fn get_lower_bound(&self) -> f32 {
+        self.lower_bound
     }
 
-    fn lerp(&self, index: usize/*starting point*/, offset: f32 ) {
+    pub fn set_upper_bound(&mut self, v: f32) {
+        if self.dynamic_bound { self.upper_bound = v; }
+    }
+    pub fn set_lower_bound(&mut self, v: f32) {
+        if self.dynamic_bound { self.lower_bound = v; }
+    }
+
+    fn lerp(&self, index: usize /*starting point*/, offset: f32) {
         let span = self.upper_bound - self.lower_bound;
         let points = &self.points;
     }

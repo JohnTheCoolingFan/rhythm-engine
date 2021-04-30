@@ -16,3 +16,5 @@ ggez = "0.5"
 lyon_geom = "0.17.0"
 cute = "0.3.0"
 duplicate = "0.2.9"
+undo = "0.46.2"
+

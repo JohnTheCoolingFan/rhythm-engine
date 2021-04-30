@@ -1,7 +1,7 @@
 use glam::Vec2;
 
-use crate::core::complex_spline::ComplexSpline;
 use crate::core::automation;
+use crate::core::complex_spline::ComplexSpline;
 
 pub enum PolyEntityActiveMode {
     Hit(f32, f32),
@@ -12,7 +12,7 @@ pub enum PolyEntityActiveMode {
 pub struct PolyEntity {
     offsets: [f32; 2],
     hull: Vec<Vec2>,
-    
+
     rotation: f32,
     scale: f32,
 

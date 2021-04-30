@@ -1,32 +1,29 @@
 use std::usize;
 
-use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
 use crate::utils::from_end::FromEnd;
+use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
 
-pub enum AnchorCtrl {
+pub enum CtrlVariant {
     Quadratic(Point<f32>),
     CubicEase(Point<f32>),
-    Cubic(Point<f32>, Point<f32>)
+    Cubic(Point<f32>, Point<f32>),
 }
 
-struct Anchor {
+pub struct Segment {
     start: Point<f32>,
-    ctrls: AnchorCtrl
+    ctrls: CtrlVariant,
 }
 
-pub enum Sampler {
-    S,
-    X
+pub enum SampleDescriptor {
+    S, 
+    X,
 }
 
-pub struct Displacement(f32);
-pub struct VectorX(f32);
-
-struct CurveChain {
-    segment_points: Vec<Anchor>,
-    point_samples: Vec<Vec<Point<f32>>>,
-    value_samples: Vec<Vec<f32>>,
-    val_sampler: Sampler
+pub struct CurveChain {
+    segments: Vec<Segment>,
+    segment_samples: Vec<Vec<Point<f32>>>,
+    descriptor_values: Vec<Vec<f32>>,
+    descriptor: SampleDescriptor,
 }
 
 impl CurveChain {
@@ -34,53 +31,115 @@ impl CurveChain {
         (p0.to_vector() - p1.to_vector()).length()
     }
 
-    fn sample_segment(&mut self, index: usize) {
-        assert!(index < self.segment_points.len() - 1);
+    fn resample_segment(&mut self, index: usize) {
+        assert!(index < self.segments.len() - 1);
 
-        let seg_points = &self.segment_points;
+        let segments = &self.segments;
 
-        let (p0, p1, p2, op3) = match seg_points[index].ctrls {
-            AnchorCtrl::Quadratic(P1) => {
-                (seg_points[index].start, P1, seg_points[index + 1].start, None)
-            },
-            AnchorCtrl::Cubic(P1, P2) => {
-                let v1 = P1.to_vector() + seg_points[index].start.to_vector();
-                let v2 = P2.to_vector() + seg_points[index + 1].start.to_vector();
-                (seg_points[index].start, Point::new(v1.x, v1.y), Point::new(v2.x, v2.y), Some(seg_points[index + 1].start))
+        let (p0, p1, p2, op3) = match segments[index].ctrls {
+            CtrlVariant::Quadratic(P1) => (
+                segments[index].start,
+                P1,
+                segments[index + 1].start,
+                None,
+            ),
+            CtrlVariant::Cubic(P1, P2) => {
+                let v1 = P1.to_vector() + segments[index].start.to_vector();
+                let v2 = P2.to_vector() + segments[index + 1].start.to_vector();
+                (
+                    segments[index].start,
+                    Point::new(v1.x, v1.y),
+                    Point::new(v2.x, v2.y),
+                    Some(segments[index + 1].start),
+                )
             }
-            AnchorCtrl::CubicEase(PX) => {
-                let p = seg_points[index + 1].start - seg_points[index].start; 
-                let p12 = Point::new(PX.x * p.x, PX.y * p.y); 
-                (seg_points[index].start, p12, p12, Some(seg_points[index + 1].start))
+            CtrlVariant::CubicEase(PX) => {
+                let p = segments[index + 1].start - segments[index].start;
+                let p12 = Point::new(PX.x * p.x, PX.y * p.y);
+                (
+                    segments[index].start,
+                    p12,
+                    p12,
+                    Some(segments[index + 1].start),
+                )
             }
         };
 
-        let points = &mut self.point_samples[index];
-        let values = &mut self.value_samples[index];
-        
-        points.clear();
-        values.clear();
-        points.push(self.segment_points[index].start);
-        values.push(0.0);
+        let sample = &mut self.segment_samples[index];
+        let descriptor = &mut self.descriptor_values[index];
 
-        let sampler = &self.val_sampler; //have to do this to beat borrow checker
+        sample.clear();
+        descriptor.clear();
+        sample.push(self.segments[index].start);
+        descriptor.push(0.0);
+
+        let desc = &self.descriptor; //have to do this to beat borrow checker
 
         let mut callback = |p: Point<f32>| {
-            let val = match sampler { 
-                Sampler::S => (p.to_vector() - points[FromEnd(0)].to_vector()).length() + values[FromEnd(0)],
-                Sampler::X => p.x - seg_points[index].start.x
+            let d = match desc {
+                SampleDescriptor::S => {
+                    (p.to_vector() - sample[FromEnd(0)].to_vector()).length() + descriptor[FromEnd(0)]
+                }
+                SampleDescriptor::X => p.x - segments[index].start.x,
             };
-            values.push(val);
-            points.push(p);
+            descriptor.push(d);
+            sample.push(p);
         };
 
         match op3 {
             Some(p3) => {
-                CubicBezierSegment::<f32> { from: p0, ctrl1: p1, ctrl2: p2, to: p3 }.for_each_flattened(0.05, &mut callback);
-            },
-            None => {
-                QuadraticBezierSegment::<f32> { from: p0, ctrl: p1, to: p2 }.for_each_flattened(0.05, &mut callback);
+                CubicBezierSegment::<f32> {
+                    from: p0,
+                    ctrl1: p1,
+                    ctrl2: p2,
+                    to: p3,
+                }
+                .for_each_flattened(0.05, &mut callback);
             }
+            None => {
+                QuadraticBezierSegment::<f32> {
+                    from: p0,
+                    ctrl: p1,
+                    to: p2,
+                }
+                .for_each_flattened(0.05, &mut callback);
+            }
+        }
+    }
+
+    pub fn push(&mut self, segment: Segment) {
+        self.segments.push(segment);
+        self.segment_samples.push(vec![]);
+    }
+
+    pub fn pop(&mut self) {
+        self.segments.pop();
+        self.segment_samples.pop();
+    }
+
+    pub fn insert(&mut self, index: usize, segment: Segment) {
+        assert!(index <= self.segments.len());
+        if index == self.segments.len() {
+            self.push_segment(segment);
+        }
+        else {
+            self.segments.insert(index, segment);
+            self.segment_samples.insert(index, segment);
+        }
+        self.resample_segment(index - 1)
+        self.resample_segment(index);
+    }
+
+    pub fn remove(&mut self, index: usize) {
+        assert!(1 < index && index < self.segments.len());
+
+        if index == self.segments.len() - 1 {
+            self.pop();
+        }
+        else {
+            self.segments.remove(index);
+            self.segment_samples.remove(index);
+            self.resample_segment(index - 1);
         }
     }
 }
