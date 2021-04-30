@@ -63,12 +63,15 @@ impl CurveChain {
         points.push(self.segment_points[index].start);
         values.push(0.0);
 
+        let sampler = &self.val_sampler; //have to do this to beat borrow checker
+
         let mut callback = |p: Point<f32>| {
-            let val = match self.val_sampler { 
+            let val = match sampler { 
                 Sampler::S => (p.to_vector() - points[FromEnd(0)].to_vector()).length() + values[FromEnd(0)],
                 Sampler::X => p.x - seg_points[index].start.x
             };
             values.push(val);
+            points.push(p);
         };
 
         match op3 {
