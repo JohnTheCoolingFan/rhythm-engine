@@ -20,8 +20,8 @@ pub struct Automation {
 
 impl Automation
 {
-    pub fn get_upper_bound(&self) { self.upper_bound }
-    pub fn get_lower_bound(&self) { self.lower_bound }
+    pub fn get_upper_bound(&self) -> f32 { self.upper_bound }
+    pub fn get_lower_bound(&self) -> f32 { self.lower_bound }
 
     pub fn set_upper_bound(&mut self, v: f32) { 
         self.dynamic_bound.then(|| self.upper_bound = v);
@@ -37,7 +37,7 @@ impl Automation
 
     pub fn start(&mut self, offset: f32) {
         for i in (0..self.points.len()).step_by(2) {
-            if offset < self.points[i].x() {
+            if offset < self.points[i].x {
                 self.seek_cahce.index = i;
                 self.lerp(i, offset)
             }
@@ -48,7 +48,7 @@ impl Automation
 
     pub fn advance(&mut self, offset: f32) {
         for i in (self.seek_cahce.index..self.points.len()).step_by(2) {
-            if offset < self.points[i].x() {
+            if offset < self.points[i].x {
                 self.seek_cahce.index = i;
                 self.lerp(i, offset)
             }
