@@ -110,6 +110,7 @@ impl CurveChain {
     pub fn push(&mut self, segment: Segment) {
         self.segments.push(segment);
         self.segment_samples.push(vec![]);
+        self.resample_segment(self.segments.len() - 2);
     }
 
     pub fn pop(&mut self) {
@@ -120,14 +121,13 @@ impl CurveChain {
     pub fn insert(&mut self, index: usize, segment: Segment) {
         assert!(index <= self.segments.len());
         if index == self.segments.len() {
-            self.push_segment(segment);
+            self.push(segment);
         }
         else {
             self.segments.insert(index, segment);
-            self.segment_samples.insert(index, segment);
-        }
-        self.resample_segment(index - 1)
-        self.resample_segment(index);
+            self.resample_segment(index - 1);
+            self.resample_segment(index);
+        } 
     }
 
     pub fn remove(&mut self, index: usize) {

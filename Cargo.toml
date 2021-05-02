@@ -12,7 +12,7 @@ libm = ["glam/libm"]
 
 [dependencies]
 glam = { version = "0.13.0", default-features = false, features = ["mint"] }
-ggez = "0.5"
+ggez = { version = "0.6.0-rc1"}
 lyon_geom = "0.17.0"
 cute = "0.3.0"
 duplicate = "0.2.9"
