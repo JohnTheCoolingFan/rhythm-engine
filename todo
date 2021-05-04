@@ -5,11 +5,8 @@ Editor:
 
 *FFT audio visualizer
 
-
-
-
 Core:
--Fixed range automation clips *****
+-Fixed range automation clips
 -Seperate play objects into constituents and make it composable
 
 1. 	Polygon
