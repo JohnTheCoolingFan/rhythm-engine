@@ -37,15 +37,15 @@ impl CurveChain {
         let segments = &self.segments;
 
         let (p0, p1, p2, op3) = match segments[index].ctrls {
-            CtrlVariant::Quadratic(P1) => (
+            CtrlVariant::Quadratic(a1) => (
                 segments[index].start,
-                P1,
+                a1,
                 segments[index + 1].start,
                 None,
             ),
-            CtrlVariant::Cubic(P1, P2) => {
-                let v1 = P1.to_vector() + segments[index].start.to_vector();
-                let v2 = P2.to_vector() + segments[index + 1].start.to_vector();
+            CtrlVariant::Cubic(a1, a2) => {
+                let v1 = a1.to_vector() + segments[index].start.to_vector();
+                let v2 = a2.to_vector() + segments[index + 1].start.to_vector();
                 (
                     segments[index].start,
                     Point::new(v1.x, v1.y),
@@ -53,9 +53,9 @@ impl CurveChain {
                     Some(segments[index + 1].start),
                 )
             }
-            CtrlVariant::CubicEase(PX) => {
+            CtrlVariant::CubicEase(aX) => {
                 let p = segments[index + 1].start - segments[index].start;
-                let p12 = Point::new(PX.x * p.x, PX.y * p.y);
+                let p12 = Point::new(aX.x * p.x, aX.y * p.y);
                 (
                     segments[index].start,
                     p12,

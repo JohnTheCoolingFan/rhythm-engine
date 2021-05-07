@@ -28,4 +28,6 @@ impl Automation {
     pub fn set_lower_bound(&mut self, v: f32) {
         if self.dynamic_bound { self.lower_bound = v; }
     }
+
+    
 }
