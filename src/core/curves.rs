@@ -1,4 +1,4 @@
-use std::usize;
+use std::{marker::PhantomData, usize};
 
 use crate::utils::from_end::FromEnd;
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
@@ -14,21 +14,23 @@ pub struct Segment {
     ctrls: CtrlVariant,
 }
 
-pub enum SampleDescriptor {
-    S, 
-    X,
-}
 
 pub struct CurveChain {
     segments: Vec<Segment>,
     segment_samples: Vec<Vec<Point<f32>>>,
-    descriptor_values: Vec<Vec<f32>>,
-    descriptor: SampleDescriptor,
+    segment_descriptions: Vec<Vec<f32>>,
+    descriptor: fn(&CurveChain, usize, &Point<f32>) -> f32
 }
 
 impl CurveChain {
-    fn distance(p0: &Point<f32>, p1: &Point<f32>) -> f32 {
-        (p0.to_vector() - p1.to_vector()).length()
+    fn by_s(curve: &CurveChain, index: usize, point: &Point<f32>) -> f32 {
+        let samples = &curve.segment_samples[index];
+        let descriptions = &curve.segment_descriptions[index];
+        (point.to_vector() - samples[FromEnd(0)].to_vector()).length() + descriptions[FromEnd(0)]
+    }
+
+    fn by_x(curve: &CurveChain, index: usize, point: &Point<f32>) -> f32 {
+        point.x - curve.segments[index].start.x
     }
 
     fn resample_segment(&mut self, index: usize) {
@@ -52,7 +54,7 @@ impl CurveChain {
                     Point::new(v2.x, v2.y),
                     Some(segments[index + 1].start),
                 )
-            }
+            },
             CtrlVariant::CubicEase(aX) => {
                 let p = segments[index + 1].start - segments[index].start;
                 let p12 = Point::new(aX.x * p.x, aX.y * p.y);
@@ -65,25 +67,15 @@ impl CurveChain {
             }
         };
 
-        let sample = &mut self.segment_samples[index];
-        let descriptor = &mut self.descriptor_values[index];
-
-        sample.clear();
-        descriptor.clear();
-        sample.push(self.segments[index].start);
-        descriptor.push(0.0);
-
-        let desc = &self.descriptor; //have to do this to beat borrow checker
+        self.segment_samples[index].clear();
+        self.segment_descriptions[index].clear();
+        self.segment_samples[index].push(self.segments[index].start);
+        self.segment_descriptions[index].push(0.0);
 
         let mut callback = |p: Point<f32>| {
-            let d = match desc {
-                SampleDescriptor::S => {
-                    (p.to_vector() - sample[FromEnd(0)].to_vector()).length() + descriptor[FromEnd(0)]
-                }
-                SampleDescriptor::X => p.x - segments[index].start.x,
-            };
-            descriptor.push(d);
-            sample.push(p);
+            let d = (self.descriptor)(self, index, &p);
+            self.segment_samples[index].push(p);
+            self.segment_descriptions[index].push(d);
         };
 
         match op3 {
