@@ -1,71 +1,47 @@
-use std::{marker::PhantomData, usize};
-
 use crate::utils::from_end::FromEnd;
+use glam::f32::Mat3;
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
 
 pub enum CtrlVariant {
+    Linear,
     Quadratic(Point<f32>),
-    CubicEase(Point<f32>),
+    ThreePointCircle(Point<f32>),
     Cubic(Point<f32>, Point<f32>),
 }
 
 pub struct Segment {
     start: Point<f32>,
     ctrls: CtrlVariant,
+    tolerence: f32,
 }
-
 
 pub struct CurveChain {
     segments: Vec<Segment>,
     segment_samples: Vec<Vec<Point<f32>>>,
     segment_descriptions: Vec<Vec<f32>>,
-    descriptor: fn(&CurveChain, usize, &Point<f32>) -> f32
+    descriptor: fn(&CurveChain, usize, &Point<f32>) -> f32,
 }
 
 impl CurveChain {
-    fn by_s(curve: &CurveChain, index: usize, point: &Point<f32>) -> f32 {
+    pub fn new() -> Self {}
+
+    pub fn displacement_desctiptor(curve: &CurveChain, index: usize, point: &Point<f32>) -> f32 {
+        debug_assert!(index < curve.segment_samples.len());
         let samples = &curve.segment_samples[index];
         let descriptions = &curve.segment_descriptions[index];
         (point.to_vector() - samples[FromEnd(0)].to_vector()).length() + descriptions[FromEnd(0)]
     }
 
-    fn by_x(curve: &CurveChain, index: usize, point: &Point<f32>) -> f32 {
-        point.x - curve.segments[index].start.x
+    pub fn monotonic_x_descriptor(curve: &CurveChain, index: usize, point: &Point<f32>) -> f32 {
+        debug_assert!(index < curve.segment_samples.len());
+        let x = point.x - curve.segments[index].start.x;
+        debug_assert!(curve.segment_descriptions[index][FromEnd(0)] <= x);
+        return x;
     }
 
     fn resample_segment(&mut self, index: usize) {
-        assert!(index < self.segments.len() - 1);
-
-        let segments = &self.segments;
-
-        let (p0, p1, p2, op3) = match segments[index].ctrls {
-            CtrlVariant::Quadratic(a1) => (
-                segments[index].start,
-                a1,
-                segments[index + 1].start,
-                None,
-            ),
-            CtrlVariant::Cubic(a1, a2) => {
-                let v1 = a1.to_vector() + segments[index].start.to_vector();
-                let v2 = a2.to_vector() + segments[index + 1].start.to_vector();
-                (
-                    segments[index].start,
-                    Point::new(v1.x, v1.y),
-                    Point::new(v2.x, v2.y),
-                    Some(segments[index + 1].start),
-                )
-            },
-            CtrlVariant::CubicEase(aX) => {
-                let p = segments[index + 1].start - segments[index].start;
-                let p12 = Point::new(aX.x * p.x, aX.y * p.y);
-                (
-                    segments[index].start,
-                    p12,
-                    p12,
-                    Some(segments[index + 1].start),
-                )
-            }
-        };
+        debug_assert!(index < self.segment_samples.len());
+        debug_assert!(index < self.segment_descriptions.len());
 
         self.segment_samples[index].clear();
         self.segment_descriptions[index].clear();
@@ -78,48 +54,80 @@ impl CurveChain {
             self.segment_descriptions[index].push(d);
         };
 
-        match op3 {
-            Some(p3) => {
-                CubicBezierSegment::<f32> {
-                    from: p0,
-                    ctrl1: p1,
-                    ctrl2: p2,
-                    to: p3,
-                }
-                .for_each_flattened(0.05, &mut callback);
+        let segments = &self.segments;
+        let (start, end) = (&segments[index].start, &segments[index + 1].start);
+
+        match segments[index].ctrls {
+            CtrlVariant::Linear => {
+                callback(self.segments[index + 1].start);
             }
-            None => {
+            CtrlVariant::Quadratic(c) => {
                 QuadraticBezierSegment::<f32> {
-                    from: p0,
-                    ctrl: p1,
-                    to: p2,
+                    from: *start,
+                    ctrl: c,
+                    to: *end,
                 }
                 .for_each_flattened(0.05, &mut callback);
             }
-        }
+            #[rustfmt::skip]
+            CtrlVariant::ThreePointCircle(c) => {
+                let m11 = Mat3::from_cols_array(&[
+                    start.x, start.y, 1.,
+                    c.x    , c.y    , 1.,
+                    end.x  , end.y  , 1.
+                ]).transpose();
+
+                let m12 = Mat3::from_cols_array(&[
+                    start.x.powi(2) + start.y.powi(2), start.y, 1.,
+                    c.x.powi(2)     + c.y.powi(2)    , c.y    , 1.,
+                    end.x.powi(2)   + end.y.powi(2)  , end.y  , 1.,
+                ])
+                .transpose();
+
+                let m13 = Mat3::from_cols_array(&[
+                    start.x.powi(2) + start.y.powi(2), start.x, 1.,
+                    c.x.powi(2)     + c.y.powi(2)    , c.x    , 1.,
+                    end.x.powi(2)   + end.y.powi(2)  , end.x  , 1.
+                ]).transpose();
+
+                let x = 0.5 * (m12.determinant()/m11.determinant());
+                let y = -0.5 * (m13.determinant()/m11.determinant());
+            }
+            CtrlVariant::Cubic(a1, a2) => {
+                CubicBezierSegment::<f32> {
+                    from: *start,
+                    ctrl1: Point::new(a1.x + start.x, a1.y + start.y), //they're different point types
+                    ctrl2: Point::new(a2.x + end.x, a2.y + end.y), //so no common addition interface
+                    to: *end,
+                }
+                .for_each_flattened(0.05, &mut callback)
+            }
+        };
     }
 
     pub fn push(&mut self, segment: Segment) {
         self.segments.push(segment);
         self.segment_samples.push(vec![]);
+        self.segment_descriptions.push(vec![]);
+
         self.resample_segment(self.segments.len() - 2);
     }
 
     pub fn pop(&mut self) {
         self.segments.pop();
         self.segment_samples.pop();
+        self.segment_descriptions.pop();
     }
 
     pub fn insert(&mut self, index: usize, segment: Segment) {
         assert!(index <= self.segments.len());
         if index == self.segments.len() {
             self.push(segment);
-        }
-        else {
+        } else {
             self.segments.insert(index, segment);
             self.resample_segment(index - 1);
             self.resample_segment(index);
-        } 
+        }
     }
 
     pub fn remove(&mut self, index: usize) {
@@ -127,8 +135,7 @@ impl CurveChain {
 
         if index == self.segments.len() - 1 {
             self.pop();
-        }
-        else {
+        } else {
             self.segments.remove(index);
             self.segment_samples.remove(index);
             self.resample_segment(index - 1);
