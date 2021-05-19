@@ -43,7 +43,7 @@ impl event::EventHandler for MainState {
 
 pub fn main() -> GameResult {
     let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese");
-    let (mut ctx, mut event_loop) = cb.build()?;
-    let mut state = MainState::new()?;
+    let (ctx, event_loop) = cb.build()?;
+    let state = MainState::new()?;
     event::run(ctx, event_loop, state)
 }
