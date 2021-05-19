@@ -5,6 +5,7 @@ use ggez::event;
 use ggez::graphics::{self, Color};
 use ggez::{Context, GameResult};
 use glam::*;
+use crate::core::curves;
 
 struct MainState {
     pos_x: f32,
@@ -46,4 +47,5 @@ pub fn main() -> GameResult {
     let (ctx, event_loop) = cb.build()?;
     let state = MainState::new()?;
     event::run(ctx, event_loop, state)
+    //curves::tests::run()
 }

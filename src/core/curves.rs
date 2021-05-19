@@ -1,5 +1,5 @@
 use crate::utils::from_end::FromEnd;
-use glam::f32::Mat3;
+use glam::{f32::Mat3, Vec2};
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
 
 #[derive(Clone, Copy)]
@@ -28,7 +28,7 @@ pub struct Segment {
 
 pub struct CurveChain {
     segments: Vec<Segment>,
-    segment_samples: Vec<Vec<Point<f32>>>,
+    segment_samples: Vec<Vec<Vec2>>,
     segment_descriptions: Vec<Vec<f32>>,
     descriptor: fn(&CurveChain, usize, &Point<f32>) -> f32,
 }
@@ -37,7 +37,7 @@ impl CurveChain {
     pub fn new(desc: fn(&CurveChain, usize, &Point<f32>) -> f32) -> Self {
         Self {
             segments: vec![Segment{ ctrls: CtrlVariant::Linear(Point::new(0.0, 0.0)), tolerence: 0.0 }],
-            segment_samples: vec![vec![]],
+            segment_samples: vec![vec![ Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0) ]],
             segment_descriptions: vec![vec![]],
             descriptor: desc,
         }
@@ -48,7 +48,8 @@ impl CurveChain {
         let samples = &curve.segment_samples[index];
         let descriptions = &curve.segment_descriptions[index];
 
-        descriptions[FromEnd(0)] + (point.to_vector() - samples[FromEnd(0)].to_vector()).length()
+        let last = samples[FromEnd(0)];
+        descriptions[FromEnd(0)] + (point.to_vector() - Point::new(last.x, last.y).to_vector()).length()
     }
 
     pub fn monotonic_x_descriptor(curve: &CurveChain, index: usize, point: &Point<f32>) -> f32 {
@@ -70,7 +71,7 @@ impl CurveChain {
 
         self.segment_samples[index].clear();
         self.segment_descriptions[index].clear();
-        self.segment_samples[index].push(start);
+        self.segment_samples[index].push(Vec2::new(start.x, start.y));
         self.segment_descriptions[index].push(0.0);
 
         let tolerence = self.segments[index].tolerence;
@@ -79,7 +80,7 @@ impl CurveChain {
 
         let mut callback = |p: Point<f32>| {
             let d = (self.descriptor)(self, index, &p);
-            self.segment_samples[index].push(p);
+            self.segment_samples[index].push(Vec2::new(p.x, p.y));
             self.segment_descriptions[index].push(d);
         };
         //can't use self below closure
@@ -178,11 +179,10 @@ impl CurveChain {
     }
 }
 
-#[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
-    use ggez::event::{self, EventHandler, KeyCode, KeyMods, MouseButton};
-    use ggez::graphics;
+    use ggez::{event::{self, EventHandler, KeyCode, KeyMods, MouseButton}, graphics::MeshBuilder};
+    use ggez::graphics::*;
     use ggez::{Context, GameResult};
     use glam::*;
 
@@ -213,6 +213,19 @@ mod tests {
         }
 
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
+            clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
+            for segment in &self.curve.segment_samples {
+                println!("gothere");
+                let lines = MeshBuilder::new().line(
+                    segment, 
+                    4.0, 
+                    Color::new(1.0, 1.0, 1.0, 1.0)
+                )?.build(ctx)?;  
+                println!("built meshes");
+                draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
+            }
+
+            present(ctx)?;
             Ok(())
         }
 
@@ -246,11 +259,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn curve_chain_test() {
+    pub fn run() -> GameResult {
         let cb = ggez::ContextBuilder::new("Curve test", "iiYese");
-        let (ctx, event_loop) = cb.build().unwrap();
-        let state = CurveTest::new().unwrap();
-        event::run(ctx, event_loop, state);
+        let (ctx, event_loop) = cb.build()?;
+        let state = CurveTest::new()?;
+        event::run(ctx, event_loop, state)
     }
 }
