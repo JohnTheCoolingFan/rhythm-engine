@@ -37,8 +37,8 @@ impl CurveChain {
     pub fn new(desc: fn(&CurveChain, usize, &Point<f32>) -> f32) -> Self {
         Self {
             segments: vec![Segment{ ctrls: CtrlVariant::Linear(Point::new(0.0, 0.0)), tolerence: 0.0 }],
-            segment_samples: vec![vec![ Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0) ]],
-            segment_descriptions: vec![vec![]],
+            segment_samples: vec![],
+            segment_descriptions: vec![],
             descriptor: desc,
         }
     }
@@ -74,8 +74,8 @@ impl CurveChain {
         self.segment_samples[index].push(Vec2::new(start.x, start.y));
         self.segment_descriptions[index].push(0.0);
 
-        let tolerence = self.segments[index].tolerence;
-        let ctrls = self.segments[index].ctrls;
+        let tolerence = self.segments[index + 1].tolerence;
+        let ctrls = self.segments[index + 1].ctrls;
         //have to pull these out because the closure captures self
 
         let mut callback = |p: Point<f32>| {
@@ -177,6 +177,13 @@ impl CurveChain {
             self.resample_segment(index - 1);
         }
     }
+
+    pub fn clear(&mut self) {
+        self.segments.clear();
+        self.segments.push(Segment{ ctrls: CtrlVariant::Linear(Point::new(0.0, 0.0)), tolerence: 0.0 });
+        self.segment_samples.clear();
+        self.segment_descriptions.clear();
+    }
 }
 
 pub mod tests {
@@ -188,8 +195,7 @@ pub mod tests {
 
     struct CurveTest {
         curve: CurveChain,
-        point_buff: [Point<f32>; 3],
-        insert_index: usize,
+        point_buff: Vec<Point<f32>>,
         selected_segment: Option<usize>
     }
 
@@ -199,29 +205,56 @@ pub mod tests {
                 curve: CurveChain::new(
                     CurveChain::displacement_desctiptor,
                 ),
-                point_buff: [Point::new(0.0, 0.0); 3],
-                insert_index: 0,
+                point_buff: vec![],
                 selected_segment: None
             })
         }
     }
 
     impl EventHandler for CurveTest {
-        fn update(&mut self, ctx: &mut Context) -> GameResult {
+        fn update(&mut self, _ctx: &mut Context) -> GameResult {
 
             Ok(())
         }
 
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
-            clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
-            for segment in &self.curve.segment_samples {
-                println!("gothere");
-                let lines = MeshBuilder::new().line(
-                    segment, 
-                    4.0, 
+            clear(ctx, Color::new(0., 0., 0., 1.));
+
+            let circle = Mesh::new_circle(
+                ctx,
+                DrawMode::fill(),
+                Vec2::new(0.0, 0.0),
+                10.0,
+                2.0,
+                Color::new(1.0, 1.0, 1.0, 1.0),
+            )?;
+            let pos = ggez::input::mouse::position(ctx);
+            draw(ctx, &circle, (Vec2::new(pos.x, pos.y),))?;
+
+            for i in 1..self.curve.segments.len() {
+                let segment = &self.curve.segments[i];
+                match segment.ctrls {
+                    CtrlVariant::Linear(p) => { draw(ctx, &circle, (Vec2::new(p.x, p.y),))?; }
+                    CtrlVariant::Quadratic(p1, p2) => { 
+                        draw(ctx, &circle, (Vec2::new(p1.x, p1.y),))?;
+                        draw(ctx, &circle, (Vec2::new(p2.x, p2.y),))?;  
+                    }
+                    CtrlVariant::Cubic(p1, p2, p3) => { 
+                        let start = self.curve.segments[i - 1].ctrls.end();
+                        draw(ctx, &circle, (Vec2::new(start.x + p1.x, start.y + p1.y),))?; 
+                        draw(ctx, &circle, (Vec2::new(p2.x + p3.x, p2.y + p3.y),))?; 
+                        draw(ctx, &circle, (Vec2::new(p3.x, p3.y),))?; 
+                    }
+                    CtrlVariant::ThreePointCircle(_, _) => {} 
+                }
+            }
+
+            for sampled_segment in &self.curve.segment_samples {
+                let lines = MeshBuilder::new().polyline(
+                    DrawMode::Stroke(StrokeOptions::DEFAULT),
+                    sampled_segment.as_slice(), 
                     Color::new(1.0, 1.0, 1.0, 1.0)
                 )?.build(ctx)?;  
-                println!("built meshes");
                 draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
             }
 
@@ -229,18 +262,28 @@ pub mod tests {
             Ok(())
         }
 
-        fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, mods: KeyMods, _: bool) {
-            if key == KeyCode::Escape { self.selected_segment = None; return; }
+        fn key_down_event(&mut self, _ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
+            match key {
+                KeyCode::Escape => { self.selected_segment = None; return; }
+                KeyCode::C => { self.curve.clear(); }
+                _ => {}
+            }
 
             let points = &self.point_buff;
-            let segment = Segment{ tolerence: 0.05, ctrls: match key {
+
+            let segment = Segment{ tolerence: 0.01, ctrls: match key {
                 KeyCode::Key1 => { CtrlVariant::Linear(points[FromEnd(0)]) },
                 KeyCode::Key2 => { CtrlVariant::Quadratic(points[FromEnd(1)], points[FromEnd(0)]) },
                 KeyCode::Key3 => { CtrlVariant::ThreePointCircle(points[FromEnd(1)], points[FromEnd(0)]) },
-                KeyCode::Key4 => { CtrlVariant::Cubic(points[0], points[1], points[2]) }
+                KeyCode::Key4 => { 
+                    let start = self.curve.segments[FromEnd(0)].ctrls.end();
+                    let a1 = Point::new(points[0].x - start.x, points[0].y - start.y);
+                    let a2 = points[1].to_vector() - points[2].to_vector();
+                    CtrlVariant::Cubic(a1, Point::new(a2.x, a2.y), points[2]) 
+                }
                 _ => { return; }
             }};
-            self.insert_index = 0;
+            self.point_buff.clear();
 
             match self.selected_segment {
                 None => { self.curve.push(segment); },
@@ -250,9 +293,10 @@ pub mod tests {
 
         fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
             match button {
-                MouseButton::Left => { 
-                    self.point_buff[self.insert_index] = Point::new(x, y);
-                    self.insert_index = (self.insert_index + 1) % 3;
+                MouseButton::Left => {
+                    println!("click");
+                    self.point_buff.push(Point::new(x, y));
+                    println!("{:?}", self.point_buff);
                 }
                 _ => {}
             }

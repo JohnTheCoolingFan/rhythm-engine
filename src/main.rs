@@ -43,9 +43,9 @@ impl event::EventHandler for MainState {
 }
 
 pub fn main() -> GameResult {
-    let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese");
+    /*let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese");
     let (ctx, event_loop) = cb.build()?;
     let state = MainState::new()?;
-    event::run(ctx, event_loop, state)
-    //curves::tests::run()
+    event::run(ctx, event_loop, state)*/
+    curves::tests::run()
 }
