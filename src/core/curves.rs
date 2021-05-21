@@ -149,6 +149,26 @@ impl CurveChain {
         self.resample_segment(self.segments.len() - 2);
     }
 
+    pub fn push_from_absolute(&mut self, segment: Segment) {
+        self.segments.push(Segment{ 
+            tolerence: segment.tolerence, 
+            ctrls: match segment.ctrls {
+                CtrlVariant::Cubic(p0, p1, p2) => {
+                    let start = self.segments[FromEnd(0)].ctrls.end();
+                    let a1 = Point::new(p0.x - start.x, p0.y - start.y);
+                    let a2 = p1.to_vector() - p2.to_vector();
+                    CtrlVariant::Cubic(a1, Point::new(a2.x, a2.y), p2) 
+                }
+                _ => segment.ctrls
+            }
+        });
+
+        self.segment_samples.push(vec![]);
+        self.segment_descriptions.push(vec![]);
+
+        self.resample_segment(self.segments.len() - 2);
+    }
+
     pub fn pop(&mut self) {
         self.segments.pop();
         self.segment_samples.pop();
@@ -212,7 +232,9 @@ pub mod tests {
     }
 
     impl EventHandler for CurveTest {
-        fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        fn update(&mut self, ctx: &mut Context) -> GameResult {
+            //let (width, height) = drawable_size(ctx);
+            //set_screen_coordinates(ctx, Rect{x: 0., y: 0., w: width, h: height })?;
 
             Ok(())
         }
@@ -304,9 +326,20 @@ pub mod tests {
     }
 
     pub fn run() -> GameResult {
-        let cb = ggez::ContextBuilder::new("Curve test", "iiYese");
-        let (ctx, event_loop) = cb.build()?;
+        let cb = ggez::ContextBuilder::new("Curve test", "iiYese")
+            .window_mode(ggez::conf::WindowMode::default()
+                         .dimensions(1920., 1080.)
+                         .min_dimensions(1920., 1080.)
+                         .max_dimensions(1920., 1080.));
+        let (mut ctx, event_loop) = cb.build()?;
+        set_resizable(&mut ctx, true)?;
+        set_canvas(&mut ctx, None);
         let state = CurveTest::new()?;
+        let p = projection(&ctx);
+        println!("{:?}", p.x);
+        println!("{:?}", p.y);
+        println!("{:?}", p.z);
+        println!("{:?}", p.w);
         event::run(ctx, event_loop, state)
     }
 }
