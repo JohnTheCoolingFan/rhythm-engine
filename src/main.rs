@@ -1,11 +1,10 @@
 mod core;
 mod utils;
 
-use ggez::{conf::WindowSetup, event, graphics::{Rect, drawable_size, set_screen_coordinates}};
+use ggez::event;
 use ggez::graphics::{self, Color};
 use ggez::{Context, GameResult};
 use glam::*;
-use crate::core::curves;
 
 struct MainState {
 }
@@ -23,8 +22,6 @@ impl event::EventHandler for MainState {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
-        let (width, height) = drawable_size(ctx);
-        set_screen_coordinates(ctx, Rect{x: 0., y: 0., w: width, h: height })?;
         let pos = ggez::input::mouse::position(ctx);
 
         let circle = graphics::Mesh::new_circle(
@@ -43,10 +40,9 @@ impl event::EventHandler for MainState {
 }
 
 pub fn main() -> GameResult {
-    /*let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese");
-    let (mut ctx, event_loop) = cb.build()?;
+    let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese")
+        .window_mode(ggez::conf::WindowMode::default().dimensions(1920., 1080.));
+    let (ctx, event_loop) = cb.build()?;
     let state = MainState::new()?;
-    graphics::set_resizable(&mut ctx, true)?;
-    event::run(ctx, event_loop, state)*/
-    curves::tests::run()
+    event::run(ctx, event_loop, state)
 }

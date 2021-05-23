@@ -1,5 +1,5 @@
 [package]
-name = "Rythm-Engine"
+name = "rythm-engine"
 version = "0.1.0"
 authors = ["iiYese"]
 edition = "2018"
@@ -12,7 +12,7 @@ libm = ["glam/libm"]
 
 [dependencies]
 glam = { version = "0.13.0", default-features = false, features = ["mint"] }
-ggez = "0.6.0-rc1"
+ggez = { git = "https://github.com/ggez/ggez", branch = "devel" }
 lyon_geom = "0.17.0"
 cute = "0.3.0"
 duplicate = "0.2.9"

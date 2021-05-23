@@ -141,14 +141,6 @@ impl CurveChain {
         };
     }
 
-    pub fn push(&mut self, segment: Segment) {
-        self.segments.push(segment);
-        self.segment_samples.push(vec![]);
-        self.segment_descriptions.push(vec![]);
-
-        self.resample_segment(self.segments.len() - 2);
-    }
-
     pub fn push_from_absolute(&mut self, segment: Segment) {
         self.segments.push(Segment{ 
             tolerence: segment.tolerence, 
@@ -175,16 +167,24 @@ impl CurveChain {
         self.segment_descriptions.pop();
     }
 
-    pub fn insert(&mut self, index: usize, segment: Segment) {
-        assert!(index <= self.segments.len());
-        if index == self.segments.len() {
-            self.push(segment);
-        } else {
-            self.segments.insert(index, segment);
-            self.resample_segment(index - 1);
-            self.resample_segment(index);
-        }
+    pub fn replace_from_absolute(&mut self, index: usize, segment: Segment) {
+        assert!(index < self.segments.len());
+        self.segments[index] = Segment{ 
+            tolerence: segment.tolerence, 
+            ctrls: match segment.ctrls {
+                CtrlVariant::Cubic(p0, p1, p2) => {
+                    let start = self.segments[FromEnd(0)].ctrls.end();
+                    let a1 = Point::new(p0.x - start.x, p0.y - start.y);
+                    let a2 = p1.to_vector() - p2.to_vector();
+                    CtrlVariant::Cubic(a1, Point::new(a2.x, a2.y), p2) 
+                }
+                _ => segment.ctrls
+            }
+        };
+        self.resample_segment(index - 1);
+        self.resample_segment(index);
     }
+    
 
     pub fn remove(&mut self, index: usize) {
         assert!(1 < index && index < self.segments.len());
@@ -206,6 +206,8 @@ impl CurveChain {
     }
 }
 
+
+#[cfg(test)]
 pub mod tests {
     use super::*;
     use ggez::{event::{self, EventHandler, KeyCode, KeyMods, MouseButton}, graphics::MeshBuilder};
@@ -216,7 +218,7 @@ pub mod tests {
     struct CurveTest {
         curve: CurveChain,
         point_buff: Vec<Point<f32>>,
-        selected_segment: Option<usize>
+        selected_segment: Option<usize>,
     }
 
     impl CurveTest {
@@ -226,21 +228,19 @@ pub mod tests {
                     CurveChain::displacement_desctiptor,
                 ),
                 point_buff: vec![],
-                selected_segment: None
+                selected_segment: None,
             })
         }
     }
 
     impl EventHandler for CurveTest {
-        fn update(&mut self, ctx: &mut Context) -> GameResult {
-            //let (width, height) = drawable_size(ctx);
-            //set_screen_coordinates(ctx, Rect{x: 0., y: 0., w: width, h: height })?;
-
+        fn update(&mut self, _ctx: &mut Context) -> GameResult {
             Ok(())
         }
 
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
             clear(ctx, Color::new(0., 0., 0., 1.));
+            let mouse_pos = ggez::input::mouse::position(ctx);
 
             let circle = Mesh::new_circle(
                 ctx,
@@ -250,8 +250,7 @@ pub mod tests {
                 2.0,
                 Color::new(1.0, 1.0, 1.0, 1.0),
             )?;
-            let pos = ggez::input::mouse::position(ctx);
-            draw(ctx, &circle, (Vec2::new(pos.x, pos.y),))?;
+            draw(ctx, &circle, (Vec2::new(mouse_pos.x, mouse_pos.y),))?;
 
             for i in 1..self.curve.segments.len() {
                 let segment = &self.curve.segments[i];
@@ -297,23 +296,18 @@ pub mod tests {
                 KeyCode::Key1 => { CtrlVariant::Linear(points[FromEnd(0)]) },
                 KeyCode::Key2 => { CtrlVariant::Quadratic(points[FromEnd(1)], points[FromEnd(0)]) },
                 KeyCode::Key3 => { CtrlVariant::ThreePointCircle(points[FromEnd(1)], points[FromEnd(0)]) },
-                KeyCode::Key4 => { 
-                    let start = self.curve.segments[FromEnd(0)].ctrls.end();
-                    let a1 = Point::new(points[0].x - start.x, points[0].y - start.y);
-                    let a2 = points[1].to_vector() - points[2].to_vector();
-                    CtrlVariant::Cubic(a1, Point::new(a2.x, a2.y), points[2]) 
-                }
+                KeyCode::Key4 => { CtrlVariant::Cubic(points[0], points[1], points[2]) },
                 _ => { return; }
             }};
             self.point_buff.clear();
 
             match self.selected_segment {
-                None => { self.curve.push(segment); },
-                Some(index) => { self.curve.insert(index, segment); }
+                None => { self.curve.push_from_absolute(segment); },
+                Some(index) => { self.curve.replace_from_absolute(index, segment); }
             }
         }
 
-        fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
+        fn mouse_button_down_event(&mut self, _ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
             match button {
                 MouseButton::Left => {
                     println!("click");
@@ -325,21 +319,12 @@ pub mod tests {
         }
     }
 
-    pub fn run() -> GameResult {
+    #[test]
+    pub fn curve_chain_tests() -> GameResult {
         let cb = ggez::ContextBuilder::new("Curve test", "iiYese")
-            .window_mode(ggez::conf::WindowMode::default()
-                         .dimensions(1920., 1080.)
-                         .min_dimensions(1920., 1080.)
-                         .max_dimensions(1920., 1080.));
-        let (mut ctx, event_loop) = cb.build()?;
-        set_resizable(&mut ctx, true)?;
-        set_canvas(&mut ctx, None);
+            .window_mode(ggez::conf::WindowMode::default().dimensions(1920., 1080.));
+        let (ctx, event_loop) = cb.build()?;
         let state = CurveTest::new()?;
-        let p = projection(&ctx);
-        println!("{:?}", p.x);
-        println!("{:?}", p.y);
-        println!("{:?}", p.z);
-        println!("{:?}", p.w);
         event::run(ctx, event_loop, state)
     }
 }
