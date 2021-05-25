@@ -71,8 +71,7 @@ impl CurveChain {
 
     pub fn clear(&mut self) {
         self.segments.clear();
-        self.segments
-            .push(Segment::new(Ctrl::Linear(Point::new(0.0, 0.0)), 0.05));
+        self.segments.push(Segment::new(Ctrl::Linear(Point::new(0.0, 0.0)), 0.05));
     }
 }
 
@@ -85,8 +84,7 @@ mod tests {
         graphics::MeshBuilder,
     };
     use ggez::{Context, GameResult};
-    use glam::*;
-    use lyon_geom::Point;
+    use glam::Vec2;
 
     struct CurveTest {
         curve: CurveChain,
@@ -143,11 +141,11 @@ mod tests {
                 }
             }
 
-            for segment in &self.curve.segments {
+            for i in 1..self.curve.segments.len() {
                 let lines = MeshBuilder::new()
                     .polyline(
                         DrawMode::Stroke(StrokeOptions::DEFAULT),
-                        segment.get_samples().as_slice(),
+                        self.curve.segments[i].get_samples().as_slice(),
                         Color::new(1.0, 1.0, 1.0, 1.0),
                     )?
                     .build(ctx)?;
@@ -208,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    pub fn curve_chain_tests() -> GameResult {
+    pub fn curves_test() -> GameResult {
         let cb = ggez::ContextBuilder::new("Curve test", "iiYese")
             .window_mode(ggez::conf::WindowMode::default().dimensions(1920., 1080.));
         let (ctx, event_loop) = cb.build()?;
