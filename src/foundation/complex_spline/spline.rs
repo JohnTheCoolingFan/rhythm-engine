@@ -1,8 +1,7 @@
 use lyon_geom::CubicBezierSegment;
 use lyon_geom::Point;
-
 use crate::utils::from_end::FromEnd;
-
+use curves;
 pub struct FreeAnchor(Vec<Point<f32>>, f32, Vec<Point<f32>>, Vec<f32>);
 struct CSplineCache {
     seg_num: usize,

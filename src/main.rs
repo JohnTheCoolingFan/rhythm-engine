@@ -1,4 +1,4 @@
-mod core;
+mod foundation;
 mod utils;
 
 use ggez::event;
@@ -6,8 +6,7 @@ use ggez::graphics::{self, Color};
 use ggez::{Context, GameResult};
 use glam::*;
 
-struct MainState {
-}
+struct MainState {}
 
 impl MainState {
     fn new() -> GameResult<MainState> {
