@@ -145,7 +145,7 @@ mod tests {
                 let lines = MeshBuilder::new()
                     .polyline(
                         DrawMode::Stroke(StrokeOptions::DEFAULT),
-                        self.curve.segments[i].get_samples().as_slice(),
+                        self.curve.segments[i].get_point_lut().as_slice(),
                         Color::new(1.0, 1.0, 1.0, 1.0),
                     )?
                     .build(ctx)?;
