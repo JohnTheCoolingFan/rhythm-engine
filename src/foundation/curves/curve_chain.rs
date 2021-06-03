@@ -152,10 +152,10 @@ mod tests {
                 let mut t = 0.;
                 while t <= 1. {
                     points.push(seeker.seek(t));
-                    t += 0.1;
+                    t += 0.05;
                 }
-                //let last = self.curve.segments[i].ctrls.end();
-                //points.push(Vec2::new(last.x, last.y));
+                let last = self.curve.segments[i].ctrls.end();
+                points.push(Vec2::new(last.x, last.y));
 
                 let lines = MeshBuilder::new()
                     .polyline(

@@ -125,10 +125,10 @@ impl Segment {
                     let theta = (
                         center_to_start.dot(center_to_end) 
                         / (center_to_start.length() * center_to_end.length())
-                    ).acos() * (180. / PI);
+                    ).acos() * 180. / PI;
 
                     let angle = 
-                        if (start.rotate_about(&center, theta) - end).length() < 0.0001 { 
+                        if (start.rotate_about(&center, theta * rot_sign) - end).length() < 0.01 { 
                             theta
                         }
                         else {
