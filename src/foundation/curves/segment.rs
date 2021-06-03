@@ -40,7 +40,7 @@ impl Segment {
         }
     }
 
-    pub fn resample(&mut self, start: Point<f32>) {
+    pub fn recompute(&mut self, start: Point<f32>) {
         let end = self.ctrls.end();
 
         self.point_lut.clear();
@@ -92,7 +92,8 @@ impl Segment {
 
                 let d11 = m11.determinant();
 
-                if 0.0001 < d11 {
+                println!("{}", d11);
+                if 0. != d11 {
                     let m12 = Mat3::from_cols_array(&[
                         start.x.powi(2) + start.y.powi(2), start.y, 1.,
                         c.x.powi(2)     + c.y.powi(2)    , c.y    , 1.,
@@ -124,7 +125,7 @@ impl Segment {
                     let theta = (
                         center_to_start.dot(center_to_end) 
                         / (center_to_start.length() * center_to_end.length())
-                    ).acos() * 180. / PI;
+                    ).acos() * (180. / PI);
 
                     let angle = 
                         if (start.rotate_about(&center, theta) - end).length() < 0.0001 { 
@@ -134,7 +135,7 @@ impl Segment {
                             360. - theta
                         };
 
-                    self.value_lut.push(angle * rot_sign);
+                    self.value_lut[0] = angle * rot_sign;
                 }
             }
         };
@@ -157,18 +158,36 @@ impl Segment {
     }
 }
 
-struct SegmentSeeker<'a> {
+pub struct SegmentSeeker<'a> {
     index: usize,
     segment: &'a Segment
 }
 
+impl <'a> SegmentSeeker<'a> {
+    pub fn interp(&self, offset: f32) -> Vec2 {
+        debug_assert!(0 < self.index && self.index < self.segment.value_lut.len());
+        debug_assert!(
+            self.segment.value_lut[self.index - 1] <= offset 
+            && offset <= self.segment.value_lut[self.index]
+        );
+        let start = self.segment.point_lut[self.index - 1];
+        let end = self.segment.point_lut[self.index];
+
+        let s = (offset - self.segment.value_lut[self.index - 1]) 
+            / (self.segment.value_lut[self.index] - self.segment.value_lut[self.index - 1]);
+
+        end * s + start * (1. - s)
+    }
+}
+
 impl <'a> Seeker<Vec2> for SegmentSeeker<'a> {
     fn seek(&mut self, offset: f32) -> Vec2 {
+        debug_assert!(0. <= offset && offset <= 1.);
         match self.segment.ctrls {
             Ctrl::ThreePointCircle(_, _) => {
                 self.segment.point_lut[0].rotate_about( 
                     &self.segment.point_lut[1], 
-                    self.segment.value_lut[0]
+                    self.segment.value_lut[0] * offset
                 )
             }
             _ => {
@@ -180,16 +199,22 @@ impl <'a> Seeker<Vec2> for SegmentSeeker<'a> {
                     }
                     self.index += 1;
                 }
-                let s = self.segment.value_lut[index - 1]
-                self.segment.point_lut[self.index]
+
+                if 0 == self.index {
+                    self.segment.point_lut[self.index]
+                }
+                else {
+                    self.interp(offset)
+                }
             }
         }
     }
 
     fn jump(&mut self, offset: f32) -> Vec2 {
+        debug_assert!(0. <= offset && offset <= 1.);
         match self.segment.ctrls {
-            Ctrl::ThreePointCircle(a1, end) => {
-                Vec2::new(0., 0.)
+            Ctrl::ThreePointCircle(_, _) => {
+                self.seek(offset)
             }
             _ => {
                 match self.segment.value_lut.binary_search_by(
@@ -201,10 +226,11 @@ impl <'a> Seeker<Vec2> for SegmentSeeker<'a> {
                     }
                     Err(index) => {
                         self.index = index;
-                        if 0 <= index && index + 1 < self.segment.point_lut.len() {
-                            let start = self.segment.point_lut[index];
-                            let end = self.segment.point_lut[index + 1];
-                            let diff = 
+                        if 0 == index || index == self.segment.point_lut.len() {
+                            self.segment.point_lut[index]
+                        }
+                        else {
+                            self.interp(offset)
                         }
                     }
                 }
@@ -213,3 +239,9 @@ impl <'a> Seeker<Vec2> for SegmentSeeker<'a> {
     }
 }
 
+impl <'a> Seekable<'a, Vec2> for Segment {
+    type Seeker = SegmentSeeker<'a>;
+    fn seeker(&'a self) -> Self::Seeker {
+        SegmentSeeker{ index: 0, segment: &self }
+    }
+}

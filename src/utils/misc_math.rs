@@ -7,7 +7,6 @@ pub trait IsLeft {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
 }
 
-
 #[duplicate(PointT; [Point<f32>]; [Vec2])]
 impl IsLeft for PointT {
     fn is_left(&self, start: &Self, end: &Self) -> bool {
@@ -25,15 +24,12 @@ pub trait RotateAbout {
 #[duplicate(PointT; [Point<f32>]; [Vec2])]
 impl RotateAbout for PointT {
     fn rotate_about(&self, pivot: &Self, angle_deg: f32) -> Self {
-        let c = (angle_deg * PI / 180.).cos(); 
-        let s = (angle_deg * PI / 180.).sin();
-
-        let x = self.x - pivot.x;
-        let y = self.y - pivot.y;
-        
+        let c = (angle_deg * (PI / 180.)).cos(); 
+        let s = (angle_deg * (PI / 180.)).sin();
+ 
         Self::new(
-            (c * x) - (s * y) + pivot.x,
-            (s * x) - (c * y) + pivot.y
+            c * (self.x - pivot.x) - s * (self.y - pivot.y) + pivot.x,
+            s * (self.x - pivot.x) + c * (self.y - pivot.y) + pivot.y
         )
     }
 }

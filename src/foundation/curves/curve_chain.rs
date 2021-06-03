@@ -27,7 +27,7 @@ impl CurveChain {
             0.05,
         ));
         let p = self.segments[FromEnd(1)].ctrls.end();
-        self.segments[FromEnd(0)].resample(p);
+        self.segments[FromEnd(0)].recompute(p);
     }
 
     pub fn pop(&mut self) -> Segment {
@@ -46,7 +46,7 @@ impl CurveChain {
             _ => ctrls,
         };
         let p = self.segments[index - 1].ctrls.end();
-        self.segments[index].resample(p);
+        self.segments[index].recompute(p);
     }
 
     pub fn bisect_segment(&mut self, index: usize) {
@@ -60,8 +60,8 @@ impl CurveChain {
 
         let p0 = self.segments[index - 1].ctrls.end();
         let p1 = self.segments[index].ctrls.end();
-        self.segments[index].resample(p0);
-        self.segments[index + 1].resample(p1);
+        self.segments[index].recompute(p0);
+        self.segments[index + 1].recompute(p1);
     }
 
     pub fn remove(&mut self, index: usize) -> Segment {
@@ -77,6 +77,8 @@ impl CurveChain {
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::{Seekable, Seeker};
+
     use super::*;
     use ggez::graphics::*;
     use ggez::{
@@ -137,21 +139,33 @@ mod tests {
                         draw(ctx, &circle, (Vec2::new(p2.x + p3.x, p2.y + p3.y),))?;
                         draw(ctx, &circle, (Vec2::new(p3.x, p3.y),))?;
                     }
-                    Ctrl::ThreePointCircle(_, _) => {}
+                    Ctrl::ThreePointCircle(p1, p2) => {
+                        draw(ctx, &circle, (Vec2::new(p1.x, p1.y),))?;
+                        draw(ctx, &circle, (Vec2::new(p2.x, p2.y),))?;
+                    }
                 }
             }
 
             for i in 1..self.curve.segments.len() {
+                let mut points = Vec::<Vec2>::new();
+                let mut seeker = self.curve.segments[i].seeker();
+                let mut t = 0.;
+                while t <= 1. {
+                    points.push(seeker.seek(t));
+                    t += 0.1;
+                }
+                //let last = self.curve.segments[i].ctrls.end();
+                //points.push(Vec2::new(last.x, last.y));
+
                 let lines = MeshBuilder::new()
                     .polyline(
                         DrawMode::Stroke(StrokeOptions::DEFAULT),
-                        self.curve.segments[i].get_point_lut().as_slice(),
+                        points.as_slice(),
                         Color::new(1.0, 1.0, 1.0, 1.0),
-                    )?
-                    .build(ctx)?;
+                    )?.build(ctx)?;
                 draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
             }
-
+            
             present(ctx)?;
             Ok(())
         }
