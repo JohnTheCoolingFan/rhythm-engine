@@ -1,27 +1,34 @@
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 
 use crate::core::automation;
 use crate::core::complex_spline::ComplexSpline;
 
-pub enum PolyEntityActiveMode {
-    Hit(f32, f32),
+pub enum Mode {
+    Inactive(f32, f32)
+    Hit(f32, f32, f32),
     Hold(f32, f32, f32),
     Avoid(f32, f32),
 }
 
-pub struct PolyEntity {
-    offsets: [f32; 2],
-    hull: Vec<Vec2>,
-
-    rotation: f32,
+pub struct SplineVertexPairing {
+    spline: usize,
+    vertex: usize,
     scale: f32,
+    rotate: f32
+}
 
-    active_mode: Option<PolyEntityActiveMode>,
-    grab: f32,
-    grab_dir: Vec2,
+pub struct Configuration {
+    rotation: usize,
+    scale: usize,
+    color: usize,
+    splines: Vec<CVIpair>,
+    grab: usize
+}
 
-    vrtx_ctrls: Vec<ComplexSpline>,
-    ctrl_routes: Vec<u32>,
+pub struct PolyEntity {
+    duration: [f32; 2],
+    mode: Mode,
+    hull: Vec<Vec2>,
 }
 
 impl Default for PolyEntity {

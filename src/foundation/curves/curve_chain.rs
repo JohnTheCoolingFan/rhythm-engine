@@ -71,7 +71,8 @@ impl CurveChain {
 
     pub fn clear(&mut self) {
         self.segments.clear();
-        self.segments.push(Segment::new(Ctrl::Linear(Point::new(0.0, 0.0)), 0.05));
+        self.segments
+            .push(Segment::new(Ctrl::Linear(Point::new(0.0, 0.0)), 0.05));
     }
 }
 
@@ -162,10 +163,11 @@ mod tests {
                         DrawMode::Stroke(StrokeOptions::DEFAULT),
                         points.as_slice(),
                         Color::new(1.0, 1.0, 1.0, 1.0),
-                    )?.build(ctx)?;
+                    )?
+                    .build(ctx)?;
                 draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
             }
-            
+
             present(ctx)?;
             Ok(())
         }
@@ -187,9 +189,7 @@ mod tests {
             let ctrls = match key {
                 KeyCode::Key1 => Ctrl::Linear(points[FromEnd(0)]),
                 KeyCode::Key2 => Ctrl::Quadratic(points[FromEnd(1)], points[FromEnd(0)]),
-                KeyCode::Key3 => {
-                    Ctrl::ThreePointCircle(points[FromEnd(1)], points[FromEnd(0)])
-                }
+                KeyCode::Key3 => Ctrl::ThreePointCircle(points[FromEnd(1)], points[FromEnd(0)]),
                 KeyCode::Key4 => Ctrl::Cubic(points[0], points[1], points[2]),
                 _ => {
                     return;
@@ -207,7 +207,13 @@ mod tests {
             }
         }
 
-        fn mouse_button_down_event(&mut self, _ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
+        fn mouse_button_down_event(
+            &mut self,
+            _ctx: &mut Context,
+            button: MouseButton,
+            x: f32,
+            y: f32,
+        ) {
             match button {
                 MouseButton::Left => {
                     println!("click");
@@ -220,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    pub fn curves_test() -> GameResult {
+    pub fn curves() -> GameResult {
         let cb = ggez::ContextBuilder::new("Curve test", "iiYese")
             .window_mode(ggez::conf::WindowMode::default().dimensions(1920., 1080.));
         let (ctx, event_loop) = cb.build()?;

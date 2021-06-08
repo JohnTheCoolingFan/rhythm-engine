@@ -17,9 +17,6 @@ impl<T> std::ops::Index<FromEnd> for itterable {
 impl<T> std::ops::IndexMut<FromEnd> for itterable {
     fn index_mut(&mut self, FromEnd(n): FromEnd) -> &mut T {
         let len = self.len();
-        &mut self[
-            len
-            .checked_sub(1 + n)
-            .expect("out of range from end")]
+        &mut self[len.checked_sub(1 + n).expect("out of range from end")]
     }
 }
