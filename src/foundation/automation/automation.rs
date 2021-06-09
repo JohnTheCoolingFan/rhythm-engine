@@ -1,4 +1,4 @@
-use crate::utils::seeker::*;
+use crate::utils::{seeker::*, FromEnd};
 use glam::Vec2;
 
 pub struct Anchor {
@@ -23,7 +23,7 @@ impl Anchor {
                 self.weight - 1.
             }
             else {
-                new_weight
+                if new_weight.abs() < 20. { new_weight } else { self.weight }
             }
         }();
     }
@@ -96,30 +96,37 @@ pub struct AutomationSeeker<'a> {
 
 impl<'a> AutomationSeeker<'a> {
     //lower bound upper bound val
-    fn y_to_lbub_val(&self, y: f32) -> f32 {
+    fn from_y(&self, y: f32) -> f32 {
         debug_assert!(0. <= y && y <= 1.);
         self.automantion.lower_bound
             + (self.automantion.upper_bound - self.automantion.lower_bound) * y
     }
 
-    fn interp(&self, offset: f32) -> f32 {
-        debug_assert!(0 < self.index && self.index < self.automantion.anchors.len());
-        debug_assert!(
-            self.automantion.anchors[self.index - 1].point.x <= offset
-                && offset <= self.automantion.anchors[self.index].point.x
-        );
+    pub fn interp(&self, offset: f32) -> f32 {
+        self.from_y(
+            if self.index == self.automantion.anchors.len() {
+                self.automantion.anchors[FromEnd(0)].point.y
+            }
+            else if self.index == 0 {
+                self.automantion.anchors[0].point.y
+            }
+            else {
+                let start = &self.automantion.anchors[self.index - 1];
+                let end = &self.automantion.anchors[self.index];
 
-        let start = &self.automantion.anchors[self.index - 1];
-        let end = &self.automantion.anchors[self.index];
+                if end.weight == 0. {
+                    start.point.y
+                }
+                else {
+                    let t = (offset - self.automantion.anchors[self.index - 1].point.x)
+                        / (self.automantion.anchors[self.index].point.x
+                            - self.automantion.anchors[self.index - 1].point.x);
 
-        let t = (offset - self.automantion.anchors[self.index - 1].point.x)
-            / (self.automantion.anchors[self.index].point.x
-                - self.automantion.anchors[self.index - 1].point.x);
-
-        self.y_to_lbub_val(
-            end.point.y
-            - (end.point.y - start.point.y)
-            * (1. - t.powf(if 0. <= end.weight { end.weight } else { 1. / end.weight.abs() }))
+                    start.point.y
+                    + (end.point.y - start.point.y)
+                    * t.powf(if 0. < end.weight { end.weight } else { 1. / end.weight.abs() })
+                }
+            }
         )
     }
 }
@@ -127,18 +134,12 @@ impl<'a> AutomationSeeker<'a> {
 impl<'a> Seeker<f32> for AutomationSeeker<'a> {
     fn seek(&mut self, offset: f32) -> f32 {
         while self.index < self.automantion.anchors.len() {
-            if offset == self.automantion.anchors[self.index].point.x {
-                return self.y_to_lbub_val(self.automantion.anchors[self.index].point.y);
-            } else if offset < self.automantion.anchors[self.index].point.x {
+            if offset < self.automantion.anchors[self.index].point.x {
                 break;
             }
             self.index += 1;
         }
-        if 0 == self.index {
-            self.y_to_lbub_val(self.automantion.anchors[0].point.y)
-        } else {
-            self.interp(offset)
-        }
+        self.interp(offset)
     }
 
     fn jump(&mut self, offset: f32) -> f32 {
@@ -149,15 +150,11 @@ impl<'a> Seeker<f32> for AutomationSeeker<'a> {
         {
             Ok(index) => {
                 self.index = index;
-                self.y_to_lbub_val(self.automantion.anchors[index].point.y)
+                self.from_y(self.automantion.anchors[index].point.y)
             }
             Err(index) => {
                 self.index = index;
-                if 0 == index || index == self.automantion.anchors.len() {
-                    self.y_to_lbub_val(self.automantion.anchors[index].point.y)
-                } else {
-                    self.interp(offset)
-                }
+                self.interp(offset)
             }
         }
     }
@@ -256,8 +253,8 @@ mod tests {
 
         fn key_down_event(&mut self, _ctx: &mut Context, key: KeyCode, _keymods: KeyMods, _repeat: bool) {
             self.auto.anchors[FromEnd(0)].add_to_weight(match key {
-                KeyCode::Up => 0.05,
-                KeyCode::Down => -0.05,
+                KeyCode::Up => 0.15,
+                KeyCode::Down => -0.15,
                 _ => 0.
             });
             println!("{:?}", self.auto.anchors[FromEnd(0)].weight);

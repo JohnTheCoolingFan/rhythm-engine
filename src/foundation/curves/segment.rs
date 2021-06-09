@@ -170,18 +170,23 @@ pub struct SegmentSeeker<'a> {
 }
 
 impl<'a> SegmentSeeker<'a> {
-    fn interp(&self, t: f32) -> Vec2 {
-        debug_assert!(0 < self.index && self.index < self.segment.value_lut.len());
-        debug_assert!(
-            self.segment.value_lut[self.index - 1] <= t && t <= self.segment.value_lut[self.index]
-        );
-        let start = self.segment.point_lut[self.index - 1];
-        let end = self.segment.point_lut[self.index];
+    fn interp(&self, t: f32) -> Vec2 { 
+        if self.index == self.segment.point_lut.len() {
+            self.segment.point_lut[FromEnd(0)]
+        }
+        else if self.index == 0 {
+            self.segment.point_lut[0]
+            
+        }
+        else {
+            let start = self.segment.point_lut[self.index - 1];
+            let end = self.segment.point_lut[self.index];
 
-        let s = (t - self.segment.value_lut[self.index - 1])
-            / (self.segment.value_lut[self.index] - self.segment.value_lut[self.index - 1]);
+            let s = (t - self.segment.value_lut[self.index - 1])
+                / (self.segment.value_lut[self.index] - self.segment.value_lut[self.index - 1]);
 
-        end * s + start * (1. - s)
+            end * s + start * (1. - s)
+        }
     }
 }
 
@@ -199,19 +204,12 @@ impl<'a> Seeker<Vec2> for SegmentSeeker<'a> {
             }
             _ => {
                 while self.index < self.segment.value_lut.len() {
-                    if t == self.segment.value_lut[self.index] {
-                        return self.segment.point_lut[self.index];
-                    } else if t < self.segment.value_lut[self.index] {
+                    if t < self.segment.value_lut[self.index] {
                         break;
                     }
                     self.index += 1;
                 }
-
-                if 0 == self.index {
-                    self.segment.point_lut[self.index]
-                } else {
-                    self.interp(t)
-                }
+                self.interp(t)
             }
         }
     }
@@ -232,11 +230,7 @@ impl<'a> Seeker<Vec2> for SegmentSeeker<'a> {
                     }
                     Err(index) => {
                         self.index = index;
-                        if 0 == index || index == self.segment.point_lut.len() {
-                            self.segment.point_lut[index]
-                        } else {
-                            self.interp(t)
-                        }
+                        self.interp(t)
                     }
                 }
             }
