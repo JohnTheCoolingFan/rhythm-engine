@@ -3,7 +3,30 @@ use glam::Vec2;
 
 pub struct Anchor {
     point: Vec2,
-    power: f32,
+    weight: f32,
+}
+
+impl Anchor {
+    pub fn add_to_weight(&mut self, value: f32) {
+        let new_weight = self.weight + value;
+        self.weight = || -> f32 {
+            for i in -1..=1 {
+                let f = i as f32;
+                if (self.weight < f && f <= new_weight) || (new_weight <= f && f < self.weight) {
+                    return f;
+                }
+            }
+            if (self.weight == -1. || self.weight == 0.) && 0. < value {
+                self.weight + 1.
+            }
+            else if (self.weight == 0. || self.weight == 1.) && value < 0. {
+                self.weight - 1.
+            }
+            else {
+                new_weight
+            }
+        }();
+    }
 }
 
 pub struct Automation {
@@ -23,11 +46,11 @@ impl Automation {
             anchors: vec![
                 Anchor {
                     point: Vec2::new(0., 0.0),
-                    power: 1.,
+                    weight: 1.,
                 },
                 Anchor {
                     point: Vec2::new(len, 0.0),
-                    power: 1.,
+                    weight: 1.,
                 },
             ],
         }
@@ -94,9 +117,9 @@ impl<'a> AutomationSeeker<'a> {
                 - self.automantion.anchors[self.index - 1].point.x);
 
         self.y_to_lbub_val(
-            start.point.y 
-            + (end.point.y - start.point.y) 
-            * t.powf(if 0. < end.power { end.power } else { 1. / end.power.abs() })
+            end.point.y
+            - (end.point.y - start.point.y)
+            * (1. - t.powf(if 0. <= end.weight { end.weight } else { 1. / end.weight.abs() }))
         )
     }
 }
@@ -224,7 +247,7 @@ mod tests {
             match button {
                 MouseButton::Left => {
                     println!("left click");
-                    self.auto.push(Anchor{ point: Vec2::new(x,  y / self.dimensions.y), power: 1.});
+                    self.auto.push(Anchor{ point: Vec2::new(x,  y / self.dimensions.y), weight: 1.});
                     println!("{:?}", self.auto.anchors[FromEnd(0)].point);
                 }
                 _ => {}
@@ -232,11 +255,12 @@ mod tests {
         }
 
         fn key_down_event(&mut self, _ctx: &mut Context, key: KeyCode, _keymods: KeyMods, _repeat: bool) {
-            self.auto.anchors[FromEnd(0)].power += match key {
+            self.auto.anchors[FromEnd(0)].add_to_weight(match key {
                 KeyCode::Up => 0.05,
                 KeyCode::Down => -0.05,
                 _ => 0.
-            }
+            });
+            println!("{:?}", self.auto.anchors[FromEnd(0)].weight);
         }
     }
 
