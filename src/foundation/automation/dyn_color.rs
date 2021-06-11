@@ -209,24 +209,30 @@ mod tests {
             Ok(())
         }
 
-        fn mouse_button_down_event(
+        /*fn mouse_button_down_event(
             &mut self,
             _ctx: &mut Context,
             button: MouseButton,
             x: f32,
             y: f32,
         ) {
+            let index = self.auto.closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    println!("left click");
-                    self.color.automation.insert(Anchor::new(
-                        Vec2::new(x, y / self.dimensions.y),
-                        1.
-                    ));
+                    let p = Vec2::new(x, y / self.dimensions.y);
+                    let q = self.color.automation[self.color.automation.closest_to(p)].point;
+                    if (p - q).length() < 20. {
+                        self. = p;
+                    } else {
+                        self.color.automation.insert(Anchor::new(
+                            p,
+                            1.
+                        ));
+                    }
                 }
                 _ => {}
             }
-        }
+        }*/
 
     }
 

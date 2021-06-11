@@ -93,7 +93,6 @@ impl Segment {
 
                 let d11 = m11.determinant();
 
-                println!("{}", d11);
                 if 0. != d11 {
                     let m12 = Mat3::from_cols_array(&[
                         start.x.powi(2) + start.y.powi(2), start.y, 1.,

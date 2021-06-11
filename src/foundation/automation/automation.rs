@@ -1,13 +1,20 @@
 use crate::utils::{seeker::*, FromEnd};
 use glam::Vec2;
 
+#[derive(Debug, Copy, Clone)]
+pub enum Weight {
+    ForwardBias,
+    Curve(f32),
+    ReverseBias,
+}
+
 pub struct Anchor {
     point: Vec2,
-    weight: f32,
+    weight: Weight,
 }
 
 impl Anchor {
-    pub fn new(p: Vec2, w: f32) -> Self {
+    pub fn new(p: Vec2, w: Weight) -> Self {
         Self {
             point: p,
             weight: w
@@ -15,30 +22,9 @@ impl Anchor {
     }
 }
 
-impl Anchor {
-    pub fn add_to_weight(&mut self, value: f32) {
-        let new_weight = self.weight + value;
-        self.weight = || -> f32 {
-            for i in -1..=1 {
-                let f = i as f32;
-                if (self.weight < f && f <= new_weight) || (new_weight <= f && f < self.weight) {
-                    return f;
-                }
-            }
-            if (self.weight == -1. || self.weight == 0.) && 0. < value {
-                self.weight + 1.
-            } else if (self.weight == 0. || self.weight == 1.) && value < 0. {
-                self.weight - 1.
-            } else {
-                if new_weight.abs() < 20. {
-                    new_weight
-                } else {
-                    self.weight
-                }
-            }
-        }();
-    }
-}
+
+
+
 
 pub struct Automation {
     upper_bound: f32,
@@ -55,14 +41,8 @@ impl Automation {
             lower_bound: lb,
             dynamic_bound: dynamic,
             anchors: vec![
-                Anchor {
-                    point: Vec2::new(0., 0.0),
-                    weight: 1.,
-                },
-                Anchor {
-                    point: Vec2::new(len, 0.0),
-                    weight: 1.,
-                },
+                Anchor::new(Vec2::new(0., 0.0), Weight::Curve(0.)),
+                Anchor::new(Vec2::new(len, 0.0), Weight::Curve(0.)),
             ],
         }
     }
@@ -87,6 +67,10 @@ impl Automation {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.anchors.len()
+    }
+
     pub fn insert(&mut self, item: Anchor) {
         self.anchors.insert(
             match self
@@ -104,7 +88,7 @@ impl Automation {
         self.anchors.remove(index)
     }
 
-    pub fn closest_to(&mut self, point: Vec2) -> &mut Anchor {
+    pub fn closest_to(&mut self, point: Vec2) -> usize {
         let (index, _) = self.anchors
             .iter()
             .enumerate()
@@ -115,55 +99,96 @@ impl Automation {
                     .partial_cmp(&(b.point - point).length()).unwrap()
             ).unwrap();
 
-        &mut self.anchors[index]
+        index
+    }
+
+    pub fn get_pos(&self, index: usize) -> Vec2 {
+        self.anchors[index].point
+    }
+
+    pub fn set_pos(&mut self, index: usize, mut point: Vec2) {
+        let minx = if index == 0 { 0. } else { self.anchors[index - 1].point.x };
+        let maxx = if self.anchors.len() - index == 1 {
+            self.anchors[FromEnd(0)].point.x
+        }
+        else {
+            self.anchors[index + 1].point.x
+        };
+
+        point.x = point.x.clamp(minx, maxx);
+        point.y = point.y.clamp(0., 1.);
+        self.anchors[index].point = point;
+    }
+
+    pub fn get_weight(&self, index: usize) -> Weight {
+        self.anchors[index].weight
+    }
+
+    pub fn set_weight(&mut self, index: usize, weight: Weight) {
+        self.anchors[index].weight = match weight {
+            Weight::Curve(w) => Weight::Curve(
+                if 0. <= w { w.clamp(0., 30.) }
+                else { w.clamp(-30., 0.) } 
+            ),
+            _ => weight
+        };
     }
 }
 
+
+
+
+
 pub struct AutomationSeeker<'a> {
     index: usize,
-    automantion: &'a Automation,
+    automation: &'a Automation,
 }
 
 impl<'a> AutomationSeeker<'a> {
     //lower bound upper bound val
     fn from_y(&self, y: f32) -> f32 {
         debug_assert!(0. <= y && y <= 1.);
-        self.automantion.lower_bound
-            + (self.automantion.upper_bound - self.automantion.lower_bound) * y
+        self.automation.lower_bound
+            + (self.automation.upper_bound - self.automation.lower_bound) * y
     }
 
     pub fn interp(&self, offset: f32) -> f32 {
-        self.from_y(if self.index == self.automantion.anchors.len() {
-            self.automantion.anchors[FromEnd(0)].point.y
-        } else if self.index == 0 {
-            self.automantion.anchors[0].point.y
-        } else {
-            let start = &self.automantion.anchors[self.index - 1];
-            let end = &self.automantion.anchors[self.index];
-
-            if end.weight == 0. {
-                start.point.y
-            } else {
-                let t = (offset - self.automantion.anchors[self.index - 1].point.x)
-                    / (self.automantion.anchors[self.index].point.x
-                        - self.automantion.anchors[self.index - 1].point.x);
-
-                start.point.y
-                    + (end.point.y - start.point.y)
-                        * t.powf(if 0. < end.weight {
-                            end.weight
-                        } else {
-                            1. / end.weight.abs()
-                        })
+        self.from_y(
+            if 0 == self.index {
+                self.automation.anchors[0].point.y
             }
-        })
+            else if self.index == self.automation.anchors.len() {
+                let anch = &self.automation.anchors[FromEnd(0)];
+                match anch.weight {
+                    Weight::ReverseBias => self.automation.anchors[FromEnd(1)].point.y,
+                    _ => anch.point.y
+                }
+            }
+            else {
+                let start = &self.automation.anchors[self.index - 1];
+                let end = &self.automation.anchors[self.index];
+
+                let t = 
+                    (offset - start.point.x)
+                    / (end.point.x - start.point.x);
+                
+                match end.weight {
+                    Weight::ReverseBias => start.point.y,
+                    Weight::Curve(w) => 
+                        start.point.y 
+                        + (end.point.y - start.point.y) 
+                        * t.powf( if w < 0. { 1. / (w.abs() + 1.) } else { w + 1. }),
+                    Weight::ForwardBias => end.point.y,
+                }
+            }                
+        )
     }
 }
 
 impl<'a> Seeker<f32> for AutomationSeeker<'a> {
     fn seek(&mut self, offset: f32) -> f32 {
-        while self.index < self.automantion.anchors.len() {
-            if offset < self.automantion.anchors[self.index].point.x {
+        while self.index < self.automation.anchors.len() {
+            if offset < self.automation.anchors[self.index].point.x {
                 break;
             }
             self.index += 1;
@@ -173,13 +198,13 @@ impl<'a> Seeker<f32> for AutomationSeeker<'a> {
 
     fn jump(&mut self, offset: f32) -> f32 {
         match self
-            .automantion
+            .automation
             .anchors
             .binary_search_by(|t| t.point.x.partial_cmp(&offset).unwrap())
         {
             Ok(index) => {
                 self.index = index;
-                self.from_y(self.automantion.anchors[index].point.y)
+                self.from_y(self.automation.anchors[index].point.y)
             }
             Err(index) => {
                 self.index = index;
@@ -194,10 +219,14 @@ impl<'a> Seekable<'a, f32> for Automation {
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
             index: 0,
-            automantion: &self,
+            automation: &self,
         }
     }
 }
+
+
+
+
 
 #[cfg(test)]
 mod tests {
@@ -209,14 +238,14 @@ mod tests {
     use ggez::{Context, GameResult};
 
     struct AutomationTest {
-        auto: Automation,
+        automation: Automation,
         dimensions: Vec2,
     }
 
     impl AutomationTest {
         fn new() -> GameResult<Self> {
             Ok(Self {
-                auto: Automation::new(0., 1., 2800., false),
+                automation: Automation::new(0., 1., 2800., false),
                 dimensions: Vec2::new(2800., 1100.),
             })
         }
@@ -243,8 +272,8 @@ mod tests {
             let mut points = Vec::<Vec2>::new();
             let mut t = 0.;
 
-            let mut seeker = self.auto.seeker();
-            while t < self.auto.anchors[FromEnd(0)].point.x {
+            let mut seeker = self.automation.seeker();
+            while t < self.automation.anchors[FromEnd(0)].point.x {
                 points.push(Vec2::new(t, seeker.seek(t) * self.dimensions.y));
                 t += 1.;
             }
@@ -264,35 +293,42 @@ mod tests {
 
         fn mouse_button_down_event(
             &mut self,
-            _ctx: &mut Context,
+            ctx: &mut Context,
             button: MouseButton,
             x: f32,
             y: f32,
         ) {
+            
+            let index = self.automation.closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    println!("left click");
-                    self.auto.insert(Anchor {
+                    self.automation.insert(Anchor {
                         point: Vec2::new(x, y / self.dimensions.y),
-                        weight: 1.,
+                        weight: Weight::Curve(0.),
                     });
+                }
+                MouseButton::Middle => {
+                    self.automation.set_weight(
+                        index,
+                        match self.automation.get_weight(index) {
+                            Weight::Curve(w) => if w != 0. { Weight::Curve(0.) } else { Weight::ForwardBias },
+                            Weight::ForwardBias => Weight::ReverseBias,
+                            Weight::ReverseBias => Weight::Curve(0.)
+                        }
+                    );
                 }
                 _ => {}
             }
         }
 
         fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
-            self.auto.closest_to(ggez::input::mouse::position(ctx).into()).add_to_weight(
-                if y < 0. {
-                    0.01
-                }
-                else if 0. < y {
-                    -0.01
-                }
-                else {
-                    0.
-                }
-            );
+            let index = self.automation.closest_to(ggez::input::mouse::position(ctx).into());
+            let weight = self.automation.get_weight(index);
+            match weight {
+                Weight::Curve(w) => 
+                    self.automation.set_weight(index, Weight::Curve(w + if 0. < y { 0.05 } else { -0.05 })),
+                _ => {}
+            };
         }
 
     }
