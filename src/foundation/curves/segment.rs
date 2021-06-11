@@ -15,10 +15,10 @@ pub enum Ctrl {
 impl Ctrl {
     pub fn end(&self) -> Point<f32> {
         match self {
-            Ctrl::Linear(p) => *p,
-            Ctrl::Quadratic(_, p) => *p,
-            Ctrl::ThreePointCircle(_, p) => *p,
-            Ctrl::Cubic(_, _, p) => *p,
+            Self::Linear(p) => *p,
+            Self::Quadratic(_, p) => *p,
+            Self::ThreePointCircle(_, p) => *p,
+            Self::Cubic(_, _, p) => *p,
         }
     }
 }
@@ -170,15 +170,12 @@ pub struct SegmentSeeker<'a> {
 }
 
 impl<'a> SegmentSeeker<'a> {
-    fn interp(&self, t: f32) -> Vec2 { 
+    fn interp(&self, t: f32) -> Vec2 {
         if self.index == self.segment.point_lut.len() {
             self.segment.point_lut[FromEnd(0)]
-        }
-        else if self.index == 0 {
+        } else if self.index == 0 {
             self.segment.point_lut[0]
-            
-        }
-        else {
+        } else {
             let start = self.segment.point_lut[self.index - 1];
             let end = self.segment.point_lut[self.index];
 
@@ -243,7 +240,7 @@ impl<'a> Seekable<'a, Vec2> for Segment {
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
             index: 0,
-            segment: &self
+            segment: &self,
         }
     }
 }
