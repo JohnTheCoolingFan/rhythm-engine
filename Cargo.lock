@@ -2139,6 +2139,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rhythm-engine"
+version = "0.1.0"
+dependencies = [
+ "duplicate",
+ "ggez",
+ "glam 0.13.1",
+ "lyon_geom",
+ "undo",
+]
+
+[[package]]
 name = "rodio"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2185,17 +2196,6 @@ dependencies = [
  "lazy_static",
  "log",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "rythm-engine"
-version = "0.1.0"
-dependencies = [
- "duplicate",
- "ggez",
- "glam 0.13.1",
- "lyon_geom",
- "undo",
 ]
 
 [[package]]

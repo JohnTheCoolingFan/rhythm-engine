@@ -1,5 +1,5 @@
 [package]
-name = "rythm-engine"
+name = "rhythm-engine"
 version = "0.1.0"
 authors = ["iiYese"]
 edition = "2018"
