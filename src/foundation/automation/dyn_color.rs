@@ -1,5 +1,6 @@
 use crate::{foundation::automation::*, utils::seeker::*};
 use ggez::graphics::Color;
+use glam::Vec2;
 
 pub struct ColorAnchor {
     color: Color,
@@ -10,14 +11,14 @@ impl ColorAnchor {
     pub fn new(c: Color, o: f32) -> Self {
         Self {
             color: c,
-            offset: o
+            offset: o,
         }
     }
 }
 
 pub struct DynColor {
     upper_colors: Vec<ColorAnchor>,
-    pub automation: Automation,
+    automation: Automation,
     lower_colors: Vec<ColorAnchor>,
 }
 
@@ -38,12 +39,12 @@ impl DynColor {
 
     fn insert(vec: &mut Vec<ColorAnchor>, color_anch: ColorAnchor) {
         vec.insert(
-            match vec.binary_search_by(|anch| anch.offset.partial_cmp(&color_anch.offset).unwrap()) 
+            match vec.binary_search_by(|anch| anch.offset.partial_cmp(&color_anch.offset).unwrap())
             {
                 Ok(index) => index,
-                Err(index) => index
-            }, 
-            color_anch
+                Err(index) => index,
+            },
+            color_anch,
         );
     }
 
@@ -55,10 +56,9 @@ impl DynColor {
         Self::insert(&mut self.lower_colors, color_anch);
     }
 
-    pub fn get_automation_points(&self) {
-
+    pub fn get_automation(&mut self) -> &mut Automation {
+        &mut self.automation
     }
-
 }
 
 pub struct DynColorSeeker<'a> {
@@ -70,23 +70,21 @@ pub struct DynColorSeeker<'a> {
 
 impl<'a> DynColorSeeker<'a> {
     fn interp(&self, t: f32) -> Color {
-        let c1 = self.dyncolor.lower_colors[
-            if self.lower_index == self.dyncolor.lower_colors.len() {
-                self.lower_index - 1
-            }
-            else { 
-                self.lower_index
-            }
-        ].color;
-            
-        let c2 = self.dyncolor.upper_colors[
-            if self.upper_index == self.dyncolor.upper_colors.len() {
-                self.upper_index - 1
-            }
-            else { 
-                self.upper_index
-            }
-        ].color;
+        let c1 = self.dyncolor.lower_colors[if self.lower_index == self.dyncolor.lower_colors.len()
+        {
+            self.lower_index - 1
+        } else {
+            self.lower_index
+        }]
+        .color;
+
+        let c2 = self.dyncolor.upper_colors[if self.upper_index == self.dyncolor.upper_colors.len()
+        {
+            self.upper_index - 1
+        } else {
+            self.upper_index
+        }]
+        .color;
 
         Color::new(
             (c2.r - c1.r) * t + c1.r,
@@ -105,12 +103,16 @@ impl<'a> Seeker<Color> for DynColorSeeker<'a> {
             }
             self.upper_index += 1;
         }
+        self.upper_index -= if self.upper_index == 0 { 0 } else { 1 };
+
         while self.lower_index < self.dyncolor.lower_colors.len() {
             if offset <= self.dyncolor.lower_colors[self.lower_index].offset {
                 break;
             }
             self.lower_index += 1;
         }
+        self.lower_index -= if self.lower_index == 0 { 0 } else { 1 };
+
         let y = self.automation_seeker.seek(offset);
         self.interp(y)
     }
@@ -122,7 +124,13 @@ impl<'a> Seeker<Color> for DynColorSeeker<'a> {
             .binary_search_by(|anch| anch.offset.partial_cmp(&val).unwrap())
         {
             Ok(index) => index,
-            Err(index) => index,
+            Err(index) => {
+                if index == 0 {
+                    0
+                } else {
+                    index - 1
+                }
+            }
         };
 
         self.lower_index = match self
@@ -131,8 +139,16 @@ impl<'a> Seeker<Color> for DynColorSeeker<'a> {
             .binary_search_by(|anch| anch.offset.partial_cmp(&val).unwrap())
         {
             Ok(index) => index,
-            Err(index) => index,
+            Err(index) => {
+                if index == 0 {
+                    0
+                } else {
+                    index - 1
+                }
+            }
         };
+
+        println!("{}, {}", self.upper_index, self.lower_index);
 
         let y = self.automation_seeker.jump(val);
         self.interp(y)
@@ -146,7 +162,7 @@ impl<'a> Seekable<'a, Color> for DynColor {
             upper_index: 0,
             lower_index: 0,
             automation_seeker: self.automation.seeker(),
-            dyncolor: & self
+            dyncolor: &self,
         }
     }
 }
@@ -155,11 +171,10 @@ impl<'a> Seekable<'a, Color> for DynColor {
 mod tests {
     use super::*;
     use ggez::{
-        timer::time_since_start,
         event::{self, EventHandler, MouseButton},
         graphics::*,
-        Context,
-        GameResult
+        timer::time_since_start,
+        Context, GameResult,
     };
     use glam::Vec2;
 
@@ -176,9 +191,18 @@ mod tests {
                 dimensions: Vec2::new(x, 1100.),
             };
 
-            test.color.insert_lower(ColorAnchor{color: Color::new(1., 0., 0., 1.), offset: x / 2.});
-            test.color.insert_upper(ColorAnchor{color: Color::new(0., 1., 0., 1.), offset: x * (2. / 3.)});
-            test.color.insert_upper(ColorAnchor{color: Color::new(0., 1., 1., 1.), offset: x / 2.});
+            test.color.insert_lower(ColorAnchor {
+                color: Color::new(1., 0., 0., 1.),
+                offset: x / 2.,
+            });
+            test.color.insert_upper(ColorAnchor {
+                color: Color::new(0., 1., 0., 1.),
+                offset: x * (2. / 3.),
+            });
+            test.color.insert_upper(ColorAnchor {
+                color: Color::new(0., 1., 1., 1.),
+                offset: x / 2.,
+            });
 
             Ok(test)
         }
@@ -192,8 +216,34 @@ mod tests {
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
             let t = time_since_start(ctx);
             let mut seeker = self.color.seeker();
-            clear(ctx, seeker.jump(t.as_millis() as f32 % 2800.));
-            
+            clear(ctx, seeker.seek(t.as_millis() as f32 % 5000.));
+
+            for col in &self.color.lower_colors {
+                let rect = Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(0., 0., self.dimensions.x, 20.),
+                    col.color,
+                )?;
+
+                draw(ctx, &rect, (Vec2::new(col.offset, 0.),))?;
+            }
+
+            for col in &self.color.upper_colors {
+                let rect = Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(0., 0., self.dimensions.x, 20.),
+                    col.color,
+                )?;
+
+                draw(
+                    ctx,
+                    &rect,
+                    (Vec2::new(col.offset, self.dimensions.y - 20.),),
+                )?;
+            }
+
             let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
             let circle = Mesh::new_circle(
                 ctx,
@@ -205,35 +255,76 @@ mod tests {
             )?;
             draw(ctx, &circle, (mouse_pos,))?;
 
+            let mut auto_seeker = self.color.get_automation().seeker();
+            let d = self.dimensions;
+            let auto_points: Vec<Vec2> = (0..200)
+                .map(|x| {
+                    Vec2::new(
+                        (x as f32 / 200.) * d.x,
+                        auto_seeker.seek((x as f32 / 200.) * d.x) * d.y,
+                    )
+                })
+                .collect();
+
+            let lines = MeshBuilder::new()
+                .polyline(
+                    DrawMode::Stroke(StrokeOptions::DEFAULT),
+                    auto_points.as_slice(),
+                    Color::new(1., 1., 1., 1.),
+                )?
+                .build(ctx)?;
+            draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
+
             present(ctx)?;
             Ok(())
         }
 
-        /*fn mouse_button_down_event(
+        fn mouse_button_down_event(
             &mut self,
-            _ctx: &mut Context,
+            ctx: &mut Context,
             button: MouseButton,
             x: f32,
             y: f32,
         ) {
-            let index = self.auto.closest_to(ggez::input::mouse::position(ctx).into());
+            let automation = self.color.get_automation();
+            let index = automation.closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    let p = Vec2::new(x, y / self.dimensions.y);
-                    let q = self.color.automation[self.color.automation.closest_to(p)].point;
-                    if (p - q).length() < 20. {
-                        self. = p;
-                    } else {
-                        self.color.automation.insert(Anchor::new(
-                            p,
-                            1.
-                        ));
-                    }
+                    automation.insert(Anchor::new(
+                        Vec2::new(x, y / self.dimensions.y),
+                        Weight::Curve(0.),
+                    ));
+                }
+                MouseButton::Middle => {
+                    automation.set_weight(
+                        index,
+                        match automation.get_weight(index) {
+                            Weight::Curve(w) => {
+                                if w != 0. {
+                                    Weight::Curve(0.)
+                                } else {
+                                    Weight::ForwardBias
+                                }
+                            }
+                            Weight::ForwardBias => Weight::ReverseBias,
+                            Weight::ReverseBias => Weight::Curve(0.),
+                        },
+                    );
                 }
                 _ => {}
             }
-        }*/
+        }
 
+        fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
+            let automation = self.color.get_automation();
+            let index = automation.closest_to(ggez::input::mouse::position(ctx).into());
+            let weight = automation.get_weight(index);
+            match weight {
+                Weight::Curve(w) => automation
+                    .set_weight(index, Weight::Curve(w + if 0. < y { 0.05 } else { -0.05 })),
+                _ => {}
+            };
+        }
     }
 
     #[test]
@@ -245,5 +336,4 @@ mod tests {
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
     }
-
 }
