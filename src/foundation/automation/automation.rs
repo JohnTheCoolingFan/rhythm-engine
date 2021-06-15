@@ -32,6 +32,8 @@ pub struct Automation {
 
 impl Automation {
     pub fn new(lb: f32, ub: f32, len: f32, dynamic: bool) -> Self {
+        assert!(lb < ub, "upper bound must be greater than lower bound");
+        assert!(0. < len, "length cannot be zero or negative");
         Automation {
             upper_bound: ub,
             lower_bound: lb,
@@ -153,6 +155,11 @@ impl<'a> AutomationSeeker<'a> {
         self.automation.lower_bound
             + (self.automation.upper_bound - self.automation.lower_bound) * y
     }
+
+    pub fn get_index(&self) -> usize {
+        self.index
+    }
+
 
     pub fn interp(&self, offset: f32) -> f32 {
         self.from_y(if 0 == self.index {

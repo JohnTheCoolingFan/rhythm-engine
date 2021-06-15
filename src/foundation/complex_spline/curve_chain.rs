@@ -1,4 +1,4 @@
-use super::segment::{Ctrl, Segment};
+use crate::foundation::complex_spline::*;
 use crate::utils::from_end::FromEnd;
 use lyon_geom::Point;
 
@@ -73,6 +73,13 @@ impl CurveChain {
         self.segments.clear();
         self.segments
             .push(Segment::new(Ctrl::Linear(Point::new(0.0, 0.0)), 0.05));
+    }
+}
+
+impl std::ops::Index<usize> for CurveChain {
+    type Output = Segment;
+    fn index(&self, n: usize) -> &Segment {
+        &self.segments[n]
     }
 }
 

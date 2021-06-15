@@ -1,19 +1,17 @@
+Core:
+Add error handling to operations
+
 Editor:
 -Play audio
 -Timing, static + variable BPM
 -Song Timer
 
-*FFT audio visualizer
-
-Core:
--Fixed range automation clips
--Seperate play objects into constituents and make it composable
+*Audio visualizer
 
 1. 	Polygon
 2.    -CSplines
 3.       |Rot|scale|
 2.    -Fill colour
-3.       |R|G|B|A|
 2.    -Hit or Avoid
 2.    -Friction/Grab
 3.       |Rot|Dir|

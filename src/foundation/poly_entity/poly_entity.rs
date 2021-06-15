@@ -4,7 +4,7 @@ use crate::core::automation;
 use crate::core::complex_spline::ComplexSpline;
 
 pub enum Mode {
-    Inactive(f32, f32)
+    Inactive(f32, f32),
     Hit(f32, f32, f32),
     Hold(f32, f32, f32),
     Avoid(f32, f32),
