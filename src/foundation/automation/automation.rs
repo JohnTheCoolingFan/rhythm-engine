@@ -91,12 +91,12 @@ impl Automation {
             .anchors
             .iter()
             .enumerate()
-            .min_by(|(_, a), (_, b)| {
+            .min_by(|(_, a), (_, b)|
                 (a.point - point)
                     .length()
                     .partial_cmp(&(b.point - point).length())
                     .unwrap()
-            })
+            )
             .unwrap();
 
         index

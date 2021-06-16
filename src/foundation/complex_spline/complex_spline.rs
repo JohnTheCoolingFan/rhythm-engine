@@ -53,4 +53,36 @@ impl<'a> Seeker<Vec2> for CompSplSeeker<'a> {
     }
 }
 
+impl<'a> Seekable<'a, Vec2> for ComplexSpline {
+    type Seeker = CompSplSeeker<'a>;
+    fn seeker(&'a self) -> Self::Seeker {
+        CompSplSeeker {
+            auto_seeker: self.automation.seeker(),
+            segment_seeker: self.curve[0].seeker(),
+            c_spline: &self,
+        }
+    }
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ggez::{
+        graphics::*,
+        event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
+        Context,
+        GameResult
+    };
+
+    struct CompSplTest {
+        cps: ComplexSpline
+    }
+
+    /*impl CompSplTest {
+        fn new() -> Self {
+            Self {
+                cps: ComplexSpline::new(0, , intial)
+            }
+        }
+    }*/
+}

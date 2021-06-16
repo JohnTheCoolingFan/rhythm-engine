@@ -1,5 +1,6 @@
 use crate::foundation::complex_spline::*;
 use crate::utils::from_end::FromEnd;
+use glam::Vec2;
 use lyon_geom::Point;
 
 pub struct CurveChain {
@@ -74,6 +75,21 @@ impl CurveChain {
         self.segments
             .push(Segment::new(Ctrl::Linear(Point::new(0.0, 0.0)), 0.05));
     }
+
+    pub fn closest_to(&self, point: Vec2) {
+        let (index, _) = self
+            .segments
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)|
+                (a.ctrls.end().into() - point)
+                    .length()
+                    .partial_cmp(&(b.ctrls.end() - point).length())
+                    .unwrap()
+            )
+            .unwrap()
+    }
+
 }
 
 impl std::ops::Index<usize> for CurveChain {
