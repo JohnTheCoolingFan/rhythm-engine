@@ -76,18 +76,23 @@ impl CurveChain {
             .push(Segment::new(Ctrl::Linear(Point::new(0.0, 0.0)), 0.05));
     }
 
-    pub fn closest_to(&self, point: Vec2) {
+    pub fn closest_to(&self, point: Vec2) -> usize {
         let (index, _) = self
             .segments
             .iter()
             .enumerate()
-            .min_by(|(_, a), (_, b)|
-                (a.ctrls.end().into() - point)
+            .min_by(|(_, a), (_, b)| {
+                let p = a.ctrls.end();
+                let q = b.ctrls.end();
+                (Vec2::new(p.x, p.y) - point)
                     .length()
-                    .partial_cmp(&(b.ctrls.end() - point).length())
+                    .partial_cmp(&(Vec2::new(q.x, q.y) - point.into()).length())
                     .unwrap()
+                }
             )
-            .unwrap()
+            .unwrap();
+
+        index
     }
 
 }

@@ -214,9 +214,9 @@ mod tests {
         }
 
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
-            let t = time_since_start(ctx);
+            let t = ((time_since_start(ctx).as_millis() as f32 % 5000.) / 5000.) * self.dimensions.x;
             let mut seeker = self.color.seeker();
-            clear(ctx, seeker.seek(t.as_millis() as f32 % 5000.));
+            clear(ctx, seeker.seek(t));
 
             for col in &self.color.lower_colors {
                 let rect = Mesh::new_rectangle(
@@ -254,7 +254,7 @@ mod tests {
                 Color::new(1.0, 1.0, 1.0, 1.0),
             )?;
             draw(ctx, &circle, (mouse_pos,))?;
-
+            
             let mut auto_seeker = self.color.get_automation().seeker();
             let d = self.dimensions;
             let auto_points: Vec<Vec2> = (0..200)
@@ -274,6 +274,15 @@ mod tests {
                 )?
                 .build(ctx)?;
             draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
+
+            let t_line = MeshBuilder::new()
+                .polyline(
+                    DrawMode::Stroke(StrokeOptions::DEFAULT),
+                    &[Vec2::new(0., 0.), Vec2::new(0., self.dimensions.y)],
+                    Color::WHITE
+                )?
+                .build(ctx)?;
+            draw(ctx, &t_line, (Vec2::new(t, 0.),))?;
 
             present(ctx)?;
             Ok(())
