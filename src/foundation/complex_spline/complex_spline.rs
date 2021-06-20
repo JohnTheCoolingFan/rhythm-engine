@@ -1,7 +1,6 @@
-use crate::foundation::automation::automation::AutomationSeeker;
+use crate::foundation::{automation::*, complex_spline::*};
 use crate::utils::*;
-use crate::foundation::complex_spline::*;
-use crate::foundation::automation::*;
+use duplicate::duplicate;
 use glam::Vec2;
 
 use super::segment::SegmentSeeker;
@@ -9,18 +8,17 @@ use super::segment::SegmentSeeker;
 struct ComplexSpline {
     curve: CurveChain,
     offset: f32,
-    automation: Automation
+    automation: Automation,
 }
 
 impl ComplexSpline {
-    pub fn new(start: f32, end: f32, intial: Ctrl) -> Self {
-        assert!(start <= end, "end offset cannot be less than start");
+    pub fn new(start: f32, len: f32, intial: Ctrl) -> Self {
         let mut new_curve = CurveChain::new();
         new_curve.push_from_absolute(intial);
         Self {
             curve: new_curve,
             offset: start,
-            automation: Automation::new(0., 1., end - start, false)
+            automation: Automation::new(0., 1., len, false),
         }
     }
 }
@@ -28,28 +26,19 @@ impl ComplexSpline {
 struct CompSplSeeker<'a> {
     c_spline: &'a ComplexSpline,
     auto_seeker: AutomationSeeker<'a>,
-    segment_seeker: SegmentSeeker<'a>
+    segment_seeker: SegmentSeeker<'a>,
 }
 
 impl<'a> Seeker<Vec2> for CompSplSeeker<'a> {
-    fn jump(&mut self, val: f32) -> Vec2 {
+    #[duplicate(method; [seek]; [jump])]
+    fn method(&mut self, val: f32) -> Vec2 {
         let old_index = self.auto_seeker.get_index();
-        let y = self.auto_seeker.jump(val - self.c_spline.offset);
+        let y = self.auto_seeker.method(val - self.c_spline.offset);
         let new_index = self.auto_seeker.get_index();
         if old_index != new_index {
             self.segment_seeker = self.c_spline.curve[new_index].seeker();
         }
-        self.segment_seeker.seek(y)
-    }
-
-    fn seek(&mut self, val: f32) -> Vec2 {
-        let old_index = self.auto_seeker.get_index();
-        let y = self.auto_seeker.seek(val - self.c_spline.offset);
-        let new_index = self.auto_seeker.get_index();
-        if old_index != new_index {
-            self.segment_seeker = self.c_spline.curve[new_index].seeker();
-        }
-        self.segment_seeker.seek(y)
+        self.segment_seeker.method(y)
     }
 }
 
@@ -68,21 +57,45 @@ impl<'a> Seekable<'a, Vec2> for ComplexSpline {
 mod tests {
     use super::*;
     use ggez::{
-        graphics::*,
         event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
-        Context,
-        GameResult
+        graphics::*,
+        Context, GameResult,
     };
+    use lyon_geom::Point;
 
-    struct CompSplTest {
-        cps: ComplexSpline
+    struct Test {
+        cps: ComplexSpline,
+        dimensions: Vec2,
     }
 
-    /*impl CompSplTest {
-        fn new() -> Self {
-            Self {
-                cps: ComplexSpline::new(0, , intial)
-            }
+    impl Test {
+        fn new() -> GameResult<Self> {
+            let x = 2800.;
+            let y = 1000.;
+            Ok(Self {
+                cps: ComplexSpline::new(0., x, Ctrl::Linear(Point::new(x, 0.))),
+                dimensions: Vec2::new(x, y),
+            })
         }
-    }*/
+    }
+
+    impl EventHandler for Test {
+        fn update(&mut self, _ctx: &mut Context) -> GameResult {
+            Ok(())
+        }
+
+        fn draw(&mut self, _ctx: &mut Context) -> GameResult {
+            Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    fn complex_spline() -> GameResult {
+        let state = Test::new()?;
+        let cb = ggez::ContextBuilder::new("Complex Spline test", "iiYese").window_mode(
+            ggez::conf::WindowMode::default().dimensions(state.dimensions.x, state.dimensions.y),
+        );
+        let (ctx, event_loop) = cb.build()?;
+        event::run(ctx, event_loop, state)
+    }
 }

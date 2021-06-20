@@ -91,12 +91,12 @@ impl Automation {
             .anchors
             .iter()
             .enumerate()
-            .min_by(|(_, a), (_, b)|
+            .min_by(|(_, a), (_, b)| {
                 (a.point - point)
                     .length()
                     .partial_cmp(&(b.point - point).length())
                     .unwrap()
-            )
+            })
             .unwrap();
 
         index
@@ -159,7 +159,6 @@ impl<'a> AutomationSeeker<'a> {
     pub fn get_index(&self) -> usize {
         self.index
     }
-
 
     pub fn interp(&self, offset: f32) -> f32 {
         self.from_y(if 0 == self.index {
@@ -237,12 +236,12 @@ mod tests {
     };
     use ggez::{Context, GameResult};
 
-    struct AutomationTest {
+    struct Test {
         automation: Automation,
         dimensions: Vec2,
     }
 
-    impl AutomationTest {
+    impl Test {
         fn new() -> GameResult<Self> {
             Ok(Self {
                 automation: Automation::new(0., 1., 2800., false),
@@ -251,7 +250,7 @@ mod tests {
         }
     }
 
-    impl EventHandler for AutomationTest {
+    impl EventHandler for Test {
         fn update(&mut self, _ctx: &mut Context) -> GameResult {
             Ok(())
         }
@@ -347,7 +346,7 @@ mod tests {
 
     #[test]
     pub fn automation() -> GameResult {
-        let state = AutomationTest::new()?;
+        let state = Test::new()?;
         let cb = ggez::ContextBuilder::new("Automation test", "iiYese").window_mode(
             ggez::conf::WindowMode::default().dimensions(state.dimensions.x, state.dimensions.y),
         );

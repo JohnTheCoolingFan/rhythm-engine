@@ -178,13 +178,13 @@ mod tests {
     };
     use glam::Vec2;
 
-    struct DynColorTest {
+    struct Test {
         color: DynColor,
         dimensions: Vec2,
     }
 
-    impl DynColorTest {
-        fn new() -> GameResult<DynColorTest> {
+    impl Test {
+        fn new() -> GameResult<Test> {
             let x: f32 = 2800.;
             let mut test = Self {
                 color: DynColor::new(x),
@@ -208,13 +208,14 @@ mod tests {
         }
     }
 
-    impl EventHandler for DynColorTest {
+    impl EventHandler for Test {
         fn update(&mut self, _ctx: &mut Context) -> GameResult {
             Ok(())
         }
 
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
-            let t = ((time_since_start(ctx).as_millis() as f32 % 5000.) / 5000.) * self.dimensions.x;
+            let t =
+                ((time_since_start(ctx).as_millis() as f32 % 5000.) / 5000.) * self.dimensions.x;
             let mut seeker = self.color.seeker();
             clear(ctx, seeker.seek(t));
 
@@ -254,7 +255,7 @@ mod tests {
                 Color::new(1.0, 1.0, 1.0, 1.0),
             )?;
             draw(ctx, &circle, (mouse_pos,))?;
-            
+
             let mut auto_seeker = self.color.get_automation().seeker();
             let d = self.dimensions;
             let auto_points: Vec<Vec2> = (0..200)
@@ -279,7 +280,7 @@ mod tests {
                 .polyline(
                     DrawMode::Stroke(StrokeOptions::DEFAULT),
                     &[Vec2::new(0., 0.), Vec2::new(0., self.dimensions.y)],
-                    Color::WHITE
+                    Color::WHITE,
                 )?
                 .build(ctx)?;
             draw(ctx, &t_line, (Vec2::new(t, 0.),))?;
@@ -338,7 +339,7 @@ mod tests {
 
     #[test]
     pub fn dyncolor() -> GameResult {
-        let state = DynColorTest::new()?;
+        let state = Test::new()?;
         let cb = ggez::ContextBuilder::new("Dynamic Color test", "iiYese").window_mode(
             ggez::conf::WindowMode::default().dimensions(state.dimensions.x, state.dimensions.y),
         );

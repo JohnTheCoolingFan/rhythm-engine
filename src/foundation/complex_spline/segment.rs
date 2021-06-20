@@ -186,6 +186,7 @@ impl<'a> SegmentSeeker<'a> {
     }
 }
 
+///0. <= t <= 1.
 impl<'a> Seeker<Vec2> for SegmentSeeker<'a> {
     fn seek(&mut self, t: f32) -> Vec2 {
         debug_assert!(0. <= t && t <= 1.);

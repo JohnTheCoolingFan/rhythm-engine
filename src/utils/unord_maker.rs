@@ -1,7 +1,7 @@
 //needs better names
 pub trait MakerPart {
     type Complete;
-    
+
     fn add(self) -> Self;
     fn try_make(self) -> Option<Self::Complete>;
 }

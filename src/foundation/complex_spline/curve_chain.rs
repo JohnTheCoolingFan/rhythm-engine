@@ -88,13 +88,11 @@ impl CurveChain {
                     .length()
                     .partial_cmp(&(Vec2::new(q.x, q.y) - point.into()).length())
                     .unwrap()
-                }
-            )
+            })
             .unwrap();
 
         index
     }
-
 }
 
 impl std::ops::Index<usize> for CurveChain {
@@ -117,15 +115,15 @@ mod tests {
     use ggez::{Context, GameResult};
     use glam::Vec2;
 
-    struct CurveTest {
+    struct Test {
         curve: CurveChain,
         point_buff: Vec<Point<f32>>,
         selected_segment: Option<usize>,
     }
 
-    impl CurveTest {
-        fn new() -> GameResult<CurveTest> {
-            Ok(CurveTest {
+    impl Test {
+        fn new() -> GameResult<Test> {
+            Ok(Test {
                 curve: CurveChain::new(),
                 point_buff: vec![],
                 selected_segment: None,
@@ -133,7 +131,7 @@ mod tests {
         }
     }
 
-    impl EventHandler for CurveTest {
+    impl EventHandler for Test {
         fn update(&mut self, _ctx: &mut Context) -> GameResult {
             Ok(())
         }
@@ -258,7 +256,7 @@ mod tests {
         let cb = ggez::ContextBuilder::new("Curve test", "iiYese")
             .window_mode(ggez::conf::WindowMode::default().dimensions(1920., 1080.));
         let (ctx, event_loop) = cb.build()?;
-        let state = CurveTest::new()?;
+        let state = Test::new()?;
         event::run(ctx, event_loop, state)
     }
 }

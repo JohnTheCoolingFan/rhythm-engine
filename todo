@@ -1,7 +1,7 @@
 Core:
-Add error handling to operations
+Implement unordered maker for foundation types
 
-Editor:
+Game Loop/Editor:
 -Play audio
 -Timing, static + variable BPM
 -Song Timer
@@ -10,7 +10,7 @@ Editor:
 
 1. 	Polygon
 2.    -CSplines
-3.       |Rot|scale|
+3.       Local Rot/Scale
 2.    -Fill colour
 2.    -Hit or Avoid
 2.    -Friction/Grab
