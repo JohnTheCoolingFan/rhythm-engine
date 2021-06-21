@@ -84,7 +84,19 @@ mod tests {
             Ok(())
         }
 
-        fn draw(&mut self, _ctx: &mut Context) -> GameResult {
+        fn draw(&mut self, ctx: &mut Context) -> GameResult {
+            let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
+            let circle = Mesh::new_circle(
+                ctx,
+                DrawMode::fill(),
+                Vec2::new(0.0, 0.0),
+                10.0,
+                2.0,
+                Color::new(1.0, 1.0, 1.0, 1.0),
+            )?;
+            draw(ctx, &circle, (mouse_pos,))?;
+
+            present(ctx)?;
             Ok(())
         }
     }

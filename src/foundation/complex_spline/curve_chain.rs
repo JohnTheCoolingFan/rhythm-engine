@@ -39,15 +39,18 @@ impl CurveChain {
         debug_assert!(0 < index && index < self.segments.len());
         self.segments[index].ctrls = match ctrls {
             Ctrl::Cubic(p0, p1, p2) => {
-                let start = self.segments[FromEnd(0)].ctrls.end();
+                let start = self.segments[index - 1].ctrls.end();
                 let a1 = Point::new(p0.x - start.x, p0.y - start.y);
                 let a2 = p1.to_vector() - p2.to_vector();
                 Ctrl::Cubic(a1, Point::new(a2.x, a2.y), p2)
             }
             _ => ctrls,
         };
-        let p = self.segments[index - 1].ctrls.end();
-        self.segments[index].recompute(p);
+        let p0 = self.segments[index - 1].ctrls.end();
+        self.segments[index].recompute(p0);
+        if index + 1 < self.segments.len() {
+            self.segments[index + 1].recompute(ctrls.end());
+        }
     }
 
     pub fn bisect_segment(&mut self, index: usize) {
@@ -67,7 +70,11 @@ impl CurveChain {
 
     pub fn remove(&mut self, index: usize) -> Segment {
         debug_assert!(0 < index && index < self.segments.len());
-        self.segments.remove(index)
+        let segment = self.segments.remove(index);
+        let p0 = self.segments[index - 1].ctrls.end();
+        self.segments[index].recompute(p0);
+        segment
+
     }
 
     pub fn clear(&mut self) {
@@ -110,6 +117,7 @@ mod tests {
     use ggez::graphics::*;
     use ggez::{
         event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
+        input::keyboard::is_key_pressed,
         graphics::MeshBuilder,
     };
     use ggez::{Context, GameResult};
@@ -207,6 +215,14 @@ mod tests {
                 KeyCode::C => {
                     self.curve.clear();
                 }
+                KeyCode::Space => {
+                    self.selected_segment.map(|index| self.curve.bisect_segment(index));
+                    self.selected_segment = None;
+                }
+                KeyCode::Delete => {
+                    self.selected_segment.map(|index| self.curve.remove(index));
+                    self.selected_segment = None;
+                }
                 _ => {}
             }
 
@@ -229,22 +245,28 @@ mod tests {
                 }
                 Some(index) => {
                     self.curve.replace_from_absolute(index, ctrls);
+                    self.selected_segment = None;
                 }
             }
         }
 
         fn mouse_button_down_event(
             &mut self,
-            _ctx: &mut Context,
+            ctx: &mut Context,
             button: MouseButton,
             x: f32,
             y: f32,
         ) {
             match button {
                 MouseButton::Left => {
-                    println!("click");
-                    self.point_buff.push(Point::new(x, y));
-                    println!("{:?}", self.point_buff);
+                    if is_key_pressed(ctx, KeyCode::LShift) {
+                        self.selected_segment = Some(self.curve.closest_to(Vec2::new(x, y)));
+                    }
+                    else {
+                        println!("click");
+                        self.point_buff.push(Point::new(x, y));
+                        println!("{:?}", self.point_buff);
+                    }
                 }
                 _ => {}
             }

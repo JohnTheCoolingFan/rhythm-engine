@@ -326,6 +326,9 @@ mod tests {
                         },
                     );
                 }
+                MouseButton::Right => {
+                    self.automation.remove(index);
+                }
                 _ => {}
             }
         }
