@@ -1,5 +1,5 @@
 use crate::foundation::complex_spline::*;
-use crate::utils::from_end::FromEnd;
+use crate::utils::misc_traits::FromEnd;
 use glam::Vec2;
 use lyon_geom::Point;
 

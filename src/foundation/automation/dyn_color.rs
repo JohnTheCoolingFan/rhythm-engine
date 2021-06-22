@@ -1,6 +1,5 @@
-use crate::{foundation::automation::*, utils::seeker::*};
+use crate::{foundation::automation::*, utils::misc_traits::*};
 use ggez::graphics::Color;
-use glam::Vec2;
 
 pub struct ColorAnchor {
     color: Color,

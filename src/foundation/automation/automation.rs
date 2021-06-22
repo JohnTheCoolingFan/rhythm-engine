@@ -1,4 +1,4 @@
-use crate::utils::{seeker::*, FromEnd};
+use crate::utils::misc_traits::*;
 use glam::Vec2;
 
 #[derive(Debug, Copy, Clone)]

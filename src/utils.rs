@@ -1,8 +1,5 @@
-pub mod from_end;
 pub mod misc_math;
-pub mod seeker;
-pub mod unord_maker;
+pub mod misc_traits;
 
-pub use from_end::FromEnd;
 pub use misc_math::{IsLeft, RotateAbout};
-pub use seeker::{Seekable, Seeker};
+pub use misc_traits::{Seekable, Seeker, FromEnd, ButtonState, MouseHandle};

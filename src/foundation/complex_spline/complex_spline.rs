@@ -1,5 +1,6 @@
 use crate::foundation::{automation::*, complex_spline::*};
-use crate::utils::*;
+use crate::utils::misc_traits::*;
+use ggez::event::MouseButton;
 use duplicate::duplicate;
 use glam::Vec2;
 
@@ -51,6 +52,14 @@ impl ComplexSpline {
 
         let index = atoc_index(self.automation.closest_to(Vec2::new(x, 0.)));
         self.curve.bisect_segment(index);
+    }
+}
+
+pub struct CurveSpace(pub MouseButton, pub Vec2, pub ButtonState);
+
+impl MouseHandle<CurveSpace> for ComplexSpline {
+    fn mouse_event(&self, CurveSpace(button, point, state): CurveSpace) {
+        
     }
 }
 
@@ -129,6 +138,19 @@ mod tests {
 
             present(ctx)?;
             Ok(())
+        }
+
+        fn mouse_button_down_event(
+            &mut self,
+            _ctx: &mut Context,
+            button: MouseButton,
+            x: f32, y: f32
+        ) {
+            match button {
+                MouseButton::Left => {
+                }
+                _ => {}
+            }
         }
     }
 
