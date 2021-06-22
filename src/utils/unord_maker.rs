@@ -2,8 +2,9 @@
 pub trait MakerPart {
     type Complete;
 
-    fn add(self) -> Self;
-    fn try_make(self) -> Option<Self::Complete>;
+    fn add(&mut self) -> Self;
+    fn ready(&self) -> bool;
+    fn try_make(&self) -> Option<Self::Complete>;
 }
 
 //pass in closure it calls to get part info???

@@ -11,6 +11,19 @@ struct ComplexSpline {
     automation: Automation,
 }
 
+//automation to curve index
+fn atoc_index(index: usize) -> usize {
+    index / 2 + index % 2
+}
+
+//curve to automation index
+fn ctoa_index(index: usize) -> usize {
+    match index {
+        0 => 0,
+        _ => index * 2 - 1
+    }
+}
+
 impl ComplexSpline {
     pub fn new(start: f32, len: f32, intial: Ctrl) -> Self {
         let mut new_curve = CurveChain::new();
@@ -20,6 +33,24 @@ impl ComplexSpline {
             offset: start,
             automation: Automation::new(0., 1., len, false),
         }
+    }
+
+    pub fn bisect_curve(&mut self, index: usize) {
+        self.curve.bisect_segment(index);
+        let start = self.automation.get_pos(ctoa_index(index));
+        let end = self.automation.get_pos(ctoa_index(index - 2));
+        let x = end.x - start.x;
+
+        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::ForwardBias));
+        self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::Curve(0.)));
+    }
+
+    pub fn insert_critical(&mut self, x: f32) {
+        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::ForwardBias));
+        self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::Curve(0.)));
+
+        let index = atoc_index(self.automation.closest_to(Vec2::new(x, 0.)));
+        self.curve.bisect_segment(index);
     }
 }
 
@@ -32,11 +63,11 @@ struct CompSplSeeker<'a> {
 impl<'a> Seeker<Vec2> for CompSplSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, val: f32) -> Vec2 {
-        let old_index = self.auto_seeker.get_index();
-        let y = self.auto_seeker.method(val - self.c_spline.offset);
-        let new_index = self.auto_seeker.get_index();
+        let old_index = atoc_index(self.auto_seeker.get_index());
+        let y =  self.auto_seeker.method(val - self.c_spline.offset);
+        let new_index = atoc_index(self.auto_seeker.get_index());
         if old_index != new_index {
-            self.segment_seeker = self.c_spline.curve[new_index].seeker();
+            self.segment_seeker = self.c_spline.curve[atoc_index(new_index)].seeker();
         }
         self.segment_seeker.method(y)
     }

@@ -69,16 +69,16 @@ impl Automation {
         self.anchors.len()
     }
 
-    pub fn insert(&mut self, item: Anchor) {
+    pub fn insert(&mut self, anch: Anchor) {
         self.anchors.insert(
             match self
                 .anchors
-                .binary_search_by(|elem| elem.point.x.partial_cmp(&item.point.x).unwrap())
+                .binary_search_by(|elem| elem.point.x.partial_cmp(&anch.point.x).unwrap())
             {
                 Ok(index) => index,
                 Err(index) => index,
             },
-            item,
+            anch,
         );
     }
 
