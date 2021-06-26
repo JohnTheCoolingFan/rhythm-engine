@@ -1,10 +1,19 @@
-Core:
-Implement unordered maker for foundation types
-
 Game Loop/Editor:
 -Play audio
 -Timing, static + variable BPM
 -Song Timer
+-Gui
+	Widgets:
+		Track
+		SubWidgets:
+			PolyEntity Mode
+			Automation Points
+		Track Misc
+
+
+		
+
+	
 
 *Audio visualizer
 
@@ -16,4 +25,20 @@ Game Loop/Editor:
 2.    -Friction/Grab
 3.       |Rot|Dir|
 2.    -|Rot|Scale|
+
+
+
+
+
+
+
+
+
+--Problems
+Editor:
+	Cross channel selection
+	= use similar logic to single channel selection
+
+	
+
 

@@ -1,15 +1,14 @@
 use crate::foundation::{automation::*, complex_spline::*};
 use crate::utils::misc_traits::*;
-use ggez::event::MouseButton;
 use duplicate::duplicate;
 use glam::Vec2;
 
 use super::segment::SegmentSeeker;
 
-struct ComplexSpline {
-    curve: CurveChain,
-    offset: f32,
-    automation: Automation,
+pub struct ComplexSpline {
+    pub(crate) curve: CurveChain,
+    pub(crate) offset: f32,
+    pub(crate) automation: Automation,
 }
 
 //automation to curve index
@@ -52,14 +51,6 @@ impl ComplexSpline {
 
         let index = atoc_index(self.automation.closest_to(Vec2::new(x, 0.)));
         self.curve.bisect_segment(index);
-    }
-}
-
-pub struct CurveSpace(pub MouseButton, pub Vec2, pub ButtonState);
-
-impl MouseHandle<CurveSpace> for ComplexSpline {
-    fn mouse_event(&self, CurveSpace(button, point, state): CurveSpace) {
-        
     }
 }
 
