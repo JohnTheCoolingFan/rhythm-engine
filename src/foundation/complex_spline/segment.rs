@@ -235,10 +235,11 @@ impl<'a> Seeker<Vec2> for SegmentSeeker<'a> {
     }
 }
 
-impl<'a> Seekable<'a, Vec2> for Segment {
-    type Seeker = SegmentSeeker<'a>;
-    fn seeker(&'a self) -> Self::Seeker {
-        Self::Seeker {
+impl<'a> Seekable<'a> for Segment {
+    type Output = Vec2;
+    type SeekerType = SegmentSeeker<'a>;
+    fn seeker(&'a self) -> SegmentSeeker<'a> {
+        Self::SeekerType {
             index: 0,
             segment: &self,
         }

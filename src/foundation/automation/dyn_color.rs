@@ -154,10 +154,11 @@ impl<'a> Seeker<Color> for DynColorSeeker<'a> {
     }
 }
 
-impl<'a> Seekable<'a, Color> for DynColor {
-    type Seeker = DynColorSeeker<'a>;
-    fn seeker(&'a self) -> Self::Seeker {
-        Self::Seeker {
+impl<'a> Seekable<'a> for DynColor {
+    type Output = Color;
+    type SeekerType = DynColorSeeker<'a>;
+    fn seeker(&'a self) -> Self::SeekerType {
+        Self::SeekerType {
             upper_index: 0,
             lower_index: 0,
             automation_seeker: self.automation.seeker(),

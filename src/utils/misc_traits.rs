@@ -3,9 +3,10 @@ pub trait Seeker<Output> {
     fn jump(&mut self, val: f32) -> Output;
 }
 
-pub trait Seekable<'a, Output> {
-    type Seeker: Seeker<Output>;
-    fn seeker(&'a self) -> Self::Seeker;
+pub trait Seekable<'a> {
+    type Output;
+    type SeekerType: Seeker<Self::Output>;
+    fn seeker(&'a self) -> Self::SeekerType;
 }
 
 

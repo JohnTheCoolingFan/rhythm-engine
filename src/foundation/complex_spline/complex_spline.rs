@@ -7,7 +7,6 @@ use super::segment::SegmentSeeker;
 
 pub struct ComplexSpline {
     pub(crate) curve: CurveChain,
-    pub(crate) offset: f32,
     pub(crate) automation: Automation,
 }
 
@@ -30,8 +29,7 @@ impl ComplexSpline {
         new_curve.push_from_absolute(intial);
         Self {
             curve: new_curve,
-            offset: start,
-            automation: Automation::new(0., 1., len, false),
+            automation: Automation::new(0., 1., len, false)
         }
     }
 
@@ -54,7 +52,7 @@ impl ComplexSpline {
     }
 }
 
-struct CompSplSeeker<'a> {
+pub struct CompSplSeeker<'a> {
     c_spline: &'a ComplexSpline,
     auto_seeker: AutomationSeeker<'a>,
     segment_seeker: SegmentSeeker<'a>,
@@ -64,7 +62,7 @@ impl<'a> Seeker<Vec2> for CompSplSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, val: f32) -> Vec2 {
         let old_index = atoc_index(self.auto_seeker.get_index());
-        let y =  self.auto_seeker.method(val - self.c_spline.offset);
+        let y =  self.auto_seeker.method(val);
         let new_index = atoc_index(self.auto_seeker.get_index());
         if old_index != new_index {
             self.segment_seeker = self.c_spline.curve[atoc_index(new_index)].seeker();
@@ -73,10 +71,11 @@ impl<'a> Seeker<Vec2> for CompSplSeeker<'a> {
     }
 }
 
-impl<'a> Seekable<'a, Vec2> for ComplexSpline {
-    type Seeker = CompSplSeeker<'a>;
-    fn seeker(&'a self) -> Self::Seeker {
-        CompSplSeeker {
+impl<'a> Seekable<'a> for ComplexSpline {
+    type Output = Vec2;
+    type SeekerType = CompSplSeeker<'a>;
+    fn seeker(&'a self) -> Self::SeekerType {
+        Self::SeekerType {
             auto_seeker: self.automation.seeker(),
             segment_seeker: self.curve[0].seeker(),
             c_spline: &self,

@@ -217,10 +217,11 @@ impl<'a> Seeker<f32> for AutomationSeeker<'a> {
     }
 }
 
-impl<'a> Seekable<'a, f32> for Automation {
-    type Seeker = AutomationSeeker<'a>;
-    fn seeker(&'a self) -> Self::Seeker {
-        Self::Seeker {
+impl<'a> Seekable<'a> for Automation {
+    type Output = f32;
+    type SeekerType = AutomationSeeker<'a>;
+    fn seeker(&'a self) -> Self::SeekerType {
+        Self::SeekerType {
             index: 0,
             automation: &self,
         }
