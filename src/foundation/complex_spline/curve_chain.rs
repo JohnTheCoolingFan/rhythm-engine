@@ -14,6 +14,10 @@ impl CurveChain {
         }
     }
 
+    pub fn segments(&self) -> &Vec<Segment> {
+        &self.segments
+    }
+
     pub fn push_from_absolute(&mut self, ctrls: Ctrl) {
         self.segments.push(Segment::new(
             match ctrls {
