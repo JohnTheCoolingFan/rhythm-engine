@@ -13,7 +13,7 @@ pub enum Ctrl {
 }
 
 impl Ctrl {
-    pub fn end(&self) -> Point<f32> {
+    pub fn get_end(&self) -> Point<f32> {
         match self {
             Self::Linear(p) => *p,
             Self::Quadratic(_, p) => *p,
@@ -24,7 +24,10 @@ impl Ctrl {
 
     pub fn set_end(&mut self, point: Point<f32>) {
         match self {
-            Self::Linear(&mut p) => p = point,
+            Self::Linear(ref mut p) => *p = point,
+            Self::Quadratic(_, ref mut p) => *p = point,
+            Self::ThreePointCircle(_, ref mut p) => *p = point,
+            Self::Cubic(_, _, ref mut p) => *p = point
         }
     }
 }
@@ -47,7 +50,7 @@ impl Segment {
     }
 
     pub fn recompute(&mut self, start: Point<f32>) {
-        let end = self.ctrls.end();
+        let end = self.ctrls.get_end();
 
         self.point_lut.clear();
         self.value_lut.clear();

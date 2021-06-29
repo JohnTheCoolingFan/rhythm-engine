@@ -22,7 +22,7 @@ impl CurveChain {
         self.segments.push(Segment::new(
             match ctrls {
                 Ctrl::Cubic(p0, p1, p2) => {
-                    let start = self.segments[FromEnd(0)].ctrls.end();
+                    let start = self.segments[FromEnd(0)].ctrls.get_end();
                     let a1 = Point::new(p0.x - start.x, p0.y - start.y);
                     let a2 = p1.to_vector() - p2.to_vector();
                     Ctrl::Cubic(a1, Point::new(a2.x, a2.y), p2)
@@ -31,7 +31,7 @@ impl CurveChain {
             },
             0.05,
         ));
-        let p = self.segments[FromEnd(1)].ctrls.end();
+        let p = self.segments[FromEnd(1)].ctrls.get_end();
         self.segments[FromEnd(0)].recompute(p);
     }
 
@@ -43,31 +43,31 @@ impl CurveChain {
         debug_assert!(0 < index && index < self.segments.len());
         self.segments[index].ctrls = match ctrls {
             Ctrl::Cubic(p0, p1, p2) => {
-                let start = self.segments[index - 1].ctrls.end();
+                let start = self.segments[index - 1].ctrls.get_end();
                 let a1 = Point::new(p0.x - start.x, p0.y - start.y);
                 let a2 = p1.to_vector() - p2.to_vector();
                 Ctrl::Cubic(a1, Point::new(a2.x, a2.y), p2)
             }
             _ => ctrls,
         };
-        let p0 = self.segments[index - 1].ctrls.end();
+        let p0 = self.segments[index - 1].ctrls.get_end();
         self.segments[index].recompute(p0);
         if index + 1 < self.segments.len() {
-            self.segments[index + 1].recompute(ctrls.end());
+            self.segments[index + 1].recompute(ctrls.get_end());
         }
     }
 
     pub fn bisect_segment(&mut self, index: usize) {
         debug_assert!(0 < index && index < self.segments.len());
-        let start = self.segments[index - 1].ctrls.end();
-        let end = self.segments[index].ctrls.end();
+        let start = self.segments[index - 1].ctrls.get_end();
+        let end = self.segments[index].ctrls.get_end();
         self.segments[index].ctrls =
             Ctrl::Linear(start + ((end.to_vector() - start.to_vector()) * (1. / 2.)));
         self.segments
             .insert(index + 1, Segment::new(Ctrl::Linear(end), 0.5));
 
-        let p0 = self.segments[index - 1].ctrls.end();
-        let p1 = self.segments[index].ctrls.end();
+        let p0 = self.segments[index - 1].ctrls.get_end();
+        let p1 = self.segments[index].ctrls.get_end();
         self.segments[index].recompute(p0);
         self.segments[index + 1].recompute(p1);
     }
@@ -75,7 +75,7 @@ impl CurveChain {
     pub fn remove(&mut self, index: usize) -> Segment {
         debug_assert!(0 < index && index < self.segments.len());
         let segment = self.segments.remove(index);
-        let p0 = self.segments[index - 1].ctrls.end();
+        let p0 = self.segments[index - 1].ctrls.get_end();
         self.segments[index].recompute(p0);
         segment
 
@@ -93,8 +93,8 @@ impl CurveChain {
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                let p = a.ctrls.end();
-                let q = b.ctrls.end();
+                let p = a.ctrls.get_end();
+                let q = b.ctrls.get_end();
                 (Vec2::new(p.x, p.y) - point)
                     .length()
                     .partial_cmp(&(Vec2::new(q.x, q.y) - point.into()).length())
@@ -112,6 +112,13 @@ impl std::ops::Index<usize> for CurveChain {
         &self.segments[n]
     }
 }
+
+impl std::ops::IndexMut<usize> for CurveChain {
+    fn index_mut(&mut self, n: usize) -> &mut Segment {
+        &mut self.segments[n]
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -173,7 +180,7 @@ mod tests {
                         draw(ctx, &circle, (Vec2::new(p2.x, p2.y),))?;
                     }
                     Ctrl::Cubic(p1, p2, p3) => {
-                        let start = self.curve.segments[i - 1].ctrls.end();
+                        let start = self.curve.segments[i - 1].ctrls.get_end();
                         draw(ctx, &circle, (Vec2::new(start.x + p1.x, start.y + p1.y),))?;
                         draw(ctx, &circle, (Vec2::new(p2.x + p3.x, p2.y + p3.y),))?;
                         draw(ctx, &circle, (Vec2::new(p3.x, p3.y),))?;
@@ -193,7 +200,7 @@ mod tests {
                     points.push(seeker.seek(t));
                     t += 0.05;
                 }
-                //let last = self.curve.segments[i].ctrls.end();
+                //let last = self.curve.segments[i].ctrls.get_end();
                 points.push(seeker.seek(1.));
 
                 let lines = MeshBuilder::new()
