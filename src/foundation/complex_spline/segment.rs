@@ -21,6 +21,12 @@ impl Ctrl {
             Self::Cubic(_, _, p) => *p,
         }
     }
+
+    pub fn set_end(&mut self, point: Point<f32>) {
+        match self {
+            Self::Linear(&mut p) => p = point,
+        }
+    }
 }
 
 pub struct Segment {

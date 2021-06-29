@@ -10,16 +10,16 @@ pub struct ComplexSpline {
     automation: Automation,
 }
 
-//automation to curve index
+//automation to critical index
 fn atoc_index(index: usize) -> usize {
-    index / 2 + index % 2
+    (index + 1) / 2 
 }
 
-//curve to automation index
+//critical to automation index
 fn ctoa_index(index: usize) -> usize {
     match index {
         0 => 0,
-        _ => index * 2 - 1
+        _ => index * 2
     }
 }
 
@@ -27,12 +27,13 @@ impl ComplexSpline {
     pub fn new(len: f32, intial: Ctrl) -> Self {
         let mut new_curve = CurveChain::new();
         new_curve.push_from_absolute(intial);
-        let new = Self {
+        let mut cmpspl = Self {
             curve: new_curve,
             automation: Automation::new(0., 1., len, false)
-        }
+        };
+        cmpspl.automation.set_pos(1, Vec2::new(len, 1.));
 
-        new.automation
+        cmpspl
     }
 
     pub fn curve(&self) -> &CurveChain {
@@ -54,14 +55,34 @@ impl ComplexSpline {
     }
 
     pub fn insert_critical(&mut self, x: f32) {
-        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::ForwardBias));
-        self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::Curve(0.)));
+        self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
+        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::Curve(0.)));
 
         let index = atoc_index(self.automation.closest_to(Vec2::new(x, 0.)));
         self.curve.bisect_segment(index);
     }
 
     pub fn move_critical(&mut self, index: usize, x: f32) {
+        debug_assert!(0 < index && index < atoc_index(self.automation.len()));
+        
+        self.automation.set_pos(ctoa_index(index),
+            Vec2::new(
+                x.clamp(
+                    self.automation.get_pos(ctoa_index(index - 1)).x,
+                    self.automation.get_pos(ctoa_index(index + 1)).x,
+                ),
+                self.automation.get_pos(ctoa_index(index)).y
+            )
+        );
+        self.automation.set_pos(ctoa_index(index) - 1,
+            Vec2::new(
+                x.clamp(
+                    self.automation.get_pos(ctoa_index(index - 1)).x,
+                    self.automation.get_pos(ctoa_index(index + 1)).x,
+                ),
+                self.automation.get_pos(ctoa_index(index)).y
+            )
+        );
     }
 }
 
@@ -99,16 +120,14 @@ impl<'a> Seekable<'a> for ComplexSpline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ggez::{
-        event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
-        graphics::*,
-        Context, GameResult,
-    };
+    use ggez::{Context, GameResult, event::{self, EventHandler, KeyCode, KeyMods, MouseButton}, graphics::*, input::keyboard::{is_key_pressed, is_key_repeated}};
     use lyon_geom::Point;
 
     struct Test {
-        cps: ComplexSpline,
+        cmpspl: ComplexSpline,
+        point_buff: Vec<Point<f32>>,
         dimensions: Vec2,
+        selection: Option<usize>,
     }
 
     impl Test {
@@ -116,8 +135,10 @@ mod tests {
             let x = 2000.;
             let y = 1000.;
             Ok(Self {
-                cps: ComplexSpline::new(0., x, Ctrl::Linear(Point::new(x, 0.))),
+                cmpspl: ComplexSpline::new(x, Ctrl::Linear(Point::new(x, 0.))),
+                point_buff: vec![],
                 dimensions: Vec2::new(x, y),
+                selection: None,
             })
         }
     }
@@ -140,14 +161,15 @@ mod tests {
             )?;
             draw(ctx, &circle, (mouse_pos,))?;
 
-            let mut seeker = self.cps.automation.seeker();
+            let mut seeker = self.cmpspl.automation.seeker();
             let res = 200;
-            let points: Vec<Vec2> = (0..res)
+            let auto_points: Vec<Vec2> = (0..res)
                 .map(|x| {
                     Vec2::new(
                         (x as f32 / res as f32) * self.dimensions.x,
-                        seeker.seek((x as f32 / res as f32) * self.dimensions.x)
-                            * self.dimensions.y,
+                        self.dimensions.y 
+                            - seeker.seek((x as f32 / res as f32) * self.dimensions.x)
+                            * (self.dimensions.y / 4.)
                     )
                 })
                 .collect();
@@ -155,14 +177,14 @@ mod tests {
             let auto_lines = MeshBuilder::new()
                 .polyline(
                     DrawMode::Stroke(StrokeOptions::DEFAULT),
-                    points.as_slice(),
+                    auto_points.as_slice(),
                     Color::new(1., 1., 1., 1.),
                 )?
                 .build(ctx)?;
             draw(ctx, &auto_lines, (Vec2::new(0.0, 0.0),))?;
 
-            for i in 1..self.cps.curve.segments().len() {
-                let segment = &self.cps.curve.segments()[i];
+            for i in 0..self.cmpspl.curve.segments().len() {
+                let segment = &self.cmpspl.curve.segments()[i];
                 match segment.ctrls {
                     Ctrl::Linear(p) => {
                         draw(ctx, &circle, (Vec2::new(p.x, p.y),))?;
@@ -172,7 +194,7 @@ mod tests {
                         draw(ctx, &circle, (Vec2::new(p2.x, p2.y),))?;
                     }
                     Ctrl::Cubic(p1, p2, p3) => {
-                        let start = self.cps.curve.segments()[i - 1].ctrls.end();
+                        let start = self.cmpspl.curve.segments()[i - 1].ctrls.end();
                         draw(ctx, &circle, (Vec2::new(start.x + p1.x, start.y + p1.y),))?;
                         draw(ctx, &circle, (Vec2::new(p2.x + p3.x, p2.y + p3.y),))?;
                         draw(ctx, &circle, (Vec2::new(p3.x, p3.y),))?;
@@ -184,9 +206,9 @@ mod tests {
                 }
             }
 
-            for i in 1..self.cps.curve.segments().len() {
+            for i in 1..self.cmpspl.curve.segments().len() {
                 let mut points = Vec::<Vec2>::new();
-                let mut seeker = self.cps.curve.segments()[i].seeker();
+                let mut seeker = self.cmpspl.curve.segments()[i].seeker();
                 let mut t = 0.;
                 while t <= 1. {
                     points.push(seeker.seek(t));
@@ -217,6 +239,36 @@ mod tests {
         ) {
             match button {
                 MouseButton::Left => {
+                    if self.dimensions.y * (3. / 4.) < y {
+                        let index = self.cmpspl.automation().closest_to(Vec2::new(x, y));
+                        if (self.cmpspl.automation().get_pos(index) - Vec2::new(x, y)).length() < 5. {
+                            self.selection = Some(atoc_index(index));
+                        }
+                        else {
+                            match self.selection {
+                                None => { self.cmpspl.insert_critical(x) },
+                                Some(i) => {
+                                    self.cmpspl.move_critical(i, x);
+                                    self.selection = None;
+                                }
+                            }
+                        }
+                    }
+                    else {
+                        let index = self.cmpspl.curve().closest_to(Vec2::new(x, y));
+                        if (self.cmpspl.curve()[index].ctrls.end() - Point::new(x, y)).length() < 5. {
+                            self.selection = Some(index);
+                        }
+                        else {
+                            match self.selection {
+                                None => { self.point_buff.push(Point::new(x, y)) },
+                                Some(i) => {
+                                    self.cmpspl.curve()[i] = Point::new(x, y);
+                                    self.selection = None;
+                                }
+                            }
+                        }
+                    }
                 }
                 _ => {}
             }

@@ -86,7 +86,7 @@ impl Automation {
         self.anchors.remove(index)
     }
 
-    pub fn closest_to(&mut self, point: Vec2) -> usize {
+    pub fn closest_to(&self, point: Vec2) -> usize {
         let (index, _) = self
             .anchors
             .iter()
