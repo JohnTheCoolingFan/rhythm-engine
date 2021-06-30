@@ -34,15 +34,7 @@ impl ComplexSpline {
 
         cmpspl
     }
-
-    pub fn curve(&self) -> &CurveChain {
-        &self.curve
-    }
-
-    pub fn automation(&self) -> &Automation {
-        &self.automation
-    }
-
+ 
     pub fn bisect_segment(&mut self, index: usize) {
         self.curve.bisect_segment(index);
         let start = self.automation.get_pos(ctoa_index(index));
@@ -51,6 +43,14 @@ impl ComplexSpline {
 
         self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
         self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::Curve(0.)));
+    }
+
+    pub fn set_ctrls(&mut self, index: usize, ctrls: Ctrl) {
+        self.curve.replace_from_absolute(index, ctrls)
+    }
+
+    pub fn set_weight(&mut self, index: usize, weight: Weight) {
+        self.automation.set_weight(ctoa_index(index), weight)
     }
 
     pub fn insert_critical(&mut self, x: f32) {
@@ -69,13 +69,25 @@ impl ComplexSpline {
         atoc_index(self.automation.closest_to(Vec2::new(x, 0.)))
     }
 
+    pub fn get_critical_pos(&mut self, index: usize) -> f32 {
+        self.automation.get_pos(index).x
+    }
+
     pub fn set_critical_pos(&mut self, index: usize, x: f32) {
         debug_assert!(0 < index && index < atoc_index(self.automation.len()));
+        let (iya, iyb) = if self.automation.get_pos(ctoa_index(index)).x < x {
+            ((ctoa_index(index) + 1, 0.), (ctoa_index(index), 1.))
+        }
+        1 //left off
+        else {
+            ((ctoa_index(index), 1.), (ctoa_index(index) + 1, 0.))
+        };
+        #[rustfmt::skip]
         duplicate_inline!{
             [
-                i;
-                [ctoa_index(index)];
-                [ctoa_index(index) - 1]
+                i           y;
+                [iya.0]     [iya.1];
+                [iyb.0]     [iyb.1];
             ]
             self.automation.set_pos(i,
                 Vec2::new(
@@ -83,7 +95,7 @@ impl ComplexSpline {
                         self.automation.get_pos(ctoa_index(index - 1)).x,
                         self.automation.get_pos(ctoa_index(index + 1)).x,
                     ),
-                    self.automation.get_pos(ctoa_index(index)).y
+                    y
                 )
             );
         }
@@ -159,6 +171,7 @@ mod tests {
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
             clear(ctx, Color::new(0., 0., 0., 1.));
             let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
+            
             let circle = Mesh::new_circle(
                 ctx,
                 DrawMode::fill(),
@@ -191,6 +204,12 @@ mod tests {
                 .build(ctx)?;
             draw(ctx, &auto_lines, (Vec2::new(0.0, 0.0),))?;
 
+            let rect = Mesh::new_rectangle(
+                ctx,
+                DrawMode::fill(),
+                Rect::new(-5., -5., 10., 10.),
+                Color::new(1., 0., 0., 0.5)
+            )?;
             for i in 0..self.cmpspl.curve.segments().len() {
                 let segment = &self.cmpspl.curve.segments()[i];
                 match segment.ctrls {
@@ -198,17 +217,17 @@ mod tests {
                         draw(ctx, &circle, (Vec2::new(p.x, p.y),))?;
                     }
                     Ctrl::Quadratic(p1, p2) => {
-                        draw(ctx, &circle, (Vec2::new(p1.x, p1.y),))?;
+                        draw(ctx, &rect, (Vec2::new(p1.x, p1.y),))?;
                         draw(ctx, &circle, (Vec2::new(p2.x, p2.y),))?;
                     }
                     Ctrl::Cubic(p1, p2, p3) => {
                         let start = self.cmpspl.curve.segments()[i - 1].ctrls.get_end();
-                        draw(ctx, &circle, (Vec2::new(start.x + p1.x, start.y + p1.y),))?;
-                        draw(ctx, &circle, (Vec2::new(p2.x + p3.x, p2.y + p3.y),))?;
+                        draw(ctx, &rect, (Vec2::new(start.x + p1.x, start.y + p1.y),))?;
+                        draw(ctx, &rect, (Vec2::new(p2.x + p3.x, p2.y + p3.y),))?;
                         draw(ctx, &circle, (Vec2::new(p3.x, p3.y),))?;
                     }
                     Ctrl::ThreePointCircle(p1, p2) => {
-                        draw(ctx, &circle, (Vec2::new(p1.x, p1.y),))?;
+                        draw(ctx, &rect, (Vec2::new(p1.x, p1.y),))?;
                         draw(ctx, &circle, (Vec2::new(p2.x, p2.y),))?;
                     }
                 }
@@ -249,8 +268,11 @@ mod tests {
                 MouseButton::Left => {
                     if self.dimensions.y * (3. / 4.) < y {
                         let index = self.cmpspl.closest_critical(x);
-                        if self.cmpspl.automation().get_pos(index).x - x < 5. {
+                        let dist = (self.cmpspl.get_critical_pos(index) - x).abs();
+                        println!("nearest pont x distance to click: {}", dist);
+                        if dist < 30. {
                             self.selection = Some(atoc_index(index));
+                            println!("selection: {:?}", self.selection);
                         }
                         else {
                             match self.selection {
@@ -263,21 +285,67 @@ mod tests {
                         }
                     }
                     else {
-                        let index = self.cmpspl.curve().closest_to(Vec2::new(x, y));
-                        if (self.cmpspl.curve()[ctoa_index(index)].ctrls.get_end() - Point::new(x, y)).length() < 5. {
+                        let index = self.cmpspl.closest_segment(Vec2::new(x, y));
+                        if (self.cmpspl.curve[index].ctrls.get_end() - Point::new(x, y)).length() < 30. {
                             self.selection = Some(index);
+                            println!("selection: {:?}", self.selection);
                         }
                         else {
-                            match self.selection {
-                                None => { self.point_buff.push(Point::new(x, y)) },
-                                _ => {}
-                            }
+                            self.point_buff.push(Point::new(x, y));
+                            println!("points: {:?}", self.point_buff);
                         }
                     }
                 }
                 _ => {}
             }
         }
+
+        fn key_down_event(&mut self, _ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
+            match key {
+                KeyCode::Escape => {
+                    self.selection = None;
+                    return;
+                }
+                _ => {}
+            }
+
+            let points = &self.point_buff;
+
+            let ctrls = match key {
+                KeyCode::Key1 => Ctrl::Linear(points[FromEnd(0)]),
+                KeyCode::Key2 => Ctrl::Quadratic(points[FromEnd(1)], points[FromEnd(0)]),
+                KeyCode::Key3 => Ctrl::ThreePointCircle(points[FromEnd(1)], points[FromEnd(0)]),
+                KeyCode::Key4 => Ctrl::Cubic(points[0], points[1], points[2]),
+                _ => {
+                    return;
+                }
+            };
+            self.point_buff.clear();
+
+            if let Some(index) = self.selection {
+                self.cmpspl.curve.replace_from_absolute(index, ctrls);
+                self.selection = None;
+            }
+        }
+
+        fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
+            let pos = ggez::input::mouse::position(ctx);
+            let index = if pos.y < self.dimensions.y * (3. / 4.) {
+                self.cmpspl.closest_segment(pos.into())
+            }
+            else {
+                self.cmpspl.closest_critical(pos.x)
+            };
+            let weight = self.cmpspl.automation.get_weight(index);
+            match weight {
+                Weight::Curve(w) => self
+                    .cmpspl
+                    .set_weight(index, Weight::Curve(w + if 0. < y { 0.05 } else { -0.05 })),
+                _ => {}
+            };
+        }
+
+
     }
 
     #[test]
@@ -287,7 +355,6 @@ mod tests {
             ggez::conf::WindowMode::default().dimensions(state.dimensions.x, state.dimensions.y),
         );
         let (ctx, event_loop) = cb.build()?;
-        println!("gothre");
         event::run(ctx, event_loop, state)
     }
 }

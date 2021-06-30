@@ -137,10 +137,6 @@ impl Automation {
             _ => weight,
         };
     }
-
-    pub fn get_span(&self) -> f32 {
-        self.anchors[FromEnd(0)].point.x
-    }
 }
 
 pub struct AutomationSeeker<'a> {
