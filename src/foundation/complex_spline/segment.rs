@@ -4,7 +4,7 @@ use crate::utils::*;
 use glam::{f32::Mat3, Vec2};
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Ctrl {
     Linear(Point<f32>),
     Quadratic(Point<f32>, Point<f32>),
@@ -44,8 +44,8 @@ impl Segment {
         Self {
             ctrls: ctrl_type,
             tolerence: segment_tolerence,
-            point_lut: vec![],
-            value_lut: vec![],
+            point_lut: vec![Vec2::new(0., 0.)],
+            value_lut: vec![0.],
         }
     }
 
@@ -179,11 +179,13 @@ pub struct SegmentSeeker<'a> {
 
 impl<'a> SegmentSeeker<'a> {
     fn interp(&self, t: f32) -> Vec2 {
-        if self.index == self.segment.point_lut.len() {
-            self.segment.point_lut[FromEnd(0)]
-        } else if self.index == 0 {
+        if self.index == 0 {
             self.segment.point_lut[0]
-        } else {
+        }
+        else if self.index == self.segment.point_lut.len() {
+            self.segment.point_lut[FromEnd(0)]
+        }
+        else {
             let start = self.segment.point_lut[self.index - 1];
             let end = self.segment.point_lut[self.index];
 

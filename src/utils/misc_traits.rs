@@ -22,7 +22,10 @@ impl<T> std::ops::Index<FromEnd> for itterable {
         &self[self
             .len()
             .checked_sub(1 + n)
-            .expect("out of range from end")]
+            .expect(format!(
+                "From End out of range. Item len: {}",
+                self.len()
+            ).as_str())]
     }
 }
 
