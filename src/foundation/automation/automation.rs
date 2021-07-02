@@ -23,45 +23,22 @@ impl Anchor {
 }
 
 pub struct Automation {
-    upper_bound: f32,
-    lower_bound: f32,
-    dynamic_bound: bool,
-
+    pub upper_bound: f32,
+    pub lower_bound: f32,
     anchors: Vec<Anchor>,
 }
 
 impl Automation {
-    pub fn new(lb: f32, ub: f32, len: f32, dynamic: bool) -> Self {
+    pub fn new(lb: f32, ub: f32, len: f32) -> Self {
         assert!(lb < ub, "upper bound must be greater than lower bound");
         assert!(0. < len, "length cannot be zero or negative");
         Automation {
             upper_bound: ub,
             lower_bound: lb,
-            dynamic_bound: dynamic,
             anchors: vec![
                 Anchor::new(Vec2::new(0., 0.0), Weight::Curve(0.)),
                 Anchor::new(Vec2::new(len, 0.0), Weight::Curve(0.)),
             ],
-        }
-    }
-
-    pub fn get_upper_bound(&self) -> f32 {
-        self.upper_bound
-    }
-
-    pub fn get_lower_bound(&self) -> f32 {
-        self.lower_bound
-    }
-
-    pub fn set_upper_bound(&mut self, v: f32) {
-        if self.dynamic_bound {
-            self.upper_bound = v;
-        }
-    }
-
-    pub fn set_lower_bound(&mut self, v: f32) {
-        if self.dynamic_bound {
-            self.lower_bound = v;
         }
     }
 
@@ -241,7 +218,7 @@ mod tests {
     impl Test {
         fn new() -> GameResult<Self> {
             Ok(Self {
-                automation: Automation::new(0., 1., 2800., false),
+                automation: Automation::new(0., 1., 2800.),
                 dimensions: Vec2::new(2800., 1100.),
             })
         }

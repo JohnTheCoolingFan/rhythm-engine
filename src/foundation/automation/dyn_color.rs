@@ -28,7 +28,7 @@ impl DynColor {
                 color: Color::WHITE,
                 offset: 0.,
             }],
-            automation: Automation::new(0., 1., len, false),
+            automation: Automation::new(0., 1., len),
             lower_colors: vec![ColorAnchor {
                 color: Color::BLACK,
                 offset: 0.,

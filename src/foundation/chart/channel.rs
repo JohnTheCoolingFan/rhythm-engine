@@ -10,6 +10,6 @@ struct Channel<'a, T>
     _pd: PhantomData<&'a T>
 }
 
-//impl<'a, T: Seekable<'a>> Channel<'a, T> {
-//}
+impl<'a, T: Seekable<'a>> Channel<'a, T> {
+}
 

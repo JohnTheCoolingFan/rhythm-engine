@@ -39,7 +39,7 @@ impl ComplexSpline {
         new_curve.push_from_absolute(intial);
         let mut cmpspl = Self {
             curve: new_curve,
-            automation: Automation::new(0., 1., len, false)
+            automation: Automation::new(0., 1., len)
         };
         cmpspl.automation.set_pos(1, Vec2::new(len, 1.));
 

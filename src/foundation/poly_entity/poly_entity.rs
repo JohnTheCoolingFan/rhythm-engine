@@ -16,11 +16,11 @@ pub struct CSplVertPairing {
 }
 
 pub struct Properties {
-    pub splines: Vec<CSplVertPairing>,
-    pub rotation: usize,
-    pub scale: usize,
+    pub splines: Option<Vec<CSplVertPairing>>,
+    pub rotation: Option<usize>,
+    pub scale: Option<usize>,
+    pub grab: Option<usize>,
     pub color: usize,
-    pub grab: usize,
     pub mode: Mode,
 }
 
@@ -28,6 +28,7 @@ pub struct PolyEntity {
     points: Vec<Vec2>,
     pub start: f32,
     pub duration: f32,
+    pub local_center: Vec2,
     pub properties: Properties
 }
 
@@ -42,13 +43,14 @@ impl PolyEntity {
             Some(Self {
                 start,
                 duration,
+                local_center: initial.into_iter().sum::<Vec2>() / initial.len() as f32,
                 points: initial.to_vec(),
                 properties: Properties {
-                    splines: vec![],
-                    rotation: 0,
-                    scale: 0,
+                    splines: None,
+                    rotation: None,
+                    scale: None,
                     color: 0,
-                    grab: 0,
+                    grab: None,
                     mode: Mode::Inactive,
                 }
             })
@@ -58,15 +60,32 @@ impl PolyEntity {
         }
     }
 
-    pub fn split_side(&self, mut n: usize, mut m: usize) {
-        n += 2;
-        m += 2;
+    pub fn try_split_side(&mut self, mut n: usize, mut m: usize) -> Result<(), ()> {
+        n += 1;
+        m += 1;
         debug_assert!(
             n < self.points.len() && m < self.points.len(),
             "A chosen polygon vertex to split with does not exist"
         );
+        if m < n { swap(&mut n, &mut m) }
+        if m - n == 1 {
+            self.points.insert(m, self.points[n].lerp(self.points[m], 0.5));
+            Ok(())
+        }
+        else {
+            Err(())
+        }
+    }
 
-        if n < m { swap(&mut n, &mut m); }
-        self.
+    pub fn set_vertex(&mut self, n: usize, pos: Vec2) {
+        self.points[n + 2] = pos;
+    }
+
+    pub fn set_position(&mut self, pos: Vec2) {
+        self.points[0] = pos;
+    }
+
+    pub fn set_local_center(&mut self, pos: Vec2) {
+        self.points[1] = pos;
     }
 }
