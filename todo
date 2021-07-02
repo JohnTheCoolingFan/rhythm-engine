@@ -18,13 +18,13 @@ Game Loop/Editor:
 *Audio visualizer
 
 1. 	Polygon
-2.    -CSplines
-3.       Local Rot/Scale
-2.    -Fill colour
+x.    -CSplines
+x.       Local Rot/Scale
+x.    -Fill colour
 2.    -Hit or Avoid
 2.    -Friction/Grab
-3.       |Rot|Dir|
-2.    -|Rot|Scale|
+x.       |Rot|Dir|
+x.    -|Rot|Scale|
 
 
 
