@@ -1,8 +1,7 @@
-Game Loop/Editor:
--Play audio
--Timing, static + variable BPM
--Song Timer
--Gui
+--Play + Sync audio
+--Timing, static + variable BPM
+--Song Timer
+--Gui
 	Widgets:
 		Track
 		SubWidgets:
@@ -10,35 +9,9 @@ Game Loop/Editor:
 			Automation Points
 		Track Misc
 
-
-		
-
-	
-
-*Audio visualizer
-
-1. 	Polygon
-x.    -CSplines
-x.       Local Rot/Scale
-x.    -Fill colour
-2.    -Hit or Avoid
-2.    -Friction/Grab
-x.       |Rot|Dir|
-x.    -|Rot|Scale|
-
-
-
-
-
-
-
-
-
---Problems
-Editor:
-	Cross channel selection
-	= use similar logic to single channel selection
-
-	
-
-
+--Audio visualizer
+--Beat
+--Chart
+--Channels
+--Channel Rack
+--Move to Macroquad?

@@ -1,22 +1,11 @@
 use glam::{Vec2, Mat3}; 
+use crate::utils::misc_math::*;
 use std::mem::swap;
 
-pub enum Mode {
-    Hit(f32, f32),
-    Hold(f32, f32, f32),
+pub enum Beat {
+    Hit(f32, f32, (u8, bool)),
+    Hold(f32, f32, f32, (u8, bool)),
     Avoid(f32, f32, f32),
-}
-
-pub enum BeatKeys {
-    K1,
-    K2,
-    K3,
-    Phat
-}
-
-pub struct Beat {
-    mode: Mode,
-    keys: BeatKeys
 }
 
 pub struct CSplVertPairing {
@@ -27,11 +16,12 @@ pub struct CSplVertPairing {
 }
 
 pub struct Properties {
-    pub splines: Option<Vec<CSplVertPairing>>,
+    pub splines: Vec<CSplVertPairing>,
     pub rotation: Option<usize>,
     pub scale: Option<usize>,
     pub grab: Option<usize>,
     pub color: usize,
+    pub glow: usize,
     pub beats: Vec<Beat>,
 }
 
@@ -57,10 +47,11 @@ impl PolyEntity {
                 local_center: initial.into_iter().sum::<Vec2>() / initial.len() as f32,
                 points: initial.to_vec(),
                 properties: Properties {
-                    splines: None,
+                    splines: vec![],
                     rotation: None,
                     scale: None,
                     color: 0,
+                    glow: 0,
                     grab: None,
                     beats: vec![]
                 }
@@ -94,5 +85,14 @@ impl PolyEntity {
 
     pub fn set_position(&mut self, pos: Vec2) {
         self.points[0] = pos;
+    }
+
+    pub fn rotate(&mut self, deg: f32) {
+        for p in &mut self.points[1..] {
+            *p = p.rotate_about(&self.local_center, deg);
+        }
+    }
+
+    pub fn scale(&mut self, factor: f32) {
     }
 }
