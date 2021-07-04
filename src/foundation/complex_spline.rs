@@ -4,3 +4,4 @@ mod segment;
 
 pub use curve_chain::CurveChain;
 pub use segment::{Ctrl, Segment, SegmentSeeker};
+pub use complex_spline::ComplexSpline;

@@ -1,15 +1,27 @@
-use std::marker::PhantomData;
+use crate::foundation::{
+    automation::{
+        dyn_color::DynColor,
+        point_transform::PointTransform
+    },
+    complex_spline::ComplexSpline,
+    poly_entity::*
+};
 
-use crate::utils::Seekable;
-
-struct Channel<'a, T>
-    where T: Seekable<'a>
+struct Channel<T>
 {
-    offsets: Vec<f32>,  //VecDeque + Thread? Bounded Channel?
-    tracks: Vec<T>,     //Check memory usage first
-    _pd: PhantomData<&'a T>
+    tracks: Vec<(f32, T)>,    //VecDeque + Thread? Bounded Channel? Check memory usage firs
 }
 
-impl<'a, T: Seekable<'a>> Channel<'a, T> {
+impl Channel <PointTransform> {
 }
 
+impl Channel <DynColor> {
+}
+
+impl Channel <ComplexSpline> {
+}
+
+impl Channel <PolyEntity> {
+}
+
+8 //need to possibly change seeker trait

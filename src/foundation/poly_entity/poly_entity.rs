@@ -2,10 +2,21 @@ use glam::{Vec2, Mat3};
 use std::mem::swap;
 
 pub enum Mode {
-    Inactive,
-    Hit(f32),
-    Hold(f32, f32),
-    Avoid(f32, f32),
+    Hit(f32, f32),
+    Hold(f32, f32, f32),
+    Avoid(f32, f32, f32),
+}
+
+pub enum BeatKeys {
+    K1,
+    K2,
+    K3,
+    Phat
+}
+
+pub struct Beat {
+    mode: Mode,
+    keys: BeatKeys
 }
 
 pub struct CSplVertPairing {
@@ -21,7 +32,7 @@ pub struct Properties {
     pub scale: Option<usize>,
     pub grab: Option<usize>,
     pub color: usize,
-    pub mode: Mode,
+    pub beats: Vec<Beat>,
 }
 
 pub struct PolyEntity {
@@ -51,7 +62,7 @@ impl PolyEntity {
                     scale: None,
                     color: 0,
                     grab: None,
-                    mode: Mode::Inactive,
+                    beats: vec![]
                 }
             })
         }
@@ -78,14 +89,10 @@ impl PolyEntity {
     }
 
     pub fn set_vertex(&mut self, n: usize, pos: Vec2) {
-        self.points[n + 2] = pos;
+        self.points[n + 1] = pos;
     }
 
     pub fn set_position(&mut self, pos: Vec2) {
         self.points[0] = pos;
-    }
-
-    pub fn set_local_center(&mut self, pos: Vec2) {
-        self.points[1] = pos;
     }
 }
