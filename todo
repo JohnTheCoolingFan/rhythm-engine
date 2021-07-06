@@ -10,6 +10,9 @@
 		Track Misc
 
 --Automation Step Curve
+--Grab feature for Poly Entity
+		?Use outline thickness to express magnitude
+		?Use copies of vertices shifted to express direction
 --Audio visualizer
 --Beat
 --Chart
