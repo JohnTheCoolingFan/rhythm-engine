@@ -2,10 +2,42 @@ use crate::utils::misc_traits::*;
 use glam::Vec2;
 
 #[derive(Debug, Copy, Clone)]
+pub enum Step {
+    None,
+    Forward(f32),
+    Reverse(f32)
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum Weight {
     ForwardBias,
-    Curve(f32),
+    Curve{power: f32, step: Step},
     ReverseBias,
+}
+
+impl Weight {
+    pub fn set_power(&mut self, value: f32) -> Result<f32, ()> {
+        match self {
+            Self::Curve{power, step} => {
+                let old = *power;
+                *power = if value <= 0. { value.clamp(0., 30.) } else { value.clamp(-30., 0.) };
+                Ok(old)
+            }
+            _ => {
+                Err(())
+            }
+        }
+    }
+
+    pub fn set_step(&mut self, value: f32) -> Result<f32, ()> {
+        match self {
+
+            _ => {
+                Err(())
+            }
+
+        }
+    }
 }
 
 pub struct Anchor {
@@ -36,8 +68,8 @@ impl Automation {
             upper_bound: ub,
             lower_bound: lb,
             anchors: vec![
-                Anchor::new(Vec2::new(0., 0.0), Weight::Curve(0.)),
-                Anchor::new(Vec2::new(len, 0.0), Weight::Curve(0.)),
+                Anchor::new(Vec2::new(0., 0.0), Weight::Curve(0., Step::None)),
+                Anchor::new(Vec2::new(len, 0.0), Weight::Curve(0., Step::None)),
             ],
         }
     }
@@ -106,13 +138,17 @@ impl Automation {
 
     pub fn set_weight(&mut self, index: usize, weight: Weight) {
         self.anchors[index].weight = match weight {
-            Weight::Curve(w) => Weight::Curve(if 0. <= w {
-                w.clamp(0., 30.)
-            } else {
-                w.clamp(-30., 0.)
-            }),
+            Weight::Curve(v, s) => Weight::Curve(
+                if 0. <= v { v.clamp(0., 30.) }
+                else { v.clamp(-30., 0.) },
+                s
+            ),
             _ => weight,
         };
+    }
+
+    pub fn set_step(&mut self, index: usize, step: f32) {
+
     }
 }
 
