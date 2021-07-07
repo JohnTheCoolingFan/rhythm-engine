@@ -16,9 +16,9 @@ impl ColorAnchor {
 }
 
 pub struct DynColor {
+    pub automation: Automation,
     upper_colors: Vec<ColorAnchor>,
-    automation: Automation,
-    lower_colors: Vec<ColorAnchor>,
+    lower_colors: Vec<ColorAnchor>
 }
 
 impl DynColor {
@@ -53,10 +53,6 @@ impl DynColor {
 
     pub fn insert_lower(&mut self, color_anch: ColorAnchor) {
         Self::insert(&mut self.lower_colors, color_anch);
-    }
-
-    pub fn get_automation(&mut self) -> &mut Automation {
-        &mut self.automation
     }
 }
 
@@ -256,7 +252,7 @@ mod tests {
             )?;
             draw(ctx, &circle, (mouse_pos,))?;
 
-            let mut auto_seeker = self.color.get_automation().seeker();
+            let mut auto_seeker = self.color.automation.seeker();
             let d = self.dimensions;
             let auto_points: Vec<Vec2> = (0..200)
                 .map(|x| {
@@ -296,42 +292,30 @@ mod tests {
             x: f32,
             y: f32,
         ) {
-            let automation = self.color.get_automation();
+            let automation = &mut self.color.automation;
             let index = automation.closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
                     automation.insert(Anchor::new(
                         Vec2::new(x, y / self.dimensions.y),
-                        Weight::Curve(0.),
+                        Weight::Curve{power: 0., step: 0.},
                     ));
                 }
                 MouseButton::Middle => {
-                    automation.set_weight(
-                        index,
-                        match automation.get_weight(index) {
-                            Weight::Curve(w) => {
-                                if w != 0. {
-                                    Weight::Curve(0.)
-                                } else {
-                                    Weight::ForwardBias
-                                }
-                            }
-                            Weight::ForwardBias => Weight::ReverseBias,
-                            Weight::ReverseBias => Weight::Curve(0.),
-                        },
-                    );
+                    automation.cycle_weight(index);
                 }
                 _ => {}
             }
         }
 
         fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
-            let automation = self.color.get_automation();
+            let automation = &mut self.color.automation;
             let index = automation.closest_to(ggez::input::mouse::position(ctx).into());
-            let weight = automation.get_weight(index);
+            let weight = automation[index].weight;
             match weight {
-                Weight::Curve(w) => automation
-                    .set_weight(index, Weight::Curve(w + if 0. < y { 0.05 } else { -0.05 })),
+                Weight::Curve{power, step} => {
+                    automation.set_power(index, power + if 0. < y { 0.05 } else { -0.05 });
+                }
                 _ => {}
             };
         }

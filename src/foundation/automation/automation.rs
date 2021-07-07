@@ -108,11 +108,11 @@ impl Automation {
         old
     }
  
-    pub fn cycle_weight(&self, index: usize) -> Weight {
+    pub fn cycle_weight(&mut self, index: usize) -> Weight {
         let old = self.anchors[index].weight;
         self.anchors[index].weight = match old {
             Weight::ForwardBias => Weight::Curve{power: 0., step: 0.},
-            Weight::Curve{power, step} => Weight::ReverseBias,
+            Weight::Curve{..} => Weight::ReverseBias,
             Weight::ReverseBias => Weight::ForwardBias,
         };
         old
@@ -120,9 +120,9 @@ impl Automation {
 
     pub fn set_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         match self.anchors[index].weight {
-            Weight::Curve{ref mut power, step} => {
+            Weight::Curve{ref mut power, ..} => {
                 let old = *power;
-                *power = if value <= 0. { value.clamp(0., 30.) } else { value.clamp(-30., 0.) };
+                *power = if 0. <= value {  value.clamp(0., 30.) } else { value.clamp(-30., 0.) };
                 Ok(old)
             }
             _ => {
@@ -134,7 +134,7 @@ impl Automation {
     pub fn set_step(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         let time_dif = self.anchors[index].point.x - self.anchors[index - 1].point.x;
         match self.anchors[index].weight {
-            Weight::Curve{power, ref mut step} => {
+            Weight::Curve{ref mut step, ..} => {
                 let old = *step;
                 *step = value.clamp(-time_dif, time_dif);
                 Ok(old)
@@ -340,11 +340,11 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             let weight = self.automation[index].weight;
             match weight {
-                Weight::Curve{power, step} => {
+                Weight::Curve{power, ..} => {
                     self.automation.set_power(
                         index,
                         power + if 0. < y { 0.05 } else { -0.05 }
-                    );
+                    ).unwrap();
                 }
                 _ => {}
             };

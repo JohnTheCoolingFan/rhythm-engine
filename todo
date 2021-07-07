@@ -1,21 +1,26 @@
 --Play + Sync audio
 --Timing, static + variable BPM
+	Timeline
+	Snapping
+	Repeating
+	Scaling
+
 --Song Timer
 --Gui
-	Widgets:
-		Track
-		SubWidgets:
-			PolyEntity Mode
-			Automation Points
-		Track Misc
+	Widgets
 
-?Automation oscilate curve
 --Grab feature for Poly Entity
 		?Use outline thickness to express magnitude
 		?Use copies of vertices shifted to express direction
+
 --Audio visualizer
 --Beat
 --Chart
+	Assemble
+	Globals
+		BG color
+		
+
 --Channels
 --Channel Rack
 --Move to Macroquad?

@@ -48,12 +48,12 @@ impl ComplexSpline {
  
     pub fn bisect_segment(&mut self, c: Critical) {
         self.curve.bisect_segment(c.get());
-        let start = self.automation.get_pos(c.into());
-        let end = self.automation.get_pos(Critical(c.get() - 2).into());
+        let start = self.automation[c.into()].point;
+        let end = self.automation[Critical(c.get() - 2).into()].point;
         let x = end.x - start.x;
 
         self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
-        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::Curve(0.)));
+        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::Curve{power: 0., step: 0.}));
     }
 
     pub fn set_ctrls(&mut self, index: Critical, ctrls: Ctrl) {
@@ -61,16 +61,20 @@ impl ComplexSpline {
     }
 
     pub fn get_weight(&mut self, c: Critical) -> Weight {
-        self.automation.get_weight(c.into())
+        self.automation[c.into()].weight
     }
 
-    pub fn set_weight(&mut self, c: Critical, weight: Weight) {
-        self.automation.set_weight(c.into(), weight)
+    pub fn set_power(&mut self, c: Critical, power: f32) {
+        self.automation.set_power(c.into(), power);
+    }
+
+    pub fn cycle_weight(&mut self, c: Critical) {
+        self.automation.cycle_weight(c.into());
     }
 
     pub fn insert_critical(&mut self, x: f32) {
         self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
-        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::Curve(0.)));
+        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::Curve{power: 0., step: 0.}));
 
         let c: Critical = (self.automation.closest_to(Vec2::new(x, 0.))).into();
         self.curve.bisect_segment(c.get());
@@ -85,12 +89,12 @@ impl ComplexSpline {
     }
 
     pub fn get_critical_pos(&mut self, c: Critical) -> f32 {
-        self.automation.get_pos(c.into()).x
+        self.automation[c.into()].point.x
     }
 
     pub fn set_critical_pos(&mut self, c: Critical, x: f32) {
         debug_assert!(0 < c.get() && c.get() < Critical(self.automation.len()).into());
-        let (ia, ya, ib, yb) = if self.automation.get_pos(c.into()).x < x {
+        let (ia, ya, ib, yb) = if self.automation[c.into()].point.x < x {
             (Into::<usize>::into(c) + 1, 0., Into::<usize>::into(c), 1.)
         }
         else {
@@ -106,8 +110,8 @@ impl ComplexSpline {
             self.automation.set_pos(i,
                 Vec2::new(
                     x.clamp(
-                        self.automation.get_pos(Critical(c.get() - 1).into()).x,
-                        self.automation.get_pos(Critical(c.get() + 1).into()).x,
+                        self.automation[Critical(c.get() - 1).into()].point.x,
+                        self.automation[Critical(c.get() + 1).into()].point.x,
                     ),
                     y
                 )
@@ -331,24 +335,7 @@ mod tests {
                 MouseButton::Middle => {
                     if self.dimensions.y * (3. / 4.) < y {
                         let c = self.cmpspl.closest_critical(x);
-                        let weight = self.cmpspl.get_weight(c);
-
-                        self.cmpspl.set_weight(
-                        c,
-                        match weight {
-                            Weight::Curve(w) => {
-                                if w != 0. {
-                                    Weight::Curve(0.)
-                                } else {
-                                    Weight::ForwardBias
-                                }
-                            }
-                            Weight::ForwardBias => Weight::ReverseBias,
-                            Weight::ReverseBias => Weight::Curve(0.),
-                        },
-                    );
-
-                        
+                        self.cmpspl.cycle_weight(c);
                     }
                 }
                 _ => {}
@@ -393,9 +380,9 @@ mod tests {
             };
             let weight = self.cmpspl.get_weight(c);
             match weight {
-                Weight::Curve(w) => self
+                Weight::Curve{power, step} => self
                     .cmpspl
-                    .set_weight(c, Weight::Curve(w + if 0. < y { 0.05 } else { -0.05 })),
+                    .set_power(c, power + if 0. < y { 0.05 } else { -0.05 }),
                 _ => {}
             };
         }
