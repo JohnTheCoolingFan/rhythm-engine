@@ -64,8 +64,12 @@ impl ComplexSpline {
         self.automation[c.into()].weight
     }
 
-    pub fn set_power(&mut self, c: Critical, power: f32) {
-        self.automation.set_power(c.into(), power);
+    pub fn set_power(&mut self, c: Critical, power: f32) -> Result<f32, ()> {
+        self.automation.set_power(c.into(), power)
+    }
+
+    pub fn set_step(&mut self, c: Critical, step: f32) -> Result<f32, ()> {
+        self.automation.set_step(c.into(), step)
     }
 
     pub fn cycle_weight(&mut self, c: Critical) {
@@ -163,6 +167,7 @@ mod tests {
         GameResult,
         timer::time_since_start,
         event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
+        input::keyboard::is_key_pressed,
         graphics::*
     };
     use lyon_geom::Point;
@@ -380,9 +385,16 @@ mod tests {
             };
             let weight = self.cmpspl.get_weight(c);
             match weight {
-                Weight::Curve{power, step} => self
-                    .cmpspl
-                    .set_power(c, power + if 0. < y { 0.05 } else { -0.05 }),
+                Weight::Curve{power, step} => {
+                    if is_key_pressed(ctx, event::KeyCode::LShift) {
+                        self.cmpspl.set_step(c, step + if 0. < y { 10. } else { -10. }).unwrap();
+                    }
+                    else {
+                        self
+                        .cmpspl
+                        .set_power(c, power + if 0. < y { 0.05 } else { -0.05 }).unwrap();
+                    }
+                }
                 _ => {}
             };
         }

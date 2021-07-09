@@ -168,6 +168,7 @@ mod tests {
     use super::*;
     use ggez::{
         event::{self, EventHandler, MouseButton},
+        input::keyboard::is_key_pressed,
         graphics::*,
         timer::time_since_start,
         Context, GameResult,
@@ -309,12 +310,25 @@ mod tests {
         }
 
         fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
-            let automation = &mut self.color.automation;
-            let index = automation.closest_to(ggez::input::mouse::position(ctx).into());
-            let weight = automation[index].weight;
+            let index = self
+                .color
+                .automation
+                .closest_to(ggez::input::mouse::position(ctx).into());
+            let weight = self.color.automation[index].weight;
             match weight {
                 Weight::Curve{power, step} => {
-                    automation.set_power(index, power + if 0. < y { 0.05 } else { -0.05 });
+                    if is_key_pressed(ctx, event::KeyCode::LShift) {
+                        self.color.automation.set_step(
+                            index,
+                            step + if 0. < y { 10. } else { -10. }
+                        ).unwrap();
+                    }
+                    else {
+                        self.color.automation.set_power(
+                            index,
+                            power + if 0. < y { 0.05 } else { -0.05 }
+                        ).unwrap();
+                    }
                 }
                 _ => {}
             };

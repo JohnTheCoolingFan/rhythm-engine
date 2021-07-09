@@ -185,12 +185,16 @@ impl<'a> AutomationSeeker<'a> {
                 match end.weight {
                     Weight::ReverseBias => start.point.y,
                     Weight::Curve{power, step} => {
-                        if 0. != step {
-                            t = t.quant_ceil(step.abs(), 0.);
+                        let q = step.abs() / (end.point.x - start.point.x);
+                        if 0. < step {
+                            t = t.quant_ceil(q, 0.);
                         }
                         if step < 0. {
-                            t = t.quant_floor(step.abs(), 0.);
+                            t = t.quant_floor(q, 0.);
                         }
+
+                        t = t.clamp(0., 1.);
+
                         start.point.y
                         + (end.point.y - start.point.y)
                         * t.powf(if power < 0. { 1. / (power.abs() + 1.) } else { power + 1. })
@@ -281,7 +285,7 @@ mod tests {
             draw(ctx, &circle, (mouse_pos,))?;
 
             let mut seeker = self.automation.seeker();
-            let res = 200;
+            let res = 1000;
             let points: Vec<Vec2> = (0..res)
                 .map(|x| {
                     Vec2::new(
