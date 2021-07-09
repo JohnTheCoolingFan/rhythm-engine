@@ -2,6 +2,7 @@ use duplicate::duplicate;
 use glam::Vec2;
 use lyon_geom::Point;
 use std::f32::consts::PI;
+use std::ops::{Add, Sub, Rem};
 
 pub trait IsLeft {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
@@ -28,5 +29,18 @@ impl RotateAbout for PointT {
             c * (self.x - pivot.x) - s * (self.y - pivot.y) + pivot.x,
             s * (self.x - pivot.x) + c * (self.y - pivot.y) + pivot.y,
         )
+    }
+}
+
+trait Quantize {
+    fn quantize(&self, period: Self, offset: Self) -> Self;
+}
+
+//trying to do this with trait bounds and blanket impls gives very funky errors
+#[duplicate(Num; [f32]; [i32]; [usize])]
+impl Quantize for Num
+{
+    fn quantize(&self, period: Self, offset: Self) -> Self {
+        (self - (self - offset) % period) + offset
     }
 }

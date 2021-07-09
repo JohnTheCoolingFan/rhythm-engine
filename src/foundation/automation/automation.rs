@@ -190,6 +190,7 @@ impl<'a> AutomationSeeker<'a> {
                         if step < 0. {
                             t += step;
                         }
+                        
                         start.point.y
                         + (end.point.y - start.point.y)
                         * t.powf(if power < 0. { 1. / (power.abs() + 1.) } else { power + 1. })
@@ -244,10 +245,7 @@ impl<'a> Seekable<'a> for Automation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ggez::{
-        event::{self, EventHandler, MouseButton},
-        graphics::*,
-    };
+    use ggez::{event::{self, EventHandler, MouseButton}, graphics::*, input::keyboard::is_key_pressed};
     use ggez::{Context, GameResult};
 
     struct Test {
@@ -340,11 +338,16 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             let weight = self.automation[index].weight;
             match weight {
-                Weight::Curve{power, ..} => {
-                    self.automation.set_power(
-                        index,
-                        power + if 0. < y { 0.05 } else { -0.05 }
-                    ).unwrap();
+                Weight::Curve{power, step} => {
+                    if is_key_pressed(ctx, event::KeyCode::LShift) {
+                        self.automation.set_step(index, step + 10.).unwrap();
+                    }
+                    else {
+                        self.automation.set_power(
+                            index,
+                            power + if 0. < y { 0.05 } else { -0.05 }
+                        ).unwrap();
+                    }
                 }
                 _ => {}
             };

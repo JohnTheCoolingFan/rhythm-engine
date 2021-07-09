@@ -36,3 +36,4 @@ impl<T> std::ops::IndexMut<FromEnd> for itterable {
         &mut self[len.checked_sub(1 + n).expect("out of range from end")]
     }
 }
+
