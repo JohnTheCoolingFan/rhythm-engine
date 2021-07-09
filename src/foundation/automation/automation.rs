@@ -1,6 +1,7 @@
 use std::ops::Index;
 
 use crate::utils::misc_traits::*;
+use crate::utils::misc_math::*;
 use glam::Vec2;
 
 #[derive(Debug, Copy, Clone)]
@@ -184,13 +185,12 @@ impl<'a> AutomationSeeker<'a> {
                 match end.weight {
                     Weight::ReverseBias => start.point.y,
                     Weight::Curve{power, step} => {
-                        if step != 0. {
-                            t = step * ((t - t % step) / step);
+                        if 0. != step {
+                            t = t.quant_ceil(step.abs(), 0.);
                         }
                         if step < 0. {
-                            t += step;
+                            t = t.quant_floor(step.abs(), 0.);
                         }
-                        
                         start.point.y
                         + (end.point.y - start.point.y)
                         * t.powf(if power < 0. { 1. / (power.abs() + 1.) } else { power + 1. })
@@ -340,7 +340,10 @@ mod tests {
             match weight {
                 Weight::Curve{power, step} => {
                     if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.automation.set_step(index, step + 10.).unwrap();
+                        self.automation.set_step(
+                            index,
+                            step + if 0. < y { 10. } else { -10. }
+                        ).unwrap();
                     }
                     else {
                         self.automation.set_power(

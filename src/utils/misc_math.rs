@@ -32,15 +32,22 @@ impl RotateAbout for PointT {
     }
 }
 
-trait Quantize {
-    fn quantize(&self, period: Self, offset: Self) -> Self;
+pub trait Quantize {
+    fn quant_floor(&self, period: Self, offset: Self) -> Self;
+    fn quant_ceil(&self, period: Self, offset: Self) -> Self;
 }
 
 //trying to do this with trait bounds and blanket impls gives very funky errors
 #[duplicate(Num; [f32]; [i32]; [usize])]
 impl Quantize for Num
 {
-    fn quantize(&self, period: Self, offset: Self) -> Self {
+    fn quant_floor(&self, period: Self, offset: Self) -> Self {
         (self - (self - offset) % period) + offset
+    }
+    fn quant_ceil(&self, period: Self, offset: Self) -> Self {
+        let mut floored = self.quant_floor(period, offset);
+        if (0 as Num) < self - floored { floored += period };
+
+        floored
     }
 }
