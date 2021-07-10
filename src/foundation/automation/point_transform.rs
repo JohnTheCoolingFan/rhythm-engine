@@ -1,5 +1,5 @@
 use crate::{foundation::automation::*, utils::{Seekable, Seeker}};
-use glam::Vec2;
+use glam::{Vec2, Mat2};
 
 pub struct PointTransform {
     pub point: Option<Vec2>,
@@ -18,6 +18,14 @@ impl PointTransform {
 pub struct PTSeeker<'a> {
     seeker: AutomationSeeker<'a>,
     pt: &'a PointTransform
+}
+
+impl<'a> PTSeeker<'a> {
+    fn to_rotation() -> Mat2 {
+    }
+
+    fn to_scale() -> Mat2 {
+    }
 }
 
 impl<'a> Seeker<(Option<Vec2>, f32)> for PTSeeker<'a> {
