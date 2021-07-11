@@ -9,9 +9,12 @@
 --Gui
 	Widgets
 
---Grab feature for Poly Entity
-		?Use outline thickness to express magnitude
-		?Use copies of vertices shifted to express direction
+--Grab
+		Use outline thickness to express magnitude
+		Apply with average
+
+--Nudge
+		Use copies of outline shifted to express direction
 
 --Audio visualizer
 --Beat
