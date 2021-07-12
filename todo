@@ -9,21 +9,23 @@
 --Gui
 	Widgets
 
---Grab
-		Use outline thickness to express magnitude
+??Grab
+		Come up with appropriate visual design
 		Apply with average
 
---Nudge
-		Use copies of outline shifted to express direction
+??Nudge
+		Come up with appropriate visual design
 
 --Audio visualizer
 --Beat
+	??Use hold to create fake feeling opposed to nudge and grab
+	??Have phantom outlines of moving polygons at 1/n timing intervals
+
 --Chart
 	Assemble
 	Globals
 		BG color
 		
 
---Channels
---Channel Rack
+--Playlist
 --Move to Macroquad?

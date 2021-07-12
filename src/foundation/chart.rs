@@ -1,2 +1,5 @@
 pub mod chart;
-pub mod channel;
+pub mod playlist;
+
+pub use chart::Chart;
+pub use playlist::Playlist;

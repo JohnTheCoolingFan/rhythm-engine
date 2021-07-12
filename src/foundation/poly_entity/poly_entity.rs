@@ -19,7 +19,8 @@ pub struct Properties {
     pub splines: Vec<CSplVertPairing>,
     pub rotation: Option<usize>,
     pub scale: Option<usize>,
-    pub grab: Option<usize>,
+    //pub grab: Option<usize>,
+    //pub nudge: Option<usize>,
     pub color: usize,
     pub glow: usize,
     pub beats: Vec<Beat>,
@@ -52,7 +53,8 @@ impl PolyEntity {
                     scale: None,
                     color: 0,
                     glow: 0,
-                    grab: None,
+                    //grab: None,
+                    //nudge: None,
                     beats: vec![]
                 }
             })
