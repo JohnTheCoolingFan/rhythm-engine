@@ -1,18 +1,48 @@
 use glam::{Vec2, Mat3}; 
-use crate::utils::misc_math::*;
+use crate::{foundation::Automation, utils::misc_math::*};
 use std::mem::swap;
 
+struct HitKeys {
+    alphas: u8,
+    phat: bool
+}
+
+struct PolygonGhosts {
+    interval: f32,
+    vanish_curve: Automation
+}
+
 pub enum Beat {
-    Hit(f32, f32, (u8, bool)),
-    Hold(f32, f32, f32, (u8, bool)),
-    Avoid(f32, f32, f32),
+    //0. <= pre <= 1.
+    //start + attack = activation time
+    //start + post = release time
+    //no keys == lazy hit
+    Hit{
+        pre: f32,
+        attack: f32,
+        keys: Option<HitKeys>
+    },
+    Hold{
+        pre: f32,
+        attack: f32,
+        post: f32,
+        keys: Option<HitKeys>,
+        ghosts: PolygonGhosts
+    },
+    Avoid{
+        pre: f32,
+        attack: f32,
+        post: f32
+    }
 }
 
 pub struct CSplVertPairing {
     pub spline: usize,
     pub vertex: usize,
     pub scale: f32,
-    pub rotation: f32
+    pub rotation: f32,
+    pub x_invert: bool,
+    pub y_invert: bool
 }
 
 pub struct Properties {
@@ -27,7 +57,7 @@ pub struct Properties {
 }
 
 pub struct PolyEntity {
-    points: Vec<Vec2>,
+    points: Vec<Vec2>, //contains position offset
     pub start: f32,
     pub duration: f32,
     pub local_center: Vec2,
