@@ -2,7 +2,7 @@ use duplicate::duplicate;
 use glam::Vec2;
 use lyon_geom::Point;
 use std::f32::consts::PI;
-use std::ops::{Add, Sub, Rem};
+use std::ops::{Add, Rem, Sub};
 
 pub trait IsLeft {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
@@ -32,6 +32,18 @@ impl RotateAbout for PointT {
     }
 }
 
+pub trait ScaleAbout {
+    fn scale_about(&self, pivot: &Self, factor: f32) -> Self;
+}
+
+#[duplicate(PointT; [Point<f32>]; [Vec2])]
+impl ScaleAbout for PointT {
+    fn scale_about(&self, pivot: &Self, factor: f32) -> Self {
+        let p = self - pivot;
+        (p.x * factor, p.y * factor) + pivot
+    }
+}
+
 pub trait Quantize {
     fn quant_floor(&self, period: Self, offset: Self) -> Self;
     fn quant_ceil(&self, period: Self, offset: Self) -> Self;
@@ -39,14 +51,15 @@ pub trait Quantize {
 
 //trying to do this with trait bounds and blanket impls gives very funky errors
 #[duplicate(Num; [f32]; [i32]; [usize])]
-impl Quantize for Num
-{
+impl Quantize for Num {
     fn quant_floor(&self, period: Self, offset: Self) -> Self {
         (self - (self - offset) % period) + offset
     }
     fn quant_ceil(&self, period: Self, offset: Self) -> Self {
         let mut floored = self.quant_floor(period, offset);
-        if (0 as Num) < self - floored { floored += period };
+        if (0 as Num) < self - floored {
+            floored += period
+        };
 
         floored
     }

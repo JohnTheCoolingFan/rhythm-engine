@@ -1,15 +1,13 @@
-use glam::{Vec2, Mat3}; 
-use crate::{foundation::Automation, utils::misc_math::*};
+use crate::{
+    foundation::{playlist::PLSeeker, Automation},
+    utils::misc_math::*,
+};
+use glam::{Mat3, Vec2};
 use std::mem::swap;
 
 struct HitKeys {
     alphas: u8,
-    phat: bool
-}
-
-struct PolygonGhosts {
-    interval: f32,
-    vanish_curve: Automation
+    phat: bool,
 }
 
 pub enum Beat {
@@ -17,23 +15,21 @@ pub enum Beat {
     //start + attack = activation time
     //start + post = release time
     //no keys == lazy hit
-    Hit{
+    Hit {
         pre: f32,
         attack: f32,
-        keys: Option<HitKeys>
+        keys: Option<HitKeys>,
     },
-    Hold{
+    Hold {
+        pre: f32,
+        follow: Automation, //attack: start.x, post: end.x
+        keys: Option<HitKeys>,
+    },
+    Avoid {
         pre: f32,
         attack: f32,
         post: f32,
-        keys: Option<HitKeys>,
-        ghosts: PolygonGhosts
     },
-    Avoid{
-        pre: f32,
-        attack: f32,
-        post: f32
-    }
 }
 
 pub struct CSplVertPairing {
@@ -42,7 +38,7 @@ pub struct CSplVertPairing {
     pub scale: f32,
     pub rotation: f32,
     pub x_invert: bool,
-    pub y_invert: bool
+    pub y_invert: bool,
 }
 
 pub struct Properties {
@@ -61,7 +57,7 @@ pub struct PolyEntity {
     pub start: f32,
     pub duration: f32,
     pub local_center: Vec2,
-    pub properties: Properties
+    pub properties: Properties,
 }
 
 impl PolyEntity {
@@ -101,18 +97,20 @@ impl PolyEntity {
             n < self.points.len() && m < self.points.len(),
             "A chosen polygon vertex to split with does not exist"
         );
-        if m < n { swap(&mut n, &mut m) }
-        if m - n == 1 {
-            self.points.insert(m, self.points[n].lerp(self.points[m], 0.5));
-            Ok(())
+        if m < n {
+            swap(&mut n, &mut m)
         }
-        else {
+        if m - n == 1 {
+            self.points
+                .insert(m, self.points[n].lerp(self.points[m], 0.5));
+            Ok(())
+        } else {
             Err(())
         }
     }
 
     pub fn set_vertex(&mut self, n: usize, pos: Vec2) {
-        self.points[n + 1] = pos;
+        self.points[n + 1] = pos - self.points[0];
     }
 
     pub fn set_position(&mut self, pos: Vec2) {
@@ -120,11 +118,14 @@ impl PolyEntity {
     }
 
     pub fn rotate(&mut self, deg: f32) {
-        for p in &mut self.points[1..] {
-            *p = p.rotate_about(&self.local_center, deg);
+        for point in &mut self.points.iter_mut().skip(1) {
+            *point = point.rotate_about(&self.local_center, deg);
         }
     }
 
     pub fn scale(&mut self, factor: f32) {
+        for point in self.points.iter_mut().skip(1) {
+            *point = point.scale_about(&self.local_center, factor)
+        }
     }
 }

@@ -18,8 +18,10 @@
 
 --Audio visualizer
 --Beat
-	??Use hold to create fake feeling opposed to nudge and grab
-	??Have phantom outlines of moving polygons at 1/n timing intervals
+  --Hold will produce fake feeling
+    --state at attack time will be press area
+    --state at post will be release area
+    --any position in between these two states is a valid cursor position
 
 --Chart
 	Assemble
