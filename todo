@@ -1,33 +1,74 @@
---Play + Sync audio
---Timing, static + variable BPM
-	Timeline
-	Snapping
-	Repeating
-	Scaling
+-     Working on
+===   Complete
+None  Planned
 
---Song Timer
---Gui
-	Widgets
+-Version 0.1 {
+  -Core {
+    ===Automation
+    ===Dyn Color
+    ===Complex spline
+    
+    -Beat
+      Hold:
+        States:
+          Strike time: S0
+          Rlease time: S1
+          S0.contains(S1) || S1.contains(S0) == true
+          S0.contains(mouse) || S1.contains(mouse) == true
+    -Point transform
+    -Poly Entity
+    -Playlist
+    -Chart
+    
+    Play + sync audio
+    BPM(static, variable)
+    Local center scale based preattack effects
+  }
+  
+  Play {
+    Simple score
+  }
+  
+  Editor {
+    Simple widgets
+    Simple timeline
+    Snapping
+    Repeating
+    Stretching
 
-??Grab
-		Come up with appropriate visual design
-		Apply with average
+    Song timer
+  }
+}
 
-??Nudge
-		Come up with appropriate visual design
 
---Audio visualizer
---Beat
-  --Hold will produce fake feeling
-    --state at attack time will be press area
-    --state at post will be release area
-    --any position in between these two states is a valid cursor position
 
---Chart
-	Assemble
-	Globals
-		BG color
-		
 
---Playlist
---Move to Macroquad?
+
+Version 0.2 {
+  Misc {
+    Move to macroquad
+  }
+}
+
+
+
+
+
+Version 0.3 {
+  Core {
+    Replace local scale effect with striaght skeleton polygon offsetting  
+  }
+
+  Editor {
+    Map validator
+    Audio visualizer
+  }
+}
+
+
+
+
+
+Version 0.4 {
+  ???
+}
