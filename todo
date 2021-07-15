@@ -19,7 +19,7 @@ None  Planned
           Rlease time: S1
           S0.contains(S1) || S1.contains(S0) == true
           S0.contains(mouse) || S1.contains(mouse) == true
-    -Point transform
+    -Transform Point
     -Poly Entity
     -Playlist
     -Chart

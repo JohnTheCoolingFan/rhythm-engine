@@ -1,8 +1,7 @@
 use duplicate::duplicate;
-use glam::Vec2;
+use glam::{Mat2, Vec2};
 use lyon_geom::Point;
 use std::f32::consts::PI;
-use std::ops::{Add, Rem, Sub};
 
 pub trait IsLeft {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
@@ -62,5 +61,37 @@ impl Quantize for Num {
         };
 
         floored
+    }
+}
+
+pub struct Rotation(f32);
+pub struct Scale(f32);
+
+#[duplicate(NT; [Rotation]; [Scale])]
+impl Into<NT> for f32 {
+    fn into(self) -> NT {
+        NT(self)
+    }
+}
+
+impl Into<Mat2> for Rotation {
+    #[rustfmt::skip]
+    fn into(&self) -> glam::Mat2 {
+        let c = (self.0 * (PI / 180.)).cos();
+        let s = (self.0 * (PI / 180.)).sin();
+        Mat2::from_cols_array(&[
+            c, -s,
+            s, c
+        ]).transpose()
+    }
+}
+
+impl Into<Mat2> for Scale {
+    #[rustfmt::skip]
+    fn into(&self) -> Mat2 {
+        Mat2::from_cols_array(&[
+            self.0, 0,
+            0, self.0 
+        ])
     }
 }

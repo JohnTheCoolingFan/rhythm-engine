@@ -4,38 +4,32 @@ use crate::{
 };
 use glam::{Mat2, Vec2};
 
-pub struct RotationPoint {
+pub struct TransformPoint<T>
+where
+    T: Into<Mat2>,
+    f32: Into<T>,
+{
     pub point: Option<Vec2>,
     pub automation: Automation,
 }
 
-impl RotationPoint {
-    pub fn new(len: f32) -> Self {
-        Self {
-            point: None,
-            automation: Automation::new(0., 360., len),
-        }
-    }
-}
-
-pub struct RotPSeeker<'a> {
+pub struct TransPointSeeker<'a, T> {
     seeker: AutomationSeeker<'a>,
-    rp: &'a RotationPoint,
+    rp: &'a TransformPoint<T>,
 }
 
-impl<'a> Seeker<Mat2> for RotPoint<'a> {
+impl<'a, T> Seeker<Mat2> for TransPointSeeker<'a, T> {
     fn seek(&mut self, val: f32) -> Mat2 {
-        (self.pt.point, self.seeker.seek(val))
+        self.seeker.seek(val).into::<T>().into::<Mat2>()
     }
-
     fn jump(&mut self, val: f32) -> Mat2 {
-        (self.pt.point, self.seeker.jump(val))
+        self.seeker.jump(val).into::<T>().into::<Mat2>()
     }
 }
 
-impl<'a> Seekable<'a> for PointTransform {
+impl<'a, T> Seekable<'a> for TransformPoint<T> {
     type Output = (Option<Vec2>, f32);
-    type SeekerType = PTSeeker<'a>;
+    type SeekerType = TransPointSeeker<'a, T>;
     fn seeker(&'a self) -> Self::SeekerType {
         Self::SeekerType {
             seeker: self.automation.seeker(),
