@@ -7,7 +7,7 @@ pub trait IsLeft {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
 }
 
-#[duplicate(PointT; [Point<f32>]; [Vec2])]
+#[duplicate(PointT; [Point::<f32>]; [Vec2])]
 impl IsLeft for PointT {
     fn is_left(&self, start: &Self, end: &Self) -> bool {
         ((end.x - start.x) * (self.y - start.y) - (end.y - start.y) * (self.x - start.x)) > 0.
@@ -18,7 +18,7 @@ pub trait RotateAbout {
     fn rotate_about(&self, pivot: &Self, angle_deg: f32) -> Self;
 }
 
-#[duplicate(PointT; [Point<f32>]; [Vec2])]
+#[duplicate(PointT; [Point::<f32>]; [Vec2])]
 impl RotateAbout for PointT {
     fn rotate_about(&self, pivot: &Self, angle_deg: f32) -> Self {
         let c = (angle_deg * (PI / 180.)).cos();
@@ -35,11 +35,11 @@ pub trait ScaleAbout {
     fn scale_about(&self, pivot: &Self, factor: f32) -> Self;
 }
 
-#[duplicate(PointT; [Point<f32>]; [Vec2])]
+#[duplicate(PointT; [Point::<f32>]; [Vec2])]
 impl ScaleAbout for PointT {
     fn scale_about(&self, pivot: &Self, factor: f32) -> Self {
-        let p = self - pivot;
-        (p.x * factor, p.y * factor) + pivot
+        let p = *self - *pivot;
+        PointT::new(p.x * factor + pivot.x, p.y * factor + pivot.y)
     }
 }
 
@@ -76,7 +76,7 @@ impl Into<NT> for f32 {
 
 impl Into<Mat2> for Rotation {
     #[rustfmt::skip]
-    fn into(&self) -> glam::Mat2 {
+    fn into(self) -> glam::Mat2 {
         let c = (self.0 * (PI / 180.)).cos();
         let s = (self.0 * (PI / 180.)).sin();
         Mat2::from_cols_array(&[
@@ -88,10 +88,10 @@ impl Into<Mat2> for Rotation {
 
 impl Into<Mat2> for Scale {
     #[rustfmt::skip]
-    fn into(&self) -> Mat2 {
+    fn into(self) -> Mat2 {
         Mat2::from_cols_array(&[
-            self.0, 0,
-            0, self.0 
+            self.0, 0.,
+            0., self.0 
         ])
     }
 }

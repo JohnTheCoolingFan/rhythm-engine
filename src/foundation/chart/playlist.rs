@@ -13,7 +13,7 @@ pub struct Playlist<'a, T>
 where
     T: Seekable<'a>,
 {
-    channels: Vec<Channel<T>>,
+    channels: Vec<Channel<'a, T>>,
     _phantom: PhantomData<&'a T>,
 }
 
