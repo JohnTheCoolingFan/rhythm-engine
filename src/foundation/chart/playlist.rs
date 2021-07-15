@@ -1,11 +1,19 @@
 use crate::utils::Seekable;
 use std::{marker::PhantomData, ops::Index};
 
+pub struct Channel<'a, T>
+where
+    T: Seekable<'a>,
+{
+    tracks: Vec<(f32, T)>,
+    _phantom: PhantomData<&'a T>,
+}
+
 pub struct Playlist<'a, T>
 where
     T: Seekable<'a>,
 {
-    rotations: Vec<Vec<(f32, T)>>,
+    channels: Vec<Channel<T>>,
     _phantom: PhantomData<&'a T>,
 }
 

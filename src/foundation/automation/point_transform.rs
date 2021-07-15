@@ -1,39 +1,34 @@
-use crate::{foundation::automation::*, utils::{Seekable, Seeker}};
-use glam::{Vec2, Mat2};
+use crate::{
+    foundation::automation::*,
+    utils::{Seekable, Seeker},
+};
+use glam::{Mat2, Vec2};
 
-pub struct PointTransform {
+pub struct RotationPoint {
     pub point: Option<Vec2>,
-    pub automation: Automation
+    pub automation: Automation,
 }
 
-impl PointTransform {
-    pub fn new(lb: f32, ub: f32, len: f32) -> Self {
+impl RotationPoint {
+    pub fn new(len: f32) -> Self {
         Self {
             point: None,
-            automation: Automation::new(lb, ub, len)
+            automation: Automation::new(0., 360., len),
         }
     }
 }
 
-pub struct PTSeeker<'a> {
+pub struct RotPSeeker<'a> {
     seeker: AutomationSeeker<'a>,
-    pt: &'a PointTransform
+    rp: &'a RotationPoint,
 }
 
-impl<'a> PTSeeker<'a> {
-    fn to_rotation() -> Mat2 {
-    }
-
-    fn to_scale() -> Mat2 {
-    }
-}
-
-impl<'a> Seeker<(Option<Vec2>, f32)> for PTSeeker<'a> {
-    fn seek(&mut self, val: f32) -> (Option<Vec2>, f32) {
+impl<'a> Seeker<Mat2> for RotPoint<'a> {
+    fn seek(&mut self, val: f32) -> Mat2 {
         (self.pt.point, self.seeker.seek(val))
     }
 
-    fn jump(&mut self, val: f32) -> (Option<Vec2>, f32) {
+    fn jump(&mut self, val: f32) -> Mat2 {
         (self.pt.point, self.seeker.jump(val))
     }
 }
@@ -44,7 +39,7 @@ impl<'a> Seekable<'a> for PointTransform {
     fn seeker(&'a self) -> Self::SeekerType {
         Self::SeekerType {
             seeker: self.automation.seeker(),
-            pt: &self
+            pt: &self,
         }
     }
 }
