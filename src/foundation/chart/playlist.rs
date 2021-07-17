@@ -17,24 +17,6 @@ where
     _phantom: PhantomData<&'a T>,
 }
 
-pub struct PLSeeker<'a, T>
-where
-    T: Seekable<'a>,
-{
-    outputs: Vec<T::Output>,
-    seekers: Vec<T::SeekerType>,
-}
-
-impl<'a, T> Index<usize> for PLSeeker<'a, T>
-where
-    T: Seekable<'a>,
-{
-    type Output = T::Output;
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.outputs[index]
-    }
-}
-
 impl<'a, T> Playlist<'a, T>
 where
     T: Seekable<'a>,
