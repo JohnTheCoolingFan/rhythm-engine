@@ -1,19 +1,31 @@
 use std::ops::Index;
 
-use crate::utils::misc_traits::*;
 use crate::utils::misc_math::*;
+use crate::utils::misc_traits::*;
 use glam::Vec2;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Weight {
     ForwardBias,
-    Curve{power: f32, step: f32},
+    Quad(f32),
+    Cube(f32),
     ReverseBias,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Fancy {
+    Step(f32),
+    Oscilate {
+        offset: f32,
+        period: f32,
+        alternate: bool,
+    },
 }
 
 pub struct Anchor {
     pub point: Vec2,
     pub weight: Weight,
+    pub fancy: Fancy,
 }
 
 impl Anchor {
@@ -33,7 +45,7 @@ pub struct Automation {
 
 impl Index<usize> for Automation {
     type Output = Anchor;
-    
+
     fn index(&self, n: usize) -> &Self::Output {
         &self.anchors[n]
     }
@@ -47,8 +59,20 @@ impl Automation {
             upper_bound: ub,
             lower_bound: lb,
             anchors: vec![
-                Anchor::new(Vec2::new(0., 0.0), Weight::Curve{power: 0., step: 0.}),
-                Anchor::new(Vec2::new(len, 0.0), Weight::Curve{power: 0., step: 0.}),
+                Anchor::new(
+                    Vec2::new(0., 0.0),
+                    Weight::Curve {
+                        power: 0.,
+                        step: 0.,
+                    },
+                ),
+                Anchor::new(
+                    Vec2::new(len, 0.0),
+                    Weight::Curve {
+                        power: 0.,
+                        step: 0.,
+                    },
+                ),
             ],
         }
     }
@@ -108,12 +132,15 @@ impl Automation {
         self.anchors[index].point = point;
         old
     }
- 
+
     pub fn cycle_weight(&mut self, index: usize) -> Weight {
         let old = self.anchors[index].weight;
         self.anchors[index].weight = match old {
-            Weight::ForwardBias => Weight::Curve{power: 0., step: 0.},
-            Weight::Curve{..} => Weight::ReverseBias,
+            Weight::ForwardBias => Weight::Curve {
+                power: 0.,
+                step: 0.,
+            },
+            Weight::Curve { .. } => Weight::ReverseBias,
             Weight::ReverseBias => Weight::ForwardBias,
         };
         old
@@ -121,29 +148,28 @@ impl Automation {
 
     pub fn set_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         match self.anchors[index].weight {
-            Weight::Curve{ref mut power, ..} => {
+            Weight::Curve { ref mut power, .. } => {
                 let old = *power;
-                *power = if 0. <= value {  value.clamp(0., 30.) } else { value.clamp(-30., 0.) };
+                *power = if 0. <= value {
+                    value.clamp(0., 30.)
+                } else {
+                    value.clamp(-30., 0.)
+                };
                 Ok(old)
             }
-            _ => {
-                Err(())
-            }
+            _ => Err(()),
         }
     }
 
     pub fn set_step(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         let time_dif = self.anchors[index].point.x - self.anchors[index - 1].point.x;
         match self.anchors[index].weight {
-            Weight::Curve{ref mut step, ..} => {
+            Weight::Curve { ref mut step, .. } => {
                 let old = *step;
                 *step = value.clamp(-time_dif, time_dif);
                 Ok(old)
             }
-            _ => {
-                Err(())
-            }
-
+            _ => Err(()),
         }
     }
 }
@@ -249,7 +275,11 @@ impl<'a> Seekable<'a> for Automation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ggez::{event::{self, EventHandler, MouseButton}, graphics::*, input::keyboard::is_key_pressed};
+    use ggez::{
+        event::{self, EventHandler, MouseButton},
+        graphics::*,
+        input::keyboard::is_key_pressed,
+    };
     use ggez::{Context, GameResult};
 
     struct Test {
@@ -323,7 +353,10 @@ mod tests {
                 MouseButton::Left => {
                     self.automation.insert(Anchor {
                         point: Vec2::new(x, y / self.dimensions.y),
-                        weight: Weight::Curve{power: 0., step: 0.},
+                        weight: Weight::Curve {
+                            power: 0.,
+                            step: 0.,
+                        },
                     });
                 }
                 MouseButton::Middle => {
@@ -342,18 +375,15 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             let weight = self.automation[index].weight;
             match weight {
-                Weight::Curve{power, step} => {
+                Weight::Curve { power, step } => {
                     if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.automation.set_step(
-                            index,
-                            step + if 0. < y { 10. } else { -10. }
-                        ).unwrap();
-                    }
-                    else {
-                        self.automation.set_power(
-                            index,
-                            power + if 0. < y { 0.05 } else { -0.05 }
-                        ).unwrap();
+                        self.automation
+                            .set_step(index, step + if 0. < y { 10. } else { -10. })
+                            .unwrap();
+                    } else {
+                        self.automation
+                            .set_power(index, power + if 0. < y { 0.05 } else { -0.05 })
+                            .unwrap();
                     }
                 }
                 _ => {}
