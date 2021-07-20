@@ -14,12 +14,35 @@ pub enum Weight {
 
 #[derive(Debug, Copy, Clone)]
 pub enum Fancy {
-    Step(f32),
+    Step(f32), //-inf to inf
     Oscilate {
-        offset: f32,
-        period: f32,
+        offset: f32, //0 <=
+        period: f32, //0 <=
         alternate: bool,
     },
+}
+
+impl Fancy {
+    pub fn embellish(&self, t: f32, start: f32, end: f32) -> f32 {
+        match self {
+            Fancy::Step(step) => {
+                let q = step.abs() / (end - start);
+                if 0. < *step {
+                    t = t.quant_ceil(q, 0.);
+                }
+                if *step < 0. {
+                    t = t.quant_floor(q, 0.);
+                }
+                t.clamp(0., 1.)
+            },
+            Fancy::Oscilate{offset, period, alternate} => {
+                let q = (t / period) as i32;
+                let over = t % period;
+
+
+            }
+        }
+    }
 }
 
 pub struct Anchor {
@@ -33,6 +56,7 @@ impl Anchor {
         Self {
             point: p,
             weight: w,
+            fancy: Fancy::Step(0.),
         }
     }
 }
@@ -59,20 +83,8 @@ impl Automation {
             upper_bound: ub,
             lower_bound: lb,
             anchors: vec![
-                Anchor::new(
-                    Vec2::new(0., 0.0),
-                    Weight::Curve {
-                        power: 0.,
-                        step: 0.,
-                    },
-                ),
-                Anchor::new(
-                    Vec2::new(len, 0.0),
-                    Weight::Curve {
-                        power: 0.,
-                        step: 0.,
-                    },
-                ),
+                Anchor::new(Vec2::new(0., 0.0), Weight::Quad(0.)),
+                Anchor::new(Vec2::new(len, 0.0), Weight::Quad(0.)),
             ],
         }
     }
@@ -136,11 +148,9 @@ impl Automation {
     pub fn cycle_weight(&mut self, index: usize) -> Weight {
         let old = self.anchors[index].weight;
         self.anchors[index].weight = match old {
-            Weight::ForwardBias => Weight::Curve {
-                power: 0.,
-                step: 0.,
-            },
-            Weight::Curve { .. } => Weight::ReverseBias,
+            Weight::ForwardBias => Weight::Quad(0.),
+            Weight::Quad(_) => Weight::Cube(0.),
+            Weight::Cube(_) => Weight::ReverseBias,
             Weight::ReverseBias => Weight::ForwardBias,
         };
         old
@@ -148,7 +158,7 @@ impl Automation {
 
     pub fn set_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         match self.anchors[index].weight {
-            Weight::Curve { ref mut power, .. } => {
+            Weight::Quad(ref mut power) | Weight::Cube(ref mut power) => {
                 let old = *power;
                 *power = if 0. <= value {
                     value.clamp(0., 30.)
@@ -161,12 +171,12 @@ impl Automation {
         }
     }
 
-    pub fn set_step(&mut self, index: usize, value: f32) -> Result<f32, ()> {
+    pub fn set_period(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         let time_dif = self.anchors[index].point.x - self.anchors[index - 1].point.x;
-        match self.anchors[index].weight {
-            Weight::Curve { ref mut step, .. } => {
-                let old = *step;
-                *step = value.clamp(-time_dif, time_dif);
+        match self.anchors[index].fancy {
+            Fancy::Step(ref mut period) | Fancy::Oscilate { ref mut period, .. } => {
+                let old = *period;
+                *period = value.clamp(-time_dif, time_dif);
                 Ok(old)
             }
             _ => Err(()),
@@ -211,15 +221,7 @@ impl<'a> AutomationSeeker<'a> {
                 match end.weight {
                     Weight::ReverseBias => start.point.y,
                     Weight::Curve{power, step} => {
-                        let q = step.abs() / (end.point.x - start.point.x);
-                        if 0. < step {
-                            t = t.quant_ceil(q, 0.);
-                        }
-                        if step < 0. {
-                            t = t.quant_floor(q, 0.);
-                        }
-
-                        t = t.clamp(0., 1.);
+                        
 
                         start.point.y
                         + (end.point.y - start.point.y)
