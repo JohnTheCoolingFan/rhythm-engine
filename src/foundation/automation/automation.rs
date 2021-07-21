@@ -14,35 +14,16 @@ pub enum Weight {
 
 #[derive(Debug, Copy, Clone)]
 pub enum Fancy {
-    Step(f32), //-inf to inf
+    None,
+    Step{
+        period: f32, //-inf to inf
+        inner: Weight
+    },
     Oscilate {
         offset: f32, //0 <=
         period: f32, //0 <=
         alternate: bool,
     },
-}
-
-impl Fancy {
-    pub fn embellish(&self, t: f32, start: f32, end: f32) -> f32 {
-        match self {
-            Fancy::Step(step) => {
-                let q = step.abs() / (end - start);
-                if 0. < *step {
-                    t = t.quant_ceil(q, 0.);
-                }
-                if *step < 0. {
-                    t = t.quant_floor(q, 0.);
-                }
-                t.clamp(0., 1.)
-            },
-            Fancy::Oscilate{offset, period, alternate} => {
-                let q = (t / period) as i32;
-                let over = t % period;
-
-
-            }
-        }
-    }
 }
 
 pub struct Anchor {
@@ -56,7 +37,21 @@ impl Anchor {
         Self {
             point: p,
             weight: w,
-            fancy: Fancy::Step(0.),
+            fancy: Fancy::None,
+        }
+    }
+
+    pub fn from_x(&self, start: f32, mut x: f32) {
+        debug_assert!(start <= self.point.x, "prev.anchor.point.x <= anchor.point.x");
+        debug_assert!(0. <= x && x <= 1., "X val out of range in Anchor from_x call");
+        
+        let x = match self.fancy {
+            Fancy::Oscilate{period, offset, alternate} => x,
+            _ => x
+        };
+
+        match self.fancy {
+
         }
     }
 }
