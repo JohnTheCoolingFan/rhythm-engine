@@ -1,5 +1,6 @@
-pub mod misc_math;
-pub mod misc_traits;
+pub mod math;
+pub mod misc;
+pub mod seeker;
 
-pub use misc_math::{IsLeft, Quantize, RotateAbout, Rotation, Scale};
-pub use misc_traits::{BlanketSeeker, FromEnd, SConst, Seekable, Seeker};
+pub use math::{IsLeft, Quantize, RotateAbout, Rotation, Scale};
+pub use misc::{BlanketSeeker, FromEnd, SConst, Seekable, Seeker};
