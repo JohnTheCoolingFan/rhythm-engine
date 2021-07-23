@@ -26,20 +26,21 @@ impl Weight {
         };
 
         if let Self::CubeLike(_) = self {
-            y_diff /= 0.5;
+            y_diff /= 2.;
             if 0.5 <= t {
                 starting = end.y;
-                y_diff *= -1.;
-                t = 1. - t % 0.5;
+                y_diff = -y_diff;
+                t = (0.5 - t % 0.5) / 0.5;
             }
             else {
                 t /= 0.5;
             }
         };
-
+        
         starting + y_diff * t.powf(if power < 0. { 1. / (power.abs() + 1.) } else { power + 1. })
     }
 }
+
 #[derive(Debug, Copy, Clone)]
 pub enum Fancy {
     None,
