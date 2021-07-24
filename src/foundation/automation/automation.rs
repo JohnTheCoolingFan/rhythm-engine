@@ -23,8 +23,8 @@ impl Automation {
             upper_bound: ub,
             lower_bound: lb,
             anchors: vec![
-                Anchor::new(Vec2::new(0., 0.0), Weight::Quad(0.)),
-                Anchor::new(Vec2::new(len, 0.0), Weight::Quad(0.)),
+                Anchor::new(Vec2::new(0., 0.0), Weight::ForwardBias),
+                Anchor::new(Vec2::new(len, 0.0), Weight::QuadLike(1.)),
             ],
         }
     }

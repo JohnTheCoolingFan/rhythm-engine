@@ -2,7 +2,7 @@ use crate::utils::math::*;
 use crate::utils::misc::*;
 use glam::Vec2;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub enum Weight {
     ForwardBias,
     QuadLike(f32),
@@ -12,53 +12,67 @@ pub enum Weight {
 
 impl Weight {
     #[rustfmt::skip]
-    pub fn eval(self, start: &Vec2, end: &Vec2, offset: f32) -> f32 {
-        debug_assert!(start.x <= end.x, "start must be <= end");
-        debug_assert!(start.x <= offset && offset <= end.x, "offset out of bounds");
-        
-        let mut starting = start.y;
-        let mut t = (offset - start.x) / (end.x - start.x);
-        let mut y_diff = end.y - start.y;
-        let power = match self {
-            Self::ForwardBias => return end.y,
-            Self::ReverseBias => return start.y,
-            Self::QuadLike(p) | Self::CubeLike(p)=> p,
-        };
+    pub fn eval(&self, t: f32) -> f32 {
+        debug_assert!(0. <= t && t <= 1., "t out of bounds");
 
-        if let Self::CubeLike(_) = self {
-            y_diff /= 2.;
-            if 0.5 <= t {
-                starting = end.y;
-                y_diff = -y_diff;
-                t = (0.5 - t % 0.5) / 0.5;
+        match self {
+            Self::ForwardBias => 1.,
+            Self::ReverseBias => 0.,
+            Self::QuadLike(power) | Self::CubeLike(power) => {
+                //cubic is basically 2 quadratics with the 2nd
+                //being inverted about the half way point
+                let (starting, delta, x) = if let Self::CubeLike(_) = self {
+                    if 0.5 < t {
+                        (
+                            1.,
+                            -0.5,
+                            (0.5 - t % 0.5) / 0.5
+                        )
+                    } else {
+                        (
+                            0.,
+                            0.5,
+                            t / 0.5
+                        )
+                    }
+                } else {
+                    (
+                        0.,
+                        1.,
+                        t
+                    )
+                };
+
+                starting + delta * x.powf(
+                    if power < 0. {
+                        1. / (power.abs() + 1.)
+                    } else {
+                        power + 1.
+                    }
+                )
             }
-            else {
-                t /= 0.5;
-            }
-        };
-        
-        starting + y_diff * t.powf(if power < 0. { 1. / (power.abs() + 1.) } else { power + 1. })
+        }
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum Fancy {
-    None,
-    Step {
-        period: f32, //0 <=
-        inner: Weight,
-    },
-    Oscilate {
-        offset: f32, //0 <=
-        period: f32, //0 <=
-        alternate: bool,
-    },
+#[derive(Debug)]
+pub struct SubWave {
+    pub offset: f32,
+    pub period: f32,
+    pub inner: Weight,
 }
 
+#[derive(Debug)]
+pub enum Fancy {
+    Step,
+    Oscilate { alternate: bool },
+}
+
+#[derive(Debug)]
 pub struct Anchor {
     pub point: Vec2,
     pub weight: Weight,
-    pub fancy: Fancy,
+    pub embelish: Option<(Fancy, SubWave)>,
 }
 
 impl Anchor {
@@ -66,23 +80,25 @@ impl Anchor {
         Self {
             point: p,
             weight: w,
-            fancy: Fancy::None,
+            embelish: None,
         }
     }
 
-    pub fn interp(&self, last: &Self, input: f32) {
+    pub fn interp(&self, last: &Self, offset: f32) -> f32 {
+        debug_assert!(last.point.x <= self.point.x, "self < last");
         debug_assert!(
-            last.point.x <= self.point.x,
-            "prev.anchor.point.x <= anchor.point.x"
-        );
-        debug_assert!(
-            0. <= input && input <= 1.,
-            "X val out of range in Anchor from_x call"
+            last.point.x <= offset && offset <= self.point.x,
+            "offset out of bounds"
         );
 
-        let (y0, y1) = match self.fancy {
-            Fancy::Step { period, .. } => (input.quant_floor(period), input.quant_ceil(period)),
-            _ => (last.point.y, self.point.y),
-        };
+        let delta = self.point.y - last.point.y;
+        let outer_amp = self.weight.eval((offset - last.point.x) / (self.point.x - last.point.x));
+
+        if let Some((fancy, subwave)) = self.embelish {
+            let inner_amp = subwave.
+        }
+        else {
+            return last.point.y + delta * outer_amp;
+        }
     }
 }

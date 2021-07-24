@@ -21,8 +21,8 @@ pub trait RotateAbout {
 #[duplicate(PointT; [Point::<f32>]; [Vec2])]
 impl RotateAbout for PointT {
     fn rotate_about(&self, pivot: &Self, angle_deg: f32) -> Self {
-        let c = (angle_deg * (PI / 180.)).cos();
-        let s = (angle_deg * (PI / 180.)).sin();
+        let c = angle_deg.to_radians().cos();
+        let s = angle_deg.to_radians().sin();
 
         Self::new(
             c * (self.x - pivot.x) - s * (self.y - pivot.y) + pivot.x,
@@ -44,23 +44,23 @@ impl ScaleAbout for PointT {
 }
 
 pub trait Quantize {
-    fn quant_floor(&self, period: Self, offset: Self) -> Self;
-    fn quant_ceil(&self, period: Self, offset: Self) -> Self;
+    fn quant_floor(&self, period: Self) -> Self;
+    fn quant_ceil(&self, period: Self) -> Self;
 }
 
 //trying to do this with trait bounds and blanket impls gives very funky errors
 #[duplicate(Num; [f32]; [i32]; [usize])]
 impl Quantize for Num {
-    fn quant_floor(&self, period: Self, offset: Self) -> Self {
-        (self - (self - offset) % period) + offset
+    fn quant_floor(&self, period: Self) -> Self {
+        self / period
     }
-    fn quant_ceil(&self, period: Self, offset: Self) -> Self {
-        let mut floored = self.quant_floor(period, offset);
-        if (0 as Num) < self - floored {
-            floored += period
-        };
+    fn quant_ceil(&self, period: Self) -> Self {
+        let mut q = self.quant_floor(period);
+        if (0 as Num) < self - q {
+            q += period
+        }
 
-        floored
+        q
     }
 }
 
@@ -77,8 +77,8 @@ impl Into<NT> for f32 {
 impl Into<Mat2> for Rotation {
     #[rustfmt::skip]
     fn into(self) -> glam::Mat2 {
-        let c = (self.0 * (PI / 180.)).cos();
-        let s = (self.0 * (PI / 180.)).sin();
+        let c = self.0.to_radians().cos();
+        let s = self.0.to_radians().sin();
         Mat2::from_cols_array(&[
             c, -s,
             s, c
