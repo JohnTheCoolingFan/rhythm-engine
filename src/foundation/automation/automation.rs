@@ -1,5 +1,6 @@
 use std::ops::Index;
 use crate::foundation::automation::anchor::*;
+use glam::Vec2;
 
 pub struct Automation {
     pub upper_bound: f32,
