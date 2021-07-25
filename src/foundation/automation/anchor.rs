@@ -65,6 +65,7 @@ pub struct SubWave {
 #[derive(Debug)]
 pub enum Fancy {
     Step,
+    Hop { alternate: bool },
     Oscilate { alternate: bool },
 }
 
@@ -85,6 +86,8 @@ impl Anchor {
         }
     }
 
+
+    #[rustfmt::skip]
     pub fn interp(&self, last: &Self, offset: f32) -> f32 {
         debug_assert!(last.point.x <= self.point.x, "self < last");
         debug_assert!(
@@ -92,45 +95,38 @@ impl Anchor {
             "offset out of bounds"
         );
 
-        let length = self.point.x - last.point.x;
-        let height = self.point.y - last.point.y;
-        let macro_t = (offset - last.point.x) / (self.point.x - last.point.y);
+        let dy = self.point.y - last.point.y;
 
-        match self.embelish {
-            Some((fancy, subwave)) => {
-                let (x0, x1) = (
-                    offset
-                        .quant_floor(subwave.period, subwave.offset)
-                        .clamp(last.point.x, self.point.x),
-                    offset
-                        .quant_ceil(subwave.period, subwave.offset)
-                        .clamp(last.point.x, self.point.x),
-                );
+        let (x0, x1) = if let Some((fancy, _)) = self.fancy {
+            (
+                offset
+                    .quant_floor(fancy.period, fancy.offset)
+                    .clamp(last.point.x, self.point.x),
+                offset
+                    .quant_ceil(fancy.period, fancy.offset)
+                    .clamp(last.point.x, self.point.x),
+            )
+        } else {
+            (last.point.x, self.point.x)
+        };
 
-                let mini_t = (offset - x0) / (x1 - x0);
-
-                match fancy {
-                    Fancy::Step => {
-                        let (y0, y1) = (
-                            self.weight.eval(x0 / length) * height,
-                            self.weight.eval(x1 / length) * height,
-                        );
-
-                        last.point.y + y0 + (y1 - y0) * subwave.inner.eval(mini_t)
-                    }
-                    Fancy::Oscilate { alternate } => {
-                        let (y0, y1) = (
-                            self.weight.eval(x0 / length) * 0.5 * height,
-                            self.weight.eval(x1 / length) * 0.5 * height,
-                        );
-
-                        let delta = if alternate && (offset - subwave.offset / subwave.period) as i32 % 2 == 1 {
-
-                        }
-                    }
-                }
+        let (y0, y1) = if let Some((fancy, _)) = self.fancy {
+            match fancy {
+                Fancy::Step => (
+                    last.point.y + self.weight.eval(x0) * dy,
+                    last.point.y + self.weight.eval(x1) * dy
+                ),
+                Fancy::Hop { .. } => (
+                    last.point.y,
+                    last.point.y + self.weight.eval(x1) * dy
+                ),
+                Fancy::Oscilate { .. } => (
+                    (last.point.y + self.weight.eval(x0) * dy) / 2.
+                    (self.point.y - self.weight.eval(x1) * dy) / 2.
+                ),
             }
-            None => last.point.y + height * self.weight.eval(macro_t),
-        }
+        } else {
+            (last.point.y, self.point.y)
+        };
     }
 }
