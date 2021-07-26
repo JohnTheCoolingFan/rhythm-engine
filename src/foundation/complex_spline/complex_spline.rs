@@ -1,5 +1,5 @@
 use crate::foundation::{automation::*, complex_spline::*};
-use crate::utils::misc_traits::*;
+use crate::utils::{misc::*, seeker::*};
 use duplicate::{duplicate, duplicate_inline};
 use glam::Vec2;
 use lyon_geom::Point;
@@ -14,7 +14,7 @@ pub struct Critical(usize);
 
 impl From<usize> for Critical {
     fn from(n: usize) -> Self {
-        Critical((n + 1)/ 2)
+        Critical((n + 1) / 2)
     }
 }
 
@@ -22,7 +22,7 @@ impl Into<usize> for Critical {
     fn into(self) -> usize {
         match self.0 {
             0 => 0,
-            _ => self.0 * 2 - 1
+            _ => self.0 * 2 - 1,
         }
     }
 }
@@ -39,21 +39,28 @@ impl ComplexSpline {
         new_curve.push_from_absolute(intial);
         let mut cmpspl = Self {
             curve: new_curve,
-            automation: Automation::new(0., 1., len)
+            automation: Automation::new(0., 1., len),
         };
         cmpspl.automation.set_pos(1, Vec2::new(len, 1.));
 
         cmpspl
     }
- 
+
     pub fn bisect_segment(&mut self, c: Critical) {
         self.curve.bisect_segment(c.get());
         let start = self.automation[c.into()].point;
         let end = self.automation[Critical(c.get() - 2).into()].point;
         let x = end.x - start.x;
 
-        self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
-        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::Curve{power: 0., step: 0.}));
+        self.automation
+            .insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
+        self.automation.insert(Anchor::new(
+            Vec2::new(x, 1.),
+            Weight::Curve {
+                power: 0.,
+                step: 0.,
+            },
+        ));
     }
 
     pub fn set_ctrls(&mut self, index: Critical, ctrls: Ctrl) {
@@ -77,8 +84,15 @@ impl ComplexSpline {
     }
 
     pub fn insert_critical(&mut self, x: f32) {
-        self.automation.insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
-        self.automation.insert(Anchor::new(Vec2::new(x, 1.), Weight::Curve{power: 0., step: 0.}));
+        self.automation
+            .insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
+        self.automation.insert(Anchor::new(
+            Vec2::new(x, 1.),
+            Weight::Curve {
+                power: 0.,
+                step: 0.,
+            },
+        ));
 
         let c: Critical = (self.automation.closest_to(Vec2::new(x, 0.))).into();
         self.curve.bisect_segment(c.get());
@@ -100,8 +114,7 @@ impl ComplexSpline {
         debug_assert!(0 < c.get() && c.get() < Critical(self.automation.len()).into());
         let (ia, ya, ib, yb) = if self.automation[c.into()].point.x < x {
             (Into::<usize>::into(c) + 1, 0., Into::<usize>::into(c), 1.)
-        }
-        else {
+        } else {
             (Into::<usize>::into(c), 1., Into::<usize>::into(c) + 1, 0.)
         };
         #[rustfmt::skip]
@@ -124,7 +137,9 @@ impl ComplexSpline {
     }
 
     pub fn set_segment_pos(&mut self, index: usize, point: Vec2) {
-        self.curve[index].ctrls.set_end(Point::new(point.x, point.y))
+        self.curve[index]
+            .ctrls
+            .set_end(Point::new(point.x, point.y))
     }
 }
 
@@ -138,7 +153,7 @@ impl<'a> Seeker<Vec2> for CompSplSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, val: f32) -> Vec2 {
         let old_index: Critical = self.auto_seeker.get_index().into();
-        let y =  self.auto_seeker.method(val);
+        let y = self.auto_seeker.method(val);
         let new_index: Critical = self.auto_seeker.get_index().into();
         if old_index.get() != new_index.get() {
             self.segment_seeker = self.c_spline.curve[new_index.get()].seeker();
@@ -163,12 +178,11 @@ impl<'a> Seekable<'a> for ComplexSpline {
 mod tests {
     use super::*;
     use ggez::{
-        Context,
-        GameResult,
-        timer::time_since_start,
         event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
+        graphics::*,
         input::keyboard::is_key_pressed,
-        graphics::*
+        timer::time_since_start,
+        Context, GameResult,
     };
     use lyon_geom::Point;
 
@@ -200,7 +214,7 @@ mod tests {
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
             clear(ctx, Color::new(0., 0., 0., 1.));
             let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
-            
+
             let circle = Mesh::new_circle(
                 ctx,
                 DrawMode::fill(),
@@ -217,7 +231,10 @@ mod tests {
             let t_line = MeshBuilder::new()
                 .polyline(
                     DrawMode::Stroke(StrokeOptions::DEFAULT),
-                    &[Vec2::new(0., self.dimensions.y * (3. / 4.)), Vec2::new(0., self.dimensions.y)],
+                    &[
+                        Vec2::new(0., self.dimensions.y * (3. / 4.)),
+                        Vec2::new(0., self.dimensions.y),
+                    ],
                     Color::WHITE,
                 )?
                 .build(ctx)?;
@@ -231,9 +248,9 @@ mod tests {
                 .map(|x| {
                     Vec2::new(
                         (x as f32 / res as f32) * self.dimensions.x,
-                        self.dimensions.y 
+                        self.dimensions.y
                             - seeker.seek((x as f32 / res as f32) * self.dimensions.x)
-                            * (self.dimensions.y / 4.)
+                                * (self.dimensions.y / 4.),
                     )
                 })
                 .collect();
@@ -251,7 +268,7 @@ mod tests {
                 ctx,
                 DrawMode::fill(),
                 Rect::new(-5., -5., 10., 10.),
-                Color::new(1., 0., 0., 0.5)
+                Color::new(1., 0., 0., 0.5),
             )?;
             for i in 0..self.cmpspl.curve.segments().len() {
                 let segment = &self.cmpspl.curve.segments()[i];
@@ -305,7 +322,8 @@ mod tests {
             &mut self,
             _ctx: &mut Context,
             button: MouseButton,
-            x: f32, y: f32
+            x: f32,
+            y: f32,
         ) {
             match button {
                 MouseButton::Left => {
@@ -315,23 +333,22 @@ mod tests {
                         println!("nearest pont x distance to click: {}", dist);
                         if dist < 10. {
                             self.selection = Some(c);
-                        }
-                        else {
+                        } else {
                             match self.selection {
-                                None => { self.cmpspl.insert_critical(x) },
+                                None => self.cmpspl.insert_critical(x),
                                 Some(i) => {
                                     self.cmpspl.set_critical_pos(i, x);
                                     self.selection = None;
                                 }
                             }
                         }
-                    }
-                    else {
+                    } else {
                         let c = self.cmpspl.closest_segment(Vec2::new(x, y));
-                        if (self.cmpspl.curve[c.get()].ctrls.get_end() - Point::new(x, y)).length() < 30. {
+                        if (self.cmpspl.curve[c.get()].ctrls.get_end() - Point::new(x, y)).length()
+                            < 30.
+                        {
                             self.selection = Some(c);
-                        }
-                        else {
+                        } else {
                             self.point_buff.push(Point::new(x, y));
                             println!("points: {:?}", self.point_buff);
                         }
@@ -379,27 +396,25 @@ mod tests {
             let pos = ggez::input::mouse::position(ctx);
             let c = if pos.y < self.dimensions.y * (3. / 4.) {
                 self.cmpspl.closest_segment(pos.into())
-            }
-            else {
+            } else {
                 self.cmpspl.closest_critical(pos.x)
             };
             let weight = self.cmpspl.get_weight(c);
             match weight {
-                Weight::Curve{power, step} => {
+                Weight::Curve { power, step } => {
                     if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.cmpspl.set_step(c, step + if 0. < y { 10. } else { -10. }).unwrap();
-                    }
-                    else {
-                        self
-                        .cmpspl
-                        .set_power(c, power + if 0. < y { 0.05 } else { -0.05 }).unwrap();
+                        self.cmpspl
+                            .set_step(c, step + if 0. < y { 10. } else { -10. })
+                            .unwrap();
+                    } else {
+                        self.cmpspl
+                            .set_power(c, power + if 0. < y { 0.05 } else { -0.05 })
+                            .unwrap();
                     }
                 }
                 _ => {}
             };
         }
-
-
     }
 
     #[test]

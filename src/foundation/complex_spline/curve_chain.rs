@@ -1,5 +1,5 @@
 use crate::foundation::complex_spline::*;
-use crate::utils::misc_traits::FromEnd;
+use crate::utils::misc::*;
 use glam::Vec2;
 use lyon_geom::Point;
 
@@ -78,7 +78,6 @@ impl CurveChain {
         let p0 = self.segments[index - 1].ctrls.get_end();
         self.segments[index].recompute(p0);
         segment
-
     }
 
     pub fn clear(&mut self) {
@@ -119,17 +118,14 @@ impl std::ops::IndexMut<usize> for CurveChain {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::utils::{Seekable, Seeker};
-
     use super::*;
     use ggez::graphics::*;
     use ggez::{
         event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
-        input::keyboard::is_key_pressed,
         graphics::MeshBuilder,
+        input::keyboard::is_key_pressed,
     };
     use ggez::{Context, GameResult};
     use glam::Vec2;
@@ -227,7 +223,8 @@ mod tests {
                     self.curve.clear();
                 }
                 KeyCode::Space => {
-                    self.selected_segment.map(|index| self.curve.bisect_segment(index));
+                    self.selected_segment
+                        .map(|index| self.curve.bisect_segment(index));
                     self.selected_segment = None;
                 }
                 KeyCode::Delete => {
@@ -272,8 +269,7 @@ mod tests {
                 MouseButton::Left => {
                     if is_key_pressed(ctx, KeyCode::LShift) {
                         self.selected_segment = Some(self.curve.closest_to(Vec2::new(x, y)));
-                    }
-                    else {
+                    } else {
                         println!("click");
                         self.point_buff.push(Point::new(x, y));
                         println!("{:?}", self.point_buff);

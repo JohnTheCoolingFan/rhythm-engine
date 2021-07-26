@@ -22,32 +22,26 @@ impl Weight {
                 //cubic is basically 2 quadratics with the 2nd
                 //being inverted about the half way point
                 let (starting, delta, x) = if let Self::CubeLike(_) = self {
-                    if 0.5 < t {
-                        (
-                            1.,
-                            -0.5,
-                            (0.5 - t % 0.5) / 0.5
-                        )
-                    } else {
-                        (
-                            0.,
-                            0.5,
-                            t / 0.5
-                        )
-                    }
-                } else {
-                    (
-                        0.,
+                    if 0.5 < t {(
                         1.,
-                        t
-                    )
-                };
+                        -0.5,
+                        (0.5 - t % 0.5) / 0.5
+                    )} else {(
+                        0.,
+                        0.5,
+                        t / 0.5
+                    )}
+                } else {(
+                    0.,
+                    1.,
+                    t
+                )};
 
                 starting + delta * x.powf(
-                    if power < 0. {
+                    if *power < 0. {
                         1. / (power.abs() + 1.)
                     } else {
-                        power + 1.
+                        *power + 1.
                     }
                 )
             }
@@ -59,7 +53,7 @@ impl Weight {
 pub struct SubWave {
     pub offset: f32,
     pub period: f32,
-    pub wave: Weight,
+    pub weight: Weight,
 }
 
 #[derive(Debug)]
@@ -95,38 +89,53 @@ impl Anchor {
             "offset out of bounds"
         );
 
-        let dy = self.point.y - last.point.y;
+        let dy = self.point.y - last.point.y; 
 
-        let (x0, x1) = if let Some((fancy, _)) = self.fancy {
-            (
+        if let Some((fancy, subwave)) = self.embelish {
+            let (x0, x1) = (
                 offset
-                    .quant_floor(fancy.period, fancy.offset)
+                    .quant_floor(subwave.period, subwave.offset)
                     .clamp(last.point.x, self.point.x),
                 offset
-                    .quant_ceil(fancy.period, fancy.offset)
+                    .quant_ceil(subwave.period, subwave.offset)
                     .clamp(last.point.x, self.point.x),
-            )
-        } else {
-            (last.point.x, self.point.x)
-        };
+            );
 
-        let (y0, y1) = if let Some((fancy, _)) = self.fancy {
-            match fancy {
-                Fancy::Step => (
-                    last.point.y + self.weight.eval(x0) * dy,
-                    last.point.y + self.weight.eval(x1) * dy
-                ),
-                Fancy::Hop { .. } => (
-                    last.point.y,
-                    last.point.y + self.weight.eval(x1) * dy
-                ),
-                Fancy::Oscilate { .. } => (
-                    (last.point.y + self.weight.eval(x0) * dy) / 2.
-                    (self.point.y - self.weight.eval(x1) * dy) / 2.
-                ),
-            }
+            let t = (offset - x0) / (x1 - x0);
+            let odd_parity = ((offset - subwave.offset) / subwave.period).floor() as i32 % 2 != 0;
+
+            let (dy0, dy1) =  match fancy {
+                Fancy::Step => {(
+                    dy * self.weight.eval(x0),
+                    dy * self.weight.eval(x1)
+                )},
+                Fancy::Hop { alternate } => {
+                    if alternate && odd_parity {(
+                        dy * self.weight.eval(x0),
+                        0.
+                    )} else {(
+                        0.,
+                        dy * self.weight.eval(x1)
+                    )}
+                },
+                Fancy::Oscilate { alternate } => {
+                    let h0 = dy * self.weight.eval(x0);
+                    let h1 = dy * self.weight.eval(x1);
+
+                    if alternate && odd_parity {(
+                        (dy - h0) * 0.5 + h0,
+                        (dy - h1) * 0.5
+                    )}
+                    else {(
+                        (dy - h0) * 0.5,
+                        (dy - h1) * 0.5 + h1
+                    )}
+                },
+            };
+
+            last.point.y + dy0 + (dy1 - dy0) * subwave.weight.eval(t)
         } else {
-            (last.point.y, self.point.y)
-        };
+            last.point.y + dy * self.weight.eval((offset - last.point.x) / (self.point.x - last.point.x))
+        }
     }
 }

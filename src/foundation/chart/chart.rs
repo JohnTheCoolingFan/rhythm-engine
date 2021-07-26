@@ -3,8 +3,8 @@ use crate::utils::*;
 
 pub struct Chart<'a> {
     poly_entities: PolyEntity,
-    rotations: Playlist<'a, TransformPoint<Rotation>>,
-    scale: Playlist<'a, TransformPoint<Scale>>,
-    splines: Playlist<'a, ComplexSpline>,
+    rotations: PlayList<'a, TransformPoint<Rotation>>,
+    scale: PlayList<'a, TransformPoint<Scale>>,
+    splines: PlayList<'a, ComplexSpline>,
     audio: String,
 }

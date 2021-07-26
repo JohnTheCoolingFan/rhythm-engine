@@ -1,6 +1,7 @@
-use std::ops::Index;
 use crate::foundation::automation::anchor::*;
+use crate::utils::{misc::*, seeker::*};
 use glam::Vec2;
+use std::ops::Index;
 
 pub struct Automation {
     pub upper_bound: f32,
@@ -89,9 +90,9 @@ impl Automation {
     pub fn cycle_weight(&mut self, index: usize) -> Weight {
         let old = self.anchors[index].weight;
         self.anchors[index].weight = match old {
-            Weight::ForwardBias => Weight::Quad(0.),
-            Weight::Quad(_) => Weight::Cube(0.),
-            Weight::Cube(_) => Weight::ReverseBias,
+            Weight::ForwardBias => Weight::QuadLike(0.),
+            Weight::QuadLike(_) => Weight::CubeLike(0.),
+            Weight::CubeLike(_) => Weight::ReverseBias,
             Weight::ReverseBias => Weight::ForwardBias,
         };
         old
@@ -99,7 +100,7 @@ impl Automation {
 
     pub fn set_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         match self.anchors[index].weight {
-            Weight::Quad(ref mut power) | Weight::Cube(ref mut power) => {
+            Weight::QuadLike(ref mut power) | Weight::CubeLike(ref mut power) => {
                 let old = *power;
                 *power = if 0. <= value {
                     value.clamp(0., 30.)
@@ -114,10 +115,10 @@ impl Automation {
 
     pub fn set_period(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         let time_dif = self.anchors[index].point.x - self.anchors[index - 1].point.x;
-        match self.anchors[index].fancy {
-            Fancy::Step(ref mut period) | Fancy::Oscilate { ref mut period, .. } => {
-                let old = *period;
-                *period = value.clamp(-time_dif, time_dif);
+        match self.anchors[index].embelish {
+            Some((_, ref subwave)) => {
+                let old = subwave.period;
+                subwave.period = value.clamp(0., time_dif);
                 Ok(old)
             }
             _ => Err(()),
@@ -154,22 +155,7 @@ impl<'a> AutomationSeeker<'a> {
                     _ => anch.point.y,
                 }
             } else {
-                let start = &self.automation.anchors[self.index - 1];
-                let end = &self.automation.anchors[self.index];
-
-                let mut t = (offset - start.point.x) / (end.point.x - start.point.x);
-
-                match end.weight {
-                    Weight::ReverseBias => start.point.y,
-                    Weight::Curve{power, step} => {
-                        
-
-                        start.point.y
-                        + (end.point.y - start.point.y)
-                        * t.powf(if power < 0. { 1. / (power.abs() + 1.) } else { power + 1. })
-                    }
-                    Weight::ForwardBias => end.point.y,
-                }
+                self.automation.anchors[self.index].interp(&self.automation.anchors[self.index - 1], offset)
             }
         )
     }
@@ -294,13 +280,10 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    self.automation.insert(Anchor {
-                        point: Vec2::new(x, y / self.dimensions.y),
-                        weight: Weight::Curve {
-                            power: 0.,
-                            step: 0.,
-                        },
-                    });
+                    self.automation.insert(Anchor::new(
+                        Vec2::new(x, y / self.dimensions.y),
+                        Weight::QuadLike(0.),
+                    ));
                 }
                 MouseButton::Middle => {
                     self.automation.cycle_weight(index);
@@ -317,11 +300,11 @@ mod tests {
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
             let weight = self.automation[index].weight;
-            match weight {
-                Weight::Curve { power, step } => {
+            /*match weight {
+                Weight::QuadLike(power) | Weight::CubeLike(power) => {
                     if is_key_pressed(ctx, event::KeyCode::LShift) {
                         self.automation
-                            .set_step(index, step + if 0. < y { 10. } else { -10. })
+                            .set_period(index,  + if 0. < y { 10. } else { -10. })
                             .unwrap();
                     } else {
                         self.automation
@@ -330,7 +313,7 @@ mod tests {
                     }
                 }
                 _ => {}
-            };
+            };*/
         }
     }
 

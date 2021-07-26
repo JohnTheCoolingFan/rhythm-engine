@@ -1,4 +1,7 @@
-use crate::{foundation::automation::*, utils::misc_traits::*};
+use crate::{
+    foundation::automation::*,
+    utils::{misc::*, seeker::*},
+};
 use ggez::graphics::Color;
 
 pub struct ColorAnchor {
@@ -18,7 +21,7 @@ impl ColorAnchor {
 pub struct DynColor {
     pub automation: Automation,
     upper_colors: Vec<ColorAnchor>,
-    lower_colors: Vec<ColorAnchor>
+    lower_colors: Vec<ColorAnchor>,
 }
 
 impl DynColor {
@@ -168,8 +171,8 @@ mod tests {
     use super::*;
     use ggez::{
         event::{self, EventHandler, MouseButton},
-        input::keyboard::is_key_pressed,
         graphics::*,
+        input::keyboard::is_key_pressed,
         timer::time_since_start,
         Context, GameResult,
     };
@@ -299,7 +302,10 @@ mod tests {
                 MouseButton::Left => {
                     automation.insert(Anchor::new(
                         Vec2::new(x, y / self.dimensions.y),
-                        Weight::Curve{power: 0., step: 0.},
+                        Weight::Curve {
+                            power: 0.,
+                            step: 0.,
+                        },
                     ));
                 }
                 MouseButton::Middle => {
@@ -316,18 +322,17 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             let weight = self.color.automation[index].weight;
             match weight {
-                Weight::Curve{power, step} => {
+                Weight::Curve { power, step } => {
                     if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.color.automation.set_step(
-                            index,
-                            step + if 0. < y { 10. } else { -10. }
-                        ).unwrap();
-                    }
-                    else {
-                        self.color.automation.set_power(
-                            index,
-                            power + if 0. < y { 0.05 } else { -0.05 }
-                        ).unwrap();
+                        self.color
+                            .automation
+                            .set_step(index, step + if 0. < y { 10. } else { -10. })
+                            .unwrap();
+                    } else {
+                        self.color
+                            .automation
+                            .set_power(index, power + if 0. < y { 0.05 } else { -0.05 })
+                            .unwrap();
                     }
                 }
                 _ => {}
