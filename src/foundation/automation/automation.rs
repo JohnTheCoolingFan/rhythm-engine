@@ -113,6 +113,15 @@ impl Automation {
         }
     }
 
+    pub fn shift_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
+        match self.anchors[index].weight {
+            Weight::QuadLike(ref power) | Weight::CubeLike(ref power) => {
+                self.set_power(index, power + value)
+            }
+            _ => Err(())
+        }
+    }
+
     pub fn set_period(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         let time_dif = self.anchors[index].point.x - self.anchors[index - 1].point.x;
         match self.anchors[index].embelish {
@@ -122,6 +131,15 @@ impl Automation {
                 Ok(old)
             }
             _ => Err(()),
+        }
+    }
+
+    pub fn shift_period(&mut self, index: usize, value: f32) -> Result<f32, ()> {
+        match self.anchors[index].embelish {
+            Some((_, ref subwave)) => {
+                self.set_period(index, subwave.period + value)
+            }
+            _ => Err(())
         }
     }
 }
