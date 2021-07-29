@@ -98,15 +98,14 @@ impl Automation {
         old
     }
 
+    //use the set method in shift method. might be 1 or 2 matches extra
+    //but saves you from maintaining duplicate code
+
     pub fn set_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         match self.anchors[index].weight {
             Weight::QuadLike(ref mut power) | Weight::CubeLike(ref mut power) => {
                 let old = *power;
-                *power = if 0. <= value {
-                    value.clamp(0., 30.)
-                } else {
-                    value.clamp(-30., 0.)
-                };
+                *power = value.clamp(-30., 30.);
                 Ok(old)
             }
             _ => Err(()),
@@ -125,7 +124,7 @@ impl Automation {
     pub fn set_period(&mut self, index: usize, value: f32) -> Result<f32, ()> {
         let time_dif = self.anchors[index].point.x - self.anchors[index - 1].point.x;
         match self.anchors[index].embelish {
-            Some((_, ref subwave)) => {
+            Some((_, ref mut subwave)) => {
                 let old = subwave.period;
                 subwave.period = value.clamp(0., time_dif);
                 Ok(old)
@@ -138,6 +137,36 @@ impl Automation {
         match self.anchors[index].embelish {
             Some((_, ref subwave)) => {
                 self.set_period(index, subwave.period + value)
+            }
+            _ => Err(())
+        }
+    }
+
+    pub fn set_sub_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
+        match self.anchors[index].embelish {
+            Some((_, ref mut subwave)) => {
+                if let Weight::QuadLike(ref mut power) | Weight::CubeLike(ref mut power) = subwave.weight {
+                    let old = *power;
+                    *power = value.clamp(-30., 30.);
+                    Ok(old)
+                }
+                else {
+                    Err(())
+                }
+            }
+            _ => Err(())
+        }
+    }
+
+    pub fn shift_sub_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
+        match self.anchors[index].embelish {
+            Some((_, ref subwave)) => {
+                if let Weight::QuadLike(ref power) | Weight::CubeLike(ref power) = subwave.weight {
+                    self.set_sub_power(index, *power + value)
+                }
+                else {
+                    Err(())
+                }
             }
             _ => Err(())
         }
@@ -317,21 +346,16 @@ mod tests {
             let index = self
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            let weight = self.automation[index].weight;
-            /*match weight {
-                Weight::QuadLike(power) | Weight::CubeLike(power) => {
-                    if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.automation
-                            .set_period(index,  + if 0. < y { 10. } else { -10. })
-                            .unwrap();
-                    } else {
-                        self.automation
-                            .set_power(index, power + if 0. < y { 0.05 } else { -0.05 })
-                            .unwrap();
-                    }
-                }
-                _ => {}
-            };*/
+            if is_key_pressed(ctx, event::KeyCode::LShift) {
+                self.automation
+                    .shift_period(index, if 0. < y { 10. } else { -10. })
+                    .unwrap();
+            }
+            else {
+                self.automation
+                    .set_power(index, if 0. < y { 0.05 } else { -0.05 })
+                    .unwrap();
+            }
         }
     }
 
