@@ -25,8 +25,8 @@ impl Automation {
             upper_bound: ub,
             lower_bound: lb,
             anchors: vec![
-                Anchor::new(Vec2::new(0., 0.0), Weight::ForwardBias),
-                Anchor::new(Vec2::new(len, 0.0), Weight::QuadLike(1.)),
+                Anchor::new(Vec2::new(0., 0.0)),
+                Anchor::new(Vec2::new(len, 0.0)),
             ],
         }
     }
@@ -39,7 +39,7 @@ impl Automation {
         self.anchors.insert(
             match self
                 .anchors
-                .binary_search_by(|elem| elem.point.x.partial_cmp(&anch.point.x).unwrap())
+                .binary_search_by(|elem| elem.point().x.partial_cmp(&anch.point().x).unwrap())
             {
                 Ok(index) => index,
                 Err(index) => index,
@@ -58,9 +58,9 @@ impl Automation {
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                (a.point - point)
+                (*a.point() - point)
                     .length()
-                    .partial_cmp(&(b.point - point).length())
+                    .partial_cmp(&(*b.point() - point).length())
                     .unwrap()
             })
             .unwrap();
@@ -69,109 +69,25 @@ impl Automation {
     }
 
     pub fn set_pos(&mut self, index: usize, mut point: Vec2) -> Vec2 {
-        let old = self.anchors[index].point;
+        let old = *self.anchors[index].point();
         let minx = if index == 0 {
             0.
         } else {
-            self.anchors[index - 1].point.x
+            self.anchors[index - 1].point().x
         };
         let maxx = if self.anchors.len() - index == 1 {
-            self.anchors[FromEnd(0)].point.x
+            self.anchors[FromEnd(0)].point().x
         } else {
-            self.anchors[index + 1].point.x
+            self.anchors[index + 1].point().x
         };
 
         point.x = point.x.clamp(minx, maxx);
         point.y = point.y.clamp(0., 1.);
-        self.anchors[index].point = point;
+        *self.anchors[index].point() = point;
         old
     }
 
-    pub fn cycle_weight(&mut self, index: usize) -> Weight {
-        let old = self.anchors[index].weight;
-        self.anchors[index].weight = match old {
-            Weight::ForwardBias => Weight::QuadLike(0.),
-            Weight::QuadLike(_) => Weight::CubeLike(0.),
-            Weight::CubeLike(_) => Weight::ReverseBias,
-            Weight::ReverseBias => Weight::ForwardBias,
-        };
-        old
     }
-
-    //use the set method in shift method. might be 1 or 2 matches extra
-    //but saves you from maintaining duplicate code
-
-    pub fn set_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
-        match self.anchors[index].weight {
-            Weight::QuadLike(ref mut power) | Weight::CubeLike(ref mut power) => {
-                let old = *power;
-                *power = value.clamp(-30., 30.);
-                Ok(old)
-            }
-            _ => Err(()),
-        }
-    }
-
-    pub fn shift_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
-        match self.anchors[index].weight {
-            Weight::QuadLike(ref power) | Weight::CubeLike(ref power) => {
-                self.set_power(index, power + value)
-            }
-            _ => Err(())
-        }
-    }
-
-    pub fn set_period(&mut self, index: usize, value: f32) -> Result<f32, ()> {
-        let time_dif = self.anchors[index].point.x - self.anchors[index - 1].point.x;
-        match self.anchors[index].embelish {
-            Some((_, ref mut subwave)) => {
-                let old = subwave.period;
-                subwave.period = value.clamp(0., time_dif);
-                Ok(old)
-            }
-            _ => Err(()),
-        }
-    }
-
-    pub fn shift_period(&mut self, index: usize, value: f32) -> Result<f32, ()> {
-        match self.anchors[index].embelish {
-            Some((_, ref subwave)) => {
-                self.set_period(index, subwave.period + value)
-            }
-            _ => Err(())
-        }
-    }
-
-    pub fn set_sub_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
-        match self.anchors[index].embelish {
-            Some((_, ref mut subwave)) => {
-                if let Weight::QuadLike(ref mut power) | Weight::CubeLike(ref mut power) = subwave.weight {
-                    let old = *power;
-                    *power = value.clamp(-30., 30.);
-                    Ok(old)
-                }
-                else {
-                    Err(())
-                }
-            }
-            _ => Err(())
-        }
-    }
-
-    pub fn shift_sub_power(&mut self, index: usize, value: f32) -> Result<f32, ()> {
-        match self.anchors[index].embelish {
-            Some((_, ref subwave)) => {
-                if let Weight::QuadLike(ref power) | Weight::CubeLike(ref power) = subwave.weight {
-                    self.set_sub_power(index, *power + value)
-                }
-                else {
-                    Err(())
-                }
-            }
-            _ => Err(())
-        }
-    }
-}
 
 pub struct AutomationSeeker<'a> {
     index: usize,
@@ -194,7 +110,7 @@ impl<'a> AutomationSeeker<'a> {
     pub fn interp(&self, offset: f32) -> f32 {
         self.from_y(
             if 0 == self.index {
-                self.automation.anchors[0].point.y
+                self.automation.anchors[0].point().y
             } else if self.index == self.automation.anchors.len() {
                 let anch = &self.automation.anchors[FromEnd(0)];
                 match anch.weight {
@@ -329,11 +245,10 @@ mod tests {
                 MouseButton::Left => {
                     self.automation.insert(Anchor::new(
                         Vec2::new(x, y / self.dimensions.y),
-                        Weight::QuadLike(0.),
                     ));
                 }
                 MouseButton::Middle => {
-                    self.automation.cycle_weight(index);
+                    self.automation[index].weight.cycle();
                 }
                 MouseButton::Right => {
                     self.automation.remove(index);
@@ -347,13 +262,14 @@ mod tests {
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
             if is_key_pressed(ctx, event::KeyCode::LShift) {
-                self.automation
-                    .shift_period(index, if 0. < y { 10. } else { -10. })
-                    .unwrap();
+                self.automation[index]
+                    .subwave
+                    .shift_period(if 0. < y { 10. } else { -10. });
             }
             else {
-                self.automation
-                    .set_power(index, if 0. < y { 0.05 } else { -0.05 })
+                self.automation[index]
+                    .weight
+                    .shift_power(if 0. < y { 0.05 } else { -0.05 })
                     .unwrap();
             }
         }

@@ -48,16 +48,12 @@ impl ComplexSpline {
 
     pub fn bisect_segment(&mut self, c: Critical) {
         self.curve.bisect_segment(c.get());
-        let start = self.automation[c.into()].point;
-        let end = self.automation[Critical(c.get() - 2).into()].point;
+        let start = self.automation[c.into()].point();
+        let end = self.automation[Critical(c.get() - 2).into()].point();
         let x = end.x - start.x;
 
-        self.automation
-            .insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
-        self.automation.insert(Anchor::new(
-            Vec2::new(x, 1.),
-            Weight::QuadLike(0.),
-        ));
+        self.automation.insert(Anchor::new(Vec2::new(x, 0.)));
+        self.automation.insert(Anchor::new(Vec2::new(x, 1.)));
     }
 
     pub fn set_ctrls(&mut self, index: Critical, ctrls: Ctrl) {

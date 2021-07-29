@@ -49,7 +49,7 @@ impl Segment {
         }
     }
 
-    pub fn recompute(&mut self, start: Point<f32>) {
+    pub(super) fn recompute(&mut self, start: Point<f32>) {
         let end = self.ctrls.get_end();
 
         self.point_lut.clear();
