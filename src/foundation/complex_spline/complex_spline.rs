@@ -56,10 +56,7 @@ impl ComplexSpline {
             .insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
         self.automation.insert(Anchor::new(
             Vec2::new(x, 1.),
-            Weight::Curve {
-                power: 0.,
-                step: 0.,
-            },
+            Weight::QuadLike(0.),
         ));
     }
 
@@ -71,12 +68,12 @@ impl ComplexSpline {
         self.automation[c.into()].weight
     }
 
-    pub fn set_power(&mut self, c: Critical, power: f32) -> Result<f32, ()> {
-        self.automation.set_power(c.into(), power)
+    pub fn shift_power(&mut self, c: Critical, power: f32) -> Result<f32, ()> {
+        self.automation.shift_power(c.into(), power)
     }
 
-    pub fn set_step(&mut self, c: Critical, step: f32) -> Result<f32, ()> {
-        self.automation.set_step(c.into(), step)
+    pub fn shift_period(&mut self, c: Critical, step: f32) -> Result<f32, ()> {
+        self.automation.shift_period(c.into(), step)
     }
 
     pub fn cycle_weight(&mut self, c: Critical) {
@@ -88,10 +85,7 @@ impl ComplexSpline {
             .insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
         self.automation.insert(Anchor::new(
             Vec2::new(x, 1.),
-            Weight::Curve {
-                power: 0.,
-                step: 0.,
-            },
+            Weight::QuadLike(0.),
         ));
 
         let c: Critical = (self.automation.closest_to(Vec2::new(x, 0.))).into();
@@ -399,21 +393,15 @@ mod tests {
             } else {
                 self.cmpspl.closest_critical(pos.x)
             };
-            let weight = self.cmpspl.get_weight(c);
-            match weight {
-                Weight::Curve { power, step } => {
-                    if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.cmpspl
-                            .set_step(c, step + if 0. < y { 10. } else { -10. })
-                            .unwrap();
-                    } else {
-                        self.cmpspl
-                            .set_power(c, power + if 0. < y { 0.05 } else { -0.05 })
-                            .unwrap();
-                    }
-                }
-                _ => {}
-            };
+            if is_key_pressed(ctx, event::KeyCode::LShift) {
+                self.cmpspl
+                    .shift_period(c, if 0. < y { 10. } else { -10. })
+                    .unwrap();
+            } else {
+                self.cmpspl
+                    .shift_power(c, if 0. < y { 0.05 } else { -0.05 })
+                    .unwrap();
+            }
         }
     }
 

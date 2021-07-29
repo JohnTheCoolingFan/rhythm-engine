@@ -9,20 +9,30 @@ pub trait Seekable<'a> {
     fn seeker(&'a self) -> Self::SeekerType;
 }
 
-pub struct SeekableQuantum<T> {
+#[derive(Clone, Copy)]
+pub struct SeekableQuantum<T>
+where
+    T: Copy
+{
     val: T,
 }
 
-impl<T> Seeker<T> for SeekableQuantum<T> {
-    fn seek(&mut self, val: f32) -> T {
+impl<T> Seeker<T> for SeekableQuantum<T>
+where
+    T: Copy
+{
+    fn seek(&mut self, _offset: f32) -> T {
         self.val
     }
-    fn jump(&mut self, val: f32) -> T {
+    fn jump(&mut self, _offset: f32) -> T {
         self.val
     }
 }
 
-impl<'a, T> Seekable<'a> for SeekableQuantum<T> {
+impl<'a, T> Seekable<'a> for SeekableQuantum<T> 
+where
+    T: Copy
+{
     type Output = T;
     type SeekerType = Self;
     fn seeker(&'a self) -> Self::SeekerType {

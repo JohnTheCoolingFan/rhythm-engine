@@ -2,7 +2,7 @@ use crate::utils::math::*;
 use crate::utils::misc::*;
 use glam::Vec2;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Weight {
     ForwardBias,
     QuadLike(f32),
@@ -91,7 +91,7 @@ impl Anchor {
 
         let dy = self.point.y - last.point.y; 
 
-        if let Some((fancy, subwave)) = self.embelish {
+        if let Some((fancy, subwave)) = &self.embelish {
             let (x0, x1) = (
                 offset
                     .quant_floor(subwave.period, subwave.offset)
@@ -104,7 +104,7 @@ impl Anchor {
             let t = (offset - x0) / (x1 - x0);
             let odd_parity = ((offset - subwave.offset) / subwave.period).floor() as i32 % 2 != 0;
 
-            let (dy0, dy1) =  match fancy {
+            let (dy0, dy1) =  match *fancy {
                 Fancy::Step => {(
                     dy * self.weight.eval(x0),
                     dy * self.weight.eval(x1)

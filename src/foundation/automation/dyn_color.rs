@@ -302,10 +302,7 @@ mod tests {
                 MouseButton::Left => {
                     automation.insert(Anchor::new(
                         Vec2::new(x, y / self.dimensions.y),
-                        Weight::Curve {
-                            power: 0.,
-                            step: 0.,
-                        },
+                        Weight::QuadLike(0.),
                     ));
                 }
                 MouseButton::Middle => {
@@ -320,23 +317,17 @@ mod tests {
                 .color
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            let weight = self.color.automation[index].weight;
-            match weight {
-                Weight::Curve { power, step } => {
-                    if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.color
-                            .automation
-                            .set_step(index, step + if 0. < y { 10. } else { -10. })
-                            .unwrap();
-                    } else {
-                        self.color
-                            .automation
-                            .set_power(index, power + if 0. < y { 0.05 } else { -0.05 })
-                            .unwrap();
-                    }
-                }
-                _ => {}
-            };
+            if is_key_pressed(ctx, event::KeyCode::LShift) {
+                self.color
+                    .automation
+                    .shift_period(index, if 0. < y { 10. } else { -10. })
+                    .unwrap();
+            } else {
+                self.color
+                    .automation
+                    .shift_power(index, if 0. < y { 0.05 } else { -0.05 })
+                    .unwrap();
+            }
         }
     }
 

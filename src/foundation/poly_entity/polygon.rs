@@ -23,11 +23,11 @@ impl Polygon {
         0. < sum
     }
 
-    pub fn self_intersections(&self) -> Vec<PolygonIntersects> {}
+    /*pub fn self_intersections(&self) -> Vec<PolygonIntersects> {}
 
     //remove self intersections and return 1 or more disconnected
     //non self intersecting polygons
     pub fn trim(&self) -> Vec<Self> {}
 
-    pub fn inset(&self, amount: f32) -> Vec<Self> {}
+    pub fn inset(&self, amount: f32) -> Vec<Self> {}*/
 }
