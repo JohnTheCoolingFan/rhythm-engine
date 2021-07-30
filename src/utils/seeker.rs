@@ -17,6 +17,17 @@ where
     val: T,
 }
 
+impl <T> From<T> for SeekableQuantum<T>
+where
+    T: Copy
+{
+    fn from(t: T) -> SeekableQuantum<T> {
+        SeekableQuantum::<T> {
+            val: t
+        }
+    }
+}
+
 impl<T> Seeker<T> for SeekableQuantum<T>
 where
     T: Copy
@@ -47,6 +58,15 @@ where
     index: usize,
     seeker: T::SeekerType,
     vec: &'a Vec<(f32, T)>,
+}
+
+impl <'a, T> BlanketSeeker<'a, T>
+where
+    T: Seekable<'a, SeekerType = T> + Seeker<T::Output>,
+{
+    pub fn dead_get(&mut self) -> T::Output {
+        self.seeker.seek(f32::NAN)
+    }
 }
 
 impl<'a, T> Seeker<T::Output> for BlanketSeeker<'a, T>
@@ -99,5 +119,18 @@ where
             seeker: self[0].1.seeker(),
             vec: &self,
         }
+    }
+}
+
+pub trait GetQuant<T> {
+    fn quantum(&self) -> &T;
+}
+
+impl <T> GetQuant<T> for (f32, SeekableQuantum<T>) 
+where
+    T: Copy
+{
+    fn quantum(&self) -> &T {
+        &self.1.val
     }
 }

@@ -1,47 +1,31 @@
 use crate::{
     foundation::automation::*,
-    utils::{misc::*, seeker::*},
+    utils::seeker::*,
 };
-use ggez::graphics::Color;
+use duplicate::duplicate;
 
-pub struct ColorAnchor {
-    color: Color,
-    offset: f32,
-}
-
-impl ColorAnchor {
-    pub fn new(c: Color, o: f32) -> Self {
-        Self {
-            color: c,
-            offset: o,
-        }
-    }
-}
+type Color = ggez::graphics::Color;
+type SQCol = SeekableQuantum<Color>;
+type ColorVec = Vec<(f32, SQCol)>;
 
 pub struct DynColor {
     pub automation: Automation,
-    upper_colors: Vec<ColorAnchor>,
-    lower_colors: Vec<ColorAnchor>,
+    upper_colors: ColorVec,
+    lower_colors: ColorVec,
 }
 
 impl DynColor {
     pub fn new(len: f32) -> Self {
         Self {
-            upper_colors: vec![ColorAnchor {
-                color: Color::WHITE,
-                offset: 0.,
-            }],
+            upper_colors: vec![(0., Color::WHITE.into())],
             automation: Automation::new(0., 1., len),
-            lower_colors: vec![ColorAnchor {
-                color: Color::BLACK,
-                offset: 0.,
-            }],
+            lower_colors: vec![(0., Color::BLACK.into())],
         }
     }
 
     fn insert(vec: &mut Vec<ColorAnchor>, color_anch: ColorAnchor) {
         vec.insert(
-            match vec.binary_search_by(|anch| anch.offset.partial_cmp(&color_anch.offset).unwrap())
+            match vec.binary_search_by(|anch| anch.0.partial_cmp(&color_anch.0).unwrap())
             {
                 Ok(index) => index,
                 Err(index) => index,
@@ -60,29 +44,16 @@ impl DynColor {
 }
 
 pub struct DynColorSeeker<'a> {
-    upper_index: usize,
-    lower_index: usize,
+    upper_seeker: <ColorVec as Seekable<'a>>::SeekerType,
+    lower_seeker: <ColorVec as Seekable<'a>>::SeekerType,
     automation_seeker: automation::AutomationSeeker<'a>,
     dyncolor: &'a DynColor,
 }
 
 impl<'a> DynColorSeeker<'a> {
     fn interp(&self, t: f32) -> Color {
-        let c1 = self.dyncolor.lower_colors[if self.lower_index == self.dyncolor.lower_colors.len()
-        {
-            self.lower_index - 1
-        } else {
-            self.lower_index
-        }]
-        .color;
-
-        let c2 = self.dyncolor.upper_colors[if self.upper_index == self.dyncolor.upper_colors.len()
-        {
-            self.upper_index - 1
-        } else {
-            self.upper_index
-        }]
-        .color;
+        let c1 = self.upper_seeker.dead_get();
+        let c2 = self.lower_seeker.dead_get();
 
         Color::new(
             (c2.r - c1.r) * t + c1.r,
@@ -94,61 +65,12 @@ impl<'a> DynColorSeeker<'a> {
 }
 
 impl<'a> Seeker<Color> for DynColorSeeker<'a> {
-    fn seek(&mut self, offset: f32) -> Color {
-        while self.upper_index < self.dyncolor.upper_colors.len() {
-            if offset <= self.dyncolor.upper_colors[self.upper_index].offset {
-                break;
-            }
-            self.upper_index += 1;
-        }
-        self.upper_index -= if self.upper_index == 0 { 0 } else { 1 };
-
-        while self.lower_index < self.dyncolor.lower_colors.len() {
-            if offset <= self.dyncolor.lower_colors[self.lower_index].offset {
-                break;
-            }
-            self.lower_index += 1;
-        }
-        self.lower_index -= if self.lower_index == 0 { 0 } else { 1 };
-
-        let y = self.automation_seeker.seek(offset);
-        self.interp(y)
-    }
-
-    fn jump(&mut self, val: f32) -> Color {
-        self.upper_index = match self
-            .dyncolor
-            .upper_colors
-            .binary_search_by(|anch| anch.offset.partial_cmp(&val).unwrap())
-        {
-            Ok(index) => index,
-            Err(index) => {
-                if index == 0 {
-                    0
-                } else {
-                    index - 1
-                }
-            }
-        };
-
-        self.lower_index = match self
-            .dyncolor
-            .lower_colors
-            .binary_search_by(|anch| anch.offset.partial_cmp(&val).unwrap())
-        {
-            Ok(index) => index,
-            Err(index) => {
-                if index == 0 {
-                    0
-                } else {
-                    index - 1
-                }
-            }
-        };
-
-        println!("{}, {}", self.upper_index, self.lower_index);
-
-        let y = self.automation_seeker.jump(val);
+    #[duplicate(method; [seek]; [jump])]
+    fn method(&mut self, offset: f32) -> Color {
+        self.upper_seeker.method(offset);
+        self.lower_seeker.method(offset);
+        
+        let y = self.automation_seeker.method(offset);
         self.interp(y)
     }
 }
