@@ -22,13 +22,16 @@ impl Ctrl {
         }
     }
 
-    pub fn set_end(&mut self, point: Point<f32>) {
-        match self {
-            Self::Linear(ref mut p) => *p = point,
-            Self::Quadratic(_, ref mut p) => *p = point,
-            Self::ThreePointCircle(_, ref mut p) => *p = point,
-            Self::Cubic(_, _, ref mut p) => *p = point
-        }
+    pub fn set_end(&mut self, point: Point<f32>) -> Point<f32> {
+        let p = match self {
+            Self::Linear(ref mut p) => p,
+            Self::Quadratic(_, ref mut p) => p,
+            Self::ThreePointCircle(_, ref mut p) => p,
+            Self::Cubic(_, _, ref mut p) => p
+        };
+        let old = *p;
+        *p = point;
+        old
     }
 }
 

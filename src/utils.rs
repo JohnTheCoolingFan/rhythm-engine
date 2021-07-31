@@ -4,4 +4,4 @@ pub mod seeker;
 
 pub use math::{IsLeft, Quantize, RotateAbout, Rotation, Scale};
 pub use misc::FromEnd;
-pub use seeker::{BlanketSeeker, Seekable, SeekableQuantum, Seeker};
+pub use seeker::{BlanketSeeker, Seekable, SeekableWrap, Seeker};

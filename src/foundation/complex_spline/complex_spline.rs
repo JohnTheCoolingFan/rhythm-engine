@@ -65,7 +65,7 @@ impl ComplexSpline {
     }
 
     pub fn shift_power(&mut self, c: Critical, power: f32) -> Result<f32, ()> {
-        self.automation.shift_power(c.into(), power)
+        self.automation[c.into()].weight.shift_power(power)
     }
 
     pub fn shift_period(&mut self, c: Critical, step: f32) -> Result<f32, ()> {

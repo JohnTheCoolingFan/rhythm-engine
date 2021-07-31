@@ -5,13 +5,13 @@ use crate::{
 use duplicate::duplicate;
 
 type Color = ggez::graphics::Color;
-type SQCol = SeekableQuantum<Color>;
-type ColorVec = Vec<(f32, SQCol)>;
+pub type SWrapColor = SeekableWrap<Color>;
+pub type ColorAnchor = (f32, SWrapColor);
 
 pub struct DynColor {
     pub automation: Automation,
-    upper_colors: ColorVec,
-    lower_colors: ColorVec,
+    upper_colors: Vec<ColorAnchor>,
+    lower_colors: Vec<ColorAnchor>,
 }
 
 impl DynColor {
@@ -44,16 +44,16 @@ impl DynColor {
 }
 
 pub struct DynColorSeeker<'a> {
-    upper_seeker: <ColorVec as Seekable<'a>>::SeekerType,
-    lower_seeker: <ColorVec as Seekable<'a>>::SeekerType,
+    upper_seeker: <Vec<ColorAnchor> as Seekable<'a>>::SeekerType,
+    lower_seeker: <Vec<ColorAnchor> as Seekable<'a>>::SeekerType,
     automation_seeker: automation::AutomationSeeker<'a>,
     dyncolor: &'a DynColor,
 }
 
 impl<'a> DynColorSeeker<'a> {
     fn interp(&self, t: f32) -> Color {
-        let c1 = self.upper_seeker.dead_get();
-        let c2 = self.lower_seeker.dead_get();
+        let c1 = self.upper_seeker.qget();
+        let c2 = self.lower_seeker.qget();
 
         Color::new(
             (c2.r - c1.r) * t + c1.r,
@@ -80,8 +80,8 @@ impl<'a> Seekable<'a> for DynColor {
     type SeekerType = DynColorSeeker<'a>;
     fn seeker(&'a self) -> Self::SeekerType {
         Self::SeekerType {
-            upper_index: 0,
-            lower_index: 0,
+            upper_seeker: self.upper_colors.seeker(),
+            lower_seeker: self.lower_colors.seeker(),
             automation_seeker: self.automation.seeker(),
             dyncolor: &self,
         }
@@ -90,10 +90,14 @@ impl<'a> Seekable<'a> for DynColor {
 
 #[cfg(test)]
 mod tests {
+    mod graficks {
+        pub use ggez::graphics::*;
+        use ggez::graphics::Color; //to remove colision
+    }
+    use graficks::*;
     use super::*;
     use ggez::{
         event::{self, EventHandler, MouseButton},
-        graphics::*,
         input::keyboard::is_key_pressed,
         timer::time_since_start,
         Context, GameResult,
@@ -113,18 +117,18 @@ mod tests {
                 dimensions: Vec2::new(x, 1100.),
             };
 
-            test.color.insert_lower(ColorAnchor {
-                color: Color::new(1., 0., 0., 1.),
-                offset: x / 2.,
-            });
-            test.color.insert_upper(ColorAnchor {
-                color: Color::new(0., 1., 0., 1.),
-                offset: x * (2. / 3.),
-            });
-            test.color.insert_upper(ColorAnchor {
-                color: Color::new(0., 1., 1., 1.),
-                offset: x / 2.,
-            });
+            test.color.insert_lower((
+                x / 2.,
+                Color::new(1., 0., 0., 1.).into()
+            ));
+            test.color.insert_upper((
+                x * (2. / 3.),
+                Color::new(0., 1., 0., 1.).into()
+            ));
+            test.color.insert_upper((
+                x / 2.,
+                Color::new(0., 1., 1., 1.).into()
+            ));
 
             Ok(test)
         }
@@ -141,29 +145,29 @@ mod tests {
             let mut seeker = self.color.seeker();
             clear(ctx, seeker.seek(t));
 
-            for col in &self.color.lower_colors {
+            for (offset, swrap) in &self.color.lower_colors {
                 let rect = Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    col.color,
+                    swrap.val,
                 )?;
 
-                draw(ctx, &rect, (Vec2::new(col.offset, 0.),))?;
+                draw(ctx, &rect, (Vec2::new(*offset, 0.),))?;
             }
 
-            for col in &self.color.upper_colors {
+            for (offset, swrap) in &self.color.upper_colors {
                 let rect = Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    col.color,
+                    swrap.val,
                 )?;
 
                 draw(
                     ctx,
                     &rect,
-                    (Vec2::new(col.offset, self.dimensions.y - 20.),),
+                    (Vec2::new(*offset, self.dimensions.y - 20.),),
                 )?;
             }
 
@@ -222,13 +226,10 @@ mod tests {
             let index = automation.closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    automation.insert(Anchor::new(
-                        Vec2::new(x, y / self.dimensions.y),
-                        Weight::QuadLike(0.),
-                    ));
+                    automation.insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
                 }
                 MouseButton::Middle => {
-                    automation.cycle_weight(index);
+                    automation[index].weight.cycle();
                 }
                 _ => {}
             }
@@ -241,13 +242,14 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             if is_key_pressed(ctx, event::KeyCode::LShift) {
                 self.color
-                    .automation
-                    .shift_period(index, if 0. < y { 10. } else { -10. })
-                    .unwrap();
+                    .automation[index]
+                    .subwave
+                    .shift_period(if 0. < y { 10. } else { -10. });
             } else {
                 self.color
-                    .automation
-                    .shift_power(index, if 0. < y { 0.05 } else { -0.05 })
+                    .automation[index]
+                    .weight
+                    .shift_power(if 0. < y { 0.05 } else { -0.05 })
                     .unwrap();
             }
         }

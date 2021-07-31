@@ -9,6 +9,6 @@ pub struct PlayList<'a, T> {
 }
 
 pub struct Statics<'a> {
-    sense_muls: Channel<'a, SeekableQuantum<f32>>,
+    sense_muls: Channel<'a, SeekableWrap<f32>>,
     _phantom: PhantomData<&'a ()>,
 }

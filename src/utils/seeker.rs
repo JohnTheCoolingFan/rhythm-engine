@@ -9,51 +9,14 @@ pub trait Seekable<'a> {
     fn seeker(&'a self) -> Self::SeekerType;
 }
 
-#[derive(Clone, Copy)]
-pub struct SeekableQuantum<T>
-where
-    T: Copy
-{
-    val: T,
-}
-
-impl <T> From<T> for SeekableQuantum<T>
-where
-    T: Copy
-{
-    fn from(t: T) -> SeekableQuantum<T> {
-        SeekableQuantum::<T> {
-            val: t
-        }
-    }
-}
-
-impl<T> Seeker<T> for SeekableQuantum<T>
-where
-    T: Copy
-{
-    fn seek(&mut self, _offset: f32) -> T {
-        self.val
-    }
-    fn jump(&mut self, _offset: f32) -> T {
-        self.val
-    }
-}
-
-impl<'a, T> Seekable<'a> for SeekableQuantum<T> 
-where
-    T: Copy
-{
-    type Output = T;
-    type SeekerType = Self;
-    fn seeker(&'a self) -> Self::SeekerType {
-        *self
-    }
+pub struct Anchor<T> {
+    f32: offset,
+    val: T
 }
 
 pub struct BlanketSeeker<'a, T>
 where
-    T: Seekable<'a>,
+    T: Copy
 {
     index: usize,
     seeker: T::SeekerType,
@@ -64,7 +27,7 @@ impl <'a, T> BlanketSeeker<'a, T>
 where
     T: Seekable<'a, SeekerType = T> + Seeker<T::Output>,
 {
-    pub fn dead_get(&mut self) -> T::Output {
+    pub fn qget(&mut self) -> T::Output {
         self.seeker.seek(f32::NAN)
     }
 }
@@ -119,18 +82,5 @@ where
             seeker: self[0].1.seeker(),
             vec: &self,
         }
-    }
-}
-
-pub trait GetQuant<T> {
-    fn quantum(&self) -> &T;
-}
-
-impl <T> GetQuant<T> for (f32, SeekableQuantum<T>) 
-where
-    T: Copy
-{
-    fn quantum(&self) -> &T {
-        &self.1.val
     }
 }
