@@ -102,10 +102,6 @@ impl<'a> AutomationSeeker<'a> {
             + (self.automation.upper_bound - self.automation.lower_bound) * y
     }
 
-    pub fn get_index(&self) -> usize {
-        self.index
-    }
-
     #[rustfmt::skip]
     pub fn interp(&self, offset: f32) -> f32 {
         self.from_y(

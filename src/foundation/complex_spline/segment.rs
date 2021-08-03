@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use crate::utils::*;
 use glam::{f32::Mat3, Vec2};
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
+use duplicate::duplicate;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Ctrl {
@@ -38,8 +39,7 @@ impl Ctrl {
 pub struct Segment {
     pub ctrls: Ctrl,
     pub tolerence: f32,
-    point_lut: Vec<Vec2>,
-    value_lut: Vec<f32>,
+    lut: Vec<SimpleAnchor<Vec2>>,
 }
 
 impl Segment {
@@ -47,29 +47,30 @@ impl Segment {
         Self {
             ctrls: ctrl_type,
             tolerence: segment_tolerence,
-            point_lut: vec![Vec2::new(0., 0.)],
-            value_lut: vec![0.],
+            lut: vec![(0., Vec2::new(0., 0.)).into()],
         }
     }
 
+    #[rustfmt::skip]
     pub(super) fn recompute(&mut self, start: Point<f32>) {
         let end = self.ctrls.get_end();
 
-        self.point_lut.clear();
-        self.value_lut.clear();
-        self.point_lut.push(Vec2::new(start.x, start.y));
-        self.value_lut.push(0.0);
+        self.lut.clear();
+        self.lut.push((0., Vec2::new(start.x, start.y)).into());
 
         //these are the only variables used after the colsure definition
         let ctrls = self.ctrls;
         let tolerence = self.tolerence;
 
         let mut callback = |p: Point<f32>| {
-            let last = self.point_lut[FromEnd(0)];
-            let s = self.value_lut[FromEnd(0)]
-                + (p.to_vector() - Point::new(last.x, last.y).to_vector()).length();
-            self.point_lut.push(Vec2::new(p.x, p.y));
-            self.value_lut.push(s);
+            let last = self.lut[FromEnd(0)].val;
+            let s = 
+                self.lut[FromEnd(0)].offset
+                + (
+                    p.to_vector() - Point::new(last.x, last.y).to_vector()
+                ).length();
+            
+            self.lut.push((s, Vec2::new(p.x, p.y)).into());
         };
 
         match ctrls {
@@ -93,9 +94,8 @@ impl Segment {
                 }
                 .for_each_flattened(tolerence, &mut callback)
             }
-            #[rustfmt::skip]
             Ctrl::ThreePointCircle(c, end) => {
-                self.value_lut.clear();
+                self.lut.clear();
                 //https://math.stackexchange.com/a/1460096
                 let m11 = Mat3::from_cols_array(&[
                     start.x, start.y, 1.,
@@ -123,7 +123,7 @@ impl Segment {
                         -0.5 * (m13.determinant()/d11)
                     );
 
-                    self.point_lut.push(Vec2::new(center.x, center.y));
+                    self.lut.push((0., Vec2::new(center.x, center.y)).into());
 
                     let side = c.is_left(&start, &end);
                     let rot_sign = match start.rotate_about(&center, 1.).is_left(&start, &end) == side {
@@ -147,10 +147,10 @@ impl Segment {
                             360. - theta
                         };
 
-                    self.value_lut.push(angle * rot_sign);
+                    self.lut.push((angle * rot_sign, Vec2::new(end.x, end.y)).into());
                 }
                 else {
-                    self.point_lut.push(Vec2::new(end.x, end.y));
+                    self.lut.push((0., Vec2::new(end.x, end.y)).into());
                 }
             }
         };
@@ -158,35 +158,28 @@ impl Segment {
         match ctrls {
             Ctrl::ThreePointCircle(_, _) => {}
             _ => {
-                let max_displ = self.value_lut[FromEnd(0)];
-                for elem in &mut self.value_lut {
-                    *elem /= max_displ;
+                let max_displ = self.lut[FromEnd(0)].offset;
+                for elem in &mut self.lut {
+                    elem.offset /= max_displ;
                 }
             }
         }
-    }
-
-    pub fn get_point_lut(&self) -> &Vec<Vec2> {
-        &self.point_lut
-    }
-
-    pub fn get_value_lut(&self) -> &Vec<f32> {
-        &self.value_lut
     }
 }
 
 pub struct SegmentSeeker<'a> {
     index: usize,
     segment: &'a Segment,
+    lut_seeker: <Vec<SimpleAnchor<Vec2>> as Seekable<'a>>::SeekerType,
 }
 
-impl<'a> SegmentSeeker<'a> {
+/*impl<'a> SegmentSeeker<'a> {
     fn interp(&self, t: f32) -> Vec2 {
-        if self.index == 0 {
-            self.segment.point_lut[0]
+        if self.lut_seeker.index() == 0 {
+            self.segment.lut[0].val
         }
         else if self.index == self.segment.point_lut.len() {
-            self.segment.point_lut[FromEnd(0)]
+            self.segment.lut[FromEnd(0)].val
         }
         else {
             let start = self.segment.point_lut[self.index - 1];
@@ -198,52 +191,43 @@ impl<'a> SegmentSeeker<'a> {
             end * s + start * (1. - s)
         }
     }
-}
+}*/
 
 ///0. <= t <= 1.
 impl<'a> Seeker<Vec2> for SegmentSeeker<'a> {
-    fn seek(&mut self, t: f32) -> Vec2 {
+    #[duplicate(method; [seek]; [jump];)]
+    fn method(&mut self, t: f32) -> Vec2 {
         debug_assert!(0. <= t && t <= 1.);
-        match self.segment.ctrls {
-            Ctrl::ThreePointCircle(_, _) => {
-                if self.segment.value_lut.len() == 0 {
-                    self.segment.point_lut[0].lerp(self.segment.point_lut[1], t)
-                } else {
-                    self.segment.point_lut[0]
-                        .rotate_about(&self.segment.point_lut[1], self.segment.value_lut[0] * t)
-                }
+        if let Ctrl::ThreePointCircle(_, _) = self.segment.ctrls {
+            if self.segment.lut.len() == 3 {
+                self.segment
+                    .lut[0]
+                    .val
+                    .rotate_about(
+                        &self.segment.lut[1].val,
+                        self.segment.lut[2].offset * t
+                    )
             }
-            _ => {
-                while self.index < self.segment.value_lut.len() {
-                    if t < self.segment.value_lut[self.index] {
-                        break;
-                    }
-                    self.index += 1;
-                }
-                self.interp(t)
+            else {
+                self.segment.lut[0].val.lerp(self.segment.lut[1].val, t)
             }
         }
-    }
+        else {
+            let d = t * self.segment.lut[FromEnd(0)].offset;
+            let end = self.lut_seeker.method(d);
+            if self.lut_seeker.over_run() | self.lut_seeker.under_run() {
+                end
+            }
+            else {
+                let curr_index = self.lut_seeker.index();
+                let prev_index = curr_index - 1;
+                
+                let start = self.segment.lut[prev_index].val;
+                
+                let s = (d - self.segment.lut[prev_index].offset)
+                    / (self.segment.lut[curr_index].offset - self.segment.lut[prev_index].offset);
 
-    fn jump(&mut self, t: f32) -> Vec2 {
-        debug_assert!(0. <= t && t <= 1.);
-        match self.segment.ctrls {
-            Ctrl::ThreePointCircle(_, _) => self.seek(t),
-            _ => {
-                match self
-                    .segment
-                    .value_lut
-                    .binary_search_by(|v| v.partial_cmp(&t).unwrap())
-                {
-                    Ok(index) => {
-                        self.index = index;
-                        self.segment.point_lut[index]
-                    }
-                    Err(index) => {
-                        self.index = index;
-                        self.interp(t)
-                    }
-                }
+                start.lerp(end, s)
             }
         }
     }
@@ -256,6 +240,7 @@ impl<'a> Seekable<'a> for Segment {
         Self::SeekerType {
             index: 0,
             segment: &self,
+            lut_seeker: self.lut.seeker()
         }
     }
 }

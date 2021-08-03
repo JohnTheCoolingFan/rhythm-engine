@@ -5,55 +5,53 @@ use crate::{
 use duplicate::duplicate;
 
 type Color = ggez::graphics::Color;
-pub type SWrapColor = SeekableWrap<Color>;
-pub type ColorAnchor = (f32, SWrapColor);
 
 pub struct DynColor {
     pub automation: Automation,
-    upper_colors: Vec<ColorAnchor>,
-    lower_colors: Vec<ColorAnchor>,
+    upper_colors: Vec<SimpleAnchor<Color>>,
+    lower_colors: Vec<SimpleAnchor<Color>>,
 }
 
 impl DynColor {
     pub fn new(len: f32) -> Self {
         Self {
-            upper_colors: vec![(0., Color::WHITE.into())],
+            upper_colors: vec![(0., Color::WHITE).into()],
             automation: Automation::new(0., 1., len),
-            lower_colors: vec![(0., Color::BLACK.into())],
+            lower_colors: vec![(0., Color::BLACK).into()],
         }
     }
 
-    fn insert(vec: &mut Vec<ColorAnchor>, color_anch: ColorAnchor) {
+    fn insert(vec: &mut Vec<SimpleAnchor<Color>>, anch: SimpleAnchor<Color>) {
         vec.insert(
-            match vec.binary_search_by(|anch| anch.0.partial_cmp(&color_anch.0).unwrap())
+            match vec.binary_search_by(|anch| anch.offset.partial_cmp(&anch.offset).unwrap())
             {
                 Ok(index) => index,
                 Err(index) => index,
             },
-            color_anch,
+            anch,
         );
     }
 
-    pub fn insert_upper(&mut self, color_anch: ColorAnchor) {
-        Self::insert(&mut self.upper_colors, color_anch);
+    pub fn insert_upper(&mut self, anch: SimpleAnchor<Color>) {
+        Self::insert(&mut self.upper_colors, anch);
     }
 
-    pub fn insert_lower(&mut self, color_anch: ColorAnchor) {
-        Self::insert(&mut self.lower_colors, color_anch);
+    pub fn insert_lower(&mut self, anch: SimpleAnchor<Color>) {
+        Self::insert(&mut self.lower_colors, anch);
     }
 }
 
 pub struct DynColorSeeker<'a> {
-    upper_seeker: <Vec<ColorAnchor> as Seekable<'a>>::SeekerType,
-    lower_seeker: <Vec<ColorAnchor> as Seekable<'a>>::SeekerType,
+    upper_seeker: <Vec<SimpleAnchor<Color>> as Seekable<'a>>::SeekerType,
+    lower_seeker: <Vec<SimpleAnchor<Color>> as Seekable<'a>>::SeekerType,
     automation_seeker: automation::AutomationSeeker<'a>,
     dyncolor: &'a DynColor,
 }
 
 impl<'a> DynColorSeeker<'a> {
     fn interp(&self, t: f32) -> Color {
-        let c1 = self.upper_seeker.qget();
-        let c2 = self.lower_seeker.qget();
+        let c1 = self.upper_seeker.val();
+        let c2 = self.lower_seeker.val();
 
         Color::new(
             (c2.r - c1.r) * t + c1.r,
@@ -117,18 +115,24 @@ mod tests {
                 dimensions: Vec2::new(x, 1100.),
             };
 
-            test.color.insert_lower((
-                x / 2.,
-                Color::new(1., 0., 0., 1.).into()
-            ));
-            test.color.insert_upper((
-                x * (2. / 3.),
-                Color::new(0., 1., 0., 1.).into()
-            ));
-            test.color.insert_upper((
-                x / 2.,
-                Color::new(0., 1., 1., 1.).into()
-            ));
+            test.color.insert_lower(
+                (
+                    x / 2.,
+                    Color::new(1., 0., 0., 1.)
+                ).into()
+            );
+            test.color.insert_upper(
+                (
+                    x * (2. / 3.),
+                    Color::new(0., 1., 0., 1.)
+                ).into()
+            );
+            test.color.insert_upper(
+                (
+                    x / 2.,
+                    Color::new(0., 1., 1., 1.)
+                ).into()
+            );
 
             Ok(test)
         }
@@ -145,29 +149,29 @@ mod tests {
             let mut seeker = self.color.seeker();
             clear(ctx, seeker.seek(t));
 
-            for (offset, swrap) in &self.color.lower_colors {
+            for col in &self.color.lower_colors {
                 let rect = Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    swrap.val,
+                    col.val,
                 )?;
 
-                draw(ctx, &rect, (Vec2::new(*offset, 0.),))?;
+                draw(ctx, &rect, (Vec2::new(col.offset, 0.),))?;
             }
 
-            for (offset, swrap) in &self.color.upper_colors {
+            for col in &self.color.upper_colors {
                 let rect = Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    swrap.val,
+                    col.val,
                 )?;
 
                 draw(
                     ctx,
                     &rect,
-                    (Vec2::new(*offset, self.dimensions.y - 20.),),
+                    (Vec2::new(col.offset, self.dimensions.y - 20.),),
                 )?;
             }
 
