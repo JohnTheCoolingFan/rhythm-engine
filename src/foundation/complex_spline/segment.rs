@@ -173,26 +173,6 @@ pub struct SegmentSeeker<'a> {
     lut_seeker: <Vec<SimpleAnchor<Vec2>> as Seekable<'a>>::SeekerType,
 }
 
-/*impl<'a> SegmentSeeker<'a> {
-    fn interp(&self, t: f32) -> Vec2 {
-        if self.lut_seeker.index() == 0 {
-            self.segment.lut[0].val
-        }
-        else if self.index == self.segment.point_lut.len() {
-            self.segment.lut[FromEnd(0)].val
-        }
-        else {
-            let start = self.segment.point_lut[self.index - 1];
-            let end = self.segment.point_lut[self.index];
-
-            let s = (t - self.segment.value_lut[self.index - 1])
-                / (self.segment.value_lut[self.index] - self.segment.value_lut[self.index - 1]);
-
-            end * s + start * (1. - s)
-        }
-    }
-}*/
-
 ///0. <= t <= 1.
 impl<'a> Seeker<Vec2> for SegmentSeeker<'a> {
     #[duplicate(method; [seek]; [jump];)]
