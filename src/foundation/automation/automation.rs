@@ -86,8 +86,7 @@ impl Automation {
         *self.anchors[index].point() = point;
         old
     }
-
-    }
+}
 
 pub struct AutomationSeeker<'a> {
     index: usize,
@@ -239,9 +238,8 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    self.automation.insert(Anchor::new(
-                        Vec2::new(x, y / self.dimensions.y),
-                    ));
+                    self.automation
+                        .insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
                 }
                 MouseButton::Middle => {
                     self.automation[index].weight.cycle();
@@ -261,8 +259,7 @@ mod tests {
                 self.automation[index]
                     .subwave
                     .shift_period(if 0. < y { 10. } else { -10. });
-            }
-            else {
+            } else {
                 self.automation[index]
                     .weight
                     .shift_power(if 0. < y { 0.05 } else { -0.05 })

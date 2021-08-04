@@ -79,10 +79,8 @@ impl ComplexSpline {
     pub fn insert_critical(&mut self, x: f32) {
         self.automation
             .insert(Anchor::new(Vec2::new(x, 0.), Weight::ForwardBias));
-        self.automation.insert(Anchor::new(
-            Vec2::new(x, 1.),
-            Weight::QuadLike(0.),
-        ));
+        self.automation
+            .insert(Anchor::new(Vec2::new(x, 1.), Weight::QuadLike(0.)));
 
         let c: Critical = (self.automation.closest_to(Vec2::new(x, 0.))).into();
         self.curve.bisect_segment(c.get());

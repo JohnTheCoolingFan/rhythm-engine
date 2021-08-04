@@ -1,46 +1,33 @@
-pub trait Seeker<Output> {
-    fn seek(&mut self, val: f32) -> Output;
-    fn jump(&mut self, val: f32) -> Output;
-}
-
-pub trait Seekable<'a> {
+pub trait Seekable: Sized {
     type Output;
-    type SeekerType: Seeker<Self::Output>;
-    fn seeker(&'a self) -> Self::SeekerType;
+    type Quantifier: PartialOrd;
+    fn quantify(&self) -> Self::Quantifier;
+    fn exhibit(&self, t: Self::Quantifier, seeker: &Seeker<Self>) -> Self::Output;
 }
 
+pub trait SeekingExtensions {
+    type Seekable: Seekable;
 
-
-
-
-pub struct SimpleAnchor<ValType>
-{
-    pub offset: f32,
-    pub val: ValType
+    fn se_insert(&mut self, item: Self::Seekable);
+    fn se_remove(&mut self, index: usize) -> Result<Self::Seekable, usize>;
+    fn seeker(&self) -> Seeker<Self::Seekable>;
 }
-
-impl<ValType> From<(f32, ValType)> for SimpleAnchor<ValType>
-{
-    fn from(tup: (f32, ValType)) -> SimpleAnchor<ValType> {
-        SimpleAnchor::<ValType> {
-            offset: tup.0,
-            val: tup.1
-        }
-    }
-}
-
-pub struct SimpleSeeker<'a, ValType>
+//
+//
+//
+//
+//
+pub struct Seeker<'a, Item>
+where
+    Item: Seekable,
 {
     index: usize,
-    vec: &'a Vec<SimpleAnchor<ValType>>,
+    vec: &'a Vec<Item>,
 }
 
-trait Interp<Meta, Output> {
-    fn interp(&self, meta: Meta) -> Output;
-}
-
-
-impl <'a, ValType> SimpleSeeker<'a, ValType>
+impl<'a, Item> Seeker<'a, Item>
+where
+    Item: Seekable,
 {
     pub fn index(&self) -> usize {
         self.index
@@ -54,29 +41,36 @@ impl <'a, ValType> SimpleSeeker<'a, ValType>
         self.index == 0
     }
 
-    pub fn val(&self) -> ValType {    
-        self.vec[if self.over_run() { self.vec.len() - 1 } else {self.index}].val
+    pub fn val(&self) -> &Item {
+        &self.vec[if self.over_run() {
+            self.vec.len() - 1
+        } else {
+            self.index
+        }]
     }
 
-}
+    pub fn vec(&self) -> &Vec<Item> {
+        &self.vec
+    }
 
-impl<'a, ValType> Seeker<ValType> for SimpleSeeker<'a, ValType>
-{
-    fn seek(&mut self, offset: f32) -> ValType {
-        let old = self.index;
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    fn seek(&mut self, offset: Item::Quantifier) -> Item::Output {
         while self.index < self.vec.len() {
-            if offset < self.vec[self.index].offset {
+            if offset < self.vec[self.index].quantify() {
                 break;
             }
             self.index += 1;
         }
-        self.val()
+        self.val().exhibit(offset, &self)
     }
 
-    fn jump(&mut self, offset: f32) -> ValType {
+    fn jump(&mut self, offset: Item::Quantifier) -> Item::Output {
         self.index = match self
             .vec
-            .binary_search_by(|elem| elem.offset.partial_cmp(&offset).unwrap())
+            .binary_search_by(|elem| elem.quantify().partial_cmp(&offset).unwrap())
         {
             Ok(index) => index,
             Err(index) => {
@@ -87,18 +81,74 @@ impl<'a, ValType> Seeker<ValType> for SimpleSeeker<'a, ValType>
                 }
             }
         };
-        self.val()
+        self.val().exhibit(offset, &self)
+    }
+}
+//
+//
+//
+//
+//
+pub struct Epoch<Value>
+where
+    Value: Copy,
+{
+    pub time: f32,
+    pub val: Value,
+}
+
+impl<Value> Seekable for Epoch<Value>
+where
+    Value: Copy,
+{
+    type Output = Value;
+    type Quantifier = f32;
+    fn quantify(&self) -> Self::Quantifier {
+        self.time
+    }
+    fn exhibit(&self, _t: Self::Quantifier, _s: &Seeker<Self>) -> Self::Output {
+        self.val
     }
 }
 
-impl<'a, ValType> Seekable<'a> for Vec<SimpleAnchor<ValType>>
+impl<Value> From<(f32, Value)> for Epoch<Value>
 where
-    ValType: 'a,
+    Value: Copy,
 {
-    type Output = ValType;
-    type SeekerType = SimpleSeeker<'a, ValType>;
-    fn seeker(&'a self) -> Self::SeekerType {
-        Self::SeekerType {
+    fn from(tup: (f32, Value)) -> Epoch<Value> {
+        Epoch::<Value> {
+            time: tup.0,
+            val: tup.1,
+        }
+    }
+}
+//
+//
+//
+//
+//
+impl<T: Seekable> SeekingExtensions for Vec<T> {
+    type Seekable = T;
+
+    fn se_insert(&mut self, item: Self::Seekable) {
+        self.insert(
+            match self.binary_search_by(|a| a.quantify().partial_cmp(&item.quantify()).unwrap()) {
+                Ok(index) | Err(index) => index,
+            },
+            item,
+        );
+    }
+
+    fn se_remove(&mut self, index: usize) -> Result<Self::Seekable, usize> {
+        if index < self.len() {
+            Ok(self.remove(index))
+        } else {
+            Err(index)
+        }
+    }
+
+    fn seeker(&self) -> Seeker<Self::Seekable> {
+        Seeker::<Self::Seekable> {
             index: 0,
             vec: &self,
         }

@@ -1,7 +1,4 @@
-use crate::{
-    foundation::automation::*,
-    utils::seeker::*,
-};
+use crate::{foundation::automation::*, utils::seeker::*};
 use duplicate::duplicate;
 
 type Color = ggez::graphics::Color;
@@ -23,8 +20,7 @@ impl DynColor {
 
     fn insert(vec: &mut Vec<SimpleAnchor<Color>>, anch: SimpleAnchor<Color>) {
         vec.insert(
-            match vec.binary_search_by(|anch| anch.offset.partial_cmp(&anch.offset).unwrap())
-            {
+            match vec.binary_search_by(|anch| anch.offset.partial_cmp(&anch.offset).unwrap()) {
                 Ok(index) => index,
                 Err(index) => index,
             },
@@ -67,7 +63,7 @@ impl<'a> Seeker<Color> for DynColorSeeker<'a> {
     fn method(&mut self, offset: f32) -> Color {
         self.upper_seeker.method(offset);
         self.lower_seeker.method(offset);
-        
+
         let y = self.automation_seeker.method(offset);
         self.interp(y)
     }
@@ -89,10 +85,9 @@ impl<'a> Seekable<'a> for DynColor {
 #[cfg(test)]
 mod tests {
     mod graficks {
-        pub use ggez::graphics::*;
-        use ggez::graphics::Color; //to remove colision
+        use ggez::graphics::Color;
+        pub use ggez::graphics::*; //to remove colision
     }
-    use graficks::*;
     use super::*;
     use ggez::{
         event::{self, EventHandler, MouseButton},
@@ -101,6 +96,7 @@ mod tests {
         Context, GameResult,
     };
     use glam::Vec2;
+    use graficks::*;
 
     struct Test {
         color: DynColor,
@@ -115,24 +111,12 @@ mod tests {
                 dimensions: Vec2::new(x, 1100.),
             };
 
-            test.color.insert_lower(
-                (
-                    x / 2.,
-                    Color::new(1., 0., 0., 1.)
-                ).into()
-            );
-            test.color.insert_upper(
-                (
-                    x * (2. / 3.),
-                    Color::new(0., 1., 0., 1.)
-                ).into()
-            );
-            test.color.insert_upper(
-                (
-                    x / 2.,
-                    Color::new(0., 1., 1., 1.)
-                ).into()
-            );
+            test.color
+                .insert_lower((x / 2., Color::new(1., 0., 0., 1.)).into());
+            test.color
+                .insert_upper((x * (2. / 3.), Color::new(0., 1., 0., 1.)).into());
+            test.color
+                .insert_upper((x / 2., Color::new(0., 1., 1., 1.)).into());
 
             Ok(test)
         }
@@ -245,13 +229,11 @@ mod tests {
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
             if is_key_pressed(ctx, event::KeyCode::LShift) {
-                self.color
-                    .automation[index]
+                self.color.automation[index]
                     .subwave
                     .shift_period(if 0. < y { 10. } else { -10. });
             } else {
-                self.color
-                    .automation[index]
+                self.color.automation[index]
                     .weight
                     .shift_power(if 0. < y { 0.05 } else { -0.05 })
                     .unwrap();

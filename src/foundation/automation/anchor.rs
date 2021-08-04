@@ -1,4 +1,4 @@
-use crate::utils::math::*;
+use crate::utils::{math::*, seeker::*};
 use glam::Vec2;
 
 #[derive(Debug, Copy, Clone)]
@@ -16,7 +16,7 @@ impl Weight {
             Self::ForwardBias => Self::QuadLike(0.),
             Self::QuadLike(_) => Self::CubeLike(0.),
             Self::CubeLike(_) => Self::ReverseBias,
-            Self::ReverseBias => Self::ForwardBias
+            Self::ReverseBias => Self::ForwardBias,
         };
         old
     }
@@ -28,15 +28,14 @@ impl Weight {
                 *power = new.clamp(-30., 30.);
                 Ok(old)
             }
-            _ => Err(())
+            _ => Err(()),
         }
     }
 
     pub fn shift_power(&mut self, shift: f32) -> Result<f32, ()> {
         if let Self::QuadLike(power) | Self::CubeLike(power) = self {
             self.set_power(shift + *power)
-        }
-        else {
+        } else {
             Err(())
         }
     }
@@ -78,11 +77,11 @@ impl Weight {
         }
     }
 }
-
-
-
-
-
+//
+//
+//
+//
+//
 #[derive(Debug, Clone, Copy)]
 pub enum SubWaveMode {
     Off,
@@ -96,9 +95,9 @@ impl SubWaveMode {
         let old = *self;
         *self = match self {
             Self::Off => Self::Step,
-            Self::Step => Self::Hop{ alternate: false },
-            Self::Hop{ .. } => Self::Oscilate{ alternate: false },
-            Self::Oscilate{ .. } => Self::Off
+            Self::Step => Self::Hop { alternate: false },
+            Self::Hop { .. } => Self::Oscilate { alternate: false },
+            Self::Oscilate { .. } => Self::Off,
         };
         old
     }
@@ -109,21 +108,17 @@ impl SubWaveMode {
                 *alternate = !*alternate;
                 Ok(())
             }
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
 
-
-
-
-
 #[derive(Debug, Clone, Copy)]
 pub struct SubWave {
-    period: f32,
+    pub(super) period: f32,
     pub offset: f32,
     pub weight: Weight,
-    pub mode: SubWaveMode
+    pub mode: SubWaveMode,
 }
 
 impl SubWave {
@@ -141,11 +136,11 @@ impl SubWave {
         self.set_period(val + self.period)
     }
 }
-
-
-
-
-
+//
+//
+//
+//
+//
 #[derive(Debug, Clone, Copy)]
 pub struct Anchor {
     pub(super) point: Vec2,
@@ -159,11 +154,11 @@ impl Anchor {
         Self {
             point: p,
             weight: Weight::QuadLike(0.),
-            subwave: SubWave{
+            subwave: SubWave {
                 offset: 0.,
                 period: 0.,
                 weight: Weight::ForwardBias,
-                mode: SubWaveMode::Off
+                mode: SubWaveMode::Off,
             },
         }
     }
@@ -171,9 +166,11 @@ impl Anchor {
     pub fn point(&self) -> &Vec2 {
         &self.point
     }
- 
+
     #[rustfmt::skip]
     pub fn interp(&self, last: &Self, offset: f32) -> f32 {
+        //must take last point and raw offset instead of t
+        //otherwise quantizing would have to be done by caller
         debug_assert!(last.point.x <= self.point.x, "self < last");
         debug_assert!(
             last.point.x <= offset && offset <= self.point.x,
@@ -187,12 +184,15 @@ impl Anchor {
         }
         else {
             let (x0, x1) = (
-                offset
-                    .quant_floor(self.subwave.period, self.subwave.offset)
-                    .clamp(last.point.x, self.point.x),
-                offset
-                    .quant_ceil(self.subwave.period, self.subwave.offset)
-                    .clamp(last.point.x, self.point.x),
+                (
+                    last.point.x 
+                    + (offset - last.point.x).quant_floor(self.subwave.period, self.subwave.offset)
+                ).clamp(last.point.x, self.point.x),
+                
+                (
+                    last.point.x 
+                    + (offset - last.point.y).quant_ceil(self.subwave.period, self.subwave.offset)
+                ).clamp(last.point.x, self.point.x),
             );
 
             let t = (offset - x0) / (x1 - x0);
@@ -229,6 +229,27 @@ impl Anchor {
             };
 
             last.point.y + dy0 + (dy1 - dy0) * self.subwave.weight.eval(t)
+        }
+    }
+}
+
+impl Seekable for Anchor {
+    type Output = f32;
+    type Quantifier = f32;
+
+    fn quantify(&self) -> f32 {
+        self.point.x
+    }
+
+    fn exhibit(&self, t: f32, seeker: &Seeker<Self>) -> Self {
+        if seeker.over_run() | self.under_run() {
+            self.y
+        }
+        else {
+            self.interp(
+                seeker.vec()[seeker.index() - 1],
+                t
+            )
         }
     }
 }

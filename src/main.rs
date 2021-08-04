@@ -1,6 +1,6 @@
+mod editor;
 mod foundation;
 mod utils;
-mod editor;
 
 use ggez::event;
 use ggez::graphics::{self, Color};

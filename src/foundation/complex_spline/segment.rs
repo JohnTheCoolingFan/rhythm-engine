@@ -1,9 +1,9 @@
 use std::f32::consts::PI;
 
 use crate::utils::*;
+use duplicate::duplicate;
 use glam::{f32::Mat3, Vec2};
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
-use duplicate::duplicate;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Ctrl {
@@ -28,7 +28,7 @@ impl Ctrl {
             Self::Linear(ref mut p) => p,
             Self::Quadratic(_, ref mut p) => p,
             Self::ThreePointCircle(_, ref mut p) => p,
-            Self::Cubic(_, _, ref mut p) => p
+            Self::Cubic(_, _, ref mut p) => p,
         };
         let old = *p;
         *p = point;
@@ -180,30 +180,23 @@ impl<'a> Seeker<Vec2> for SegmentSeeker<'a> {
         debug_assert!(0. <= t && t <= 1.);
         if let Ctrl::ThreePointCircle(_, _) = self.segment.ctrls {
             if self.segment.lut.len() == 3 {
-                self.segment
-                    .lut[0]
+                self.segment.lut[0]
                     .val
-                    .rotate_about(
-                        &self.segment.lut[1].val,
-                        self.segment.lut[2].offset * t
-                    )
-            }
-            else {
+                    .rotate_about(&self.segment.lut[1].val, self.segment.lut[2].offset * t)
+            } else {
                 self.segment.lut[0].val.lerp(self.segment.lut[1].val, t)
             }
-        }
-        else {
+        } else {
             let d = t * self.segment.lut[FromEnd(0)].offset;
             let end = self.lut_seeker.method(d);
             if self.lut_seeker.over_run() | self.lut_seeker.under_run() {
                 end
-            }
-            else {
+            } else {
                 let curr_index = self.lut_seeker.index();
                 let prev_index = curr_index - 1;
-                
+
                 let start = self.segment.lut[prev_index].val;
-                
+
                 let s = (d - self.segment.lut[prev_index].offset)
                     / (self.segment.lut[curr_index].offset - self.segment.lut[prev_index].offset);
 
@@ -220,7 +213,7 @@ impl<'a> Seekable<'a> for Segment {
         Self::SeekerType {
             index: 0,
             segment: &self,
-            lut_seeker: self.lut.seeker()
+            lut_seeker: self.lut.seeker(),
         }
     }
 }

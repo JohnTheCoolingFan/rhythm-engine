@@ -1,7 +1,6 @@
 use duplicate::duplicate;
 use glam::{Mat2, Vec2};
 use lyon_geom::Point;
-use std::f32::consts::PI;
 
 pub trait IsLeft {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
@@ -50,13 +49,16 @@ pub trait Quantize {
 
 impl Quantize for f32 {
     fn quant_floor(&self, period: Self, offset: Self) -> Self {
-        ((self - offset)/ period).floor() * period + offset
+        ((self - offset) / period).floor() * period + offset
     }
     fn quant_ceil(&self, period: Self, offset: Self) -> Self {
-        ((self - offset)/ period).ceil() * period + offset
+        ((self - offset) / period).ceil() * period + offset
     }
 }
 
+/*
+ *  THIS NEEDS TO BE RETHOUGHT
+ *
 pub struct Rotation(f32);
 pub struct Scale(f32);
 
@@ -84,7 +86,7 @@ impl Into<Mat2> for Scale {
     fn into(self) -> Mat2 {
         Mat2::from_cols_array(&[
             self.0, 0.,
-            0., self.0 
+            0., self.0
         ])
     }
-}
+}*/
