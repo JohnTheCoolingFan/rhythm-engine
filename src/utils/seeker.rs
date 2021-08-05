@@ -1,12 +1,38 @@
-pub trait Seekable: Sized {
-    type Output;
+pub trait Quantify {
     type Quantifier: PartialOrd;
+    
     fn quantify(&self) -> Self::Quantifier;
-    fn exhibit(&self, t: Self::Quantifier, seeker: &Seeker<Self>) -> Self::Output;
 }
 
-pub trait SeekingExtensions {
-    type Seekable: Seekable;
+pub trait Exhibit {
+    type Item: Quantify;
+    type Output;
+    
+    fn exhibit(
+        &self, 
+        t: <Self::Item as Quantify>::Quantifier
+    ) -> Self::Output;
+}
+
+trait Seek {
+    type Item: Quantify + Exhibit;
+    
+    fn index(&self) -> usize;
+    fn over_run(&self) -> bool;
+    fn under_run(&self) -> bool;
+    fn val(&self) -> &Self::Item;
+    fn seek(
+        &mut self,
+        offset: <Self::Item as Quantify>::Quantifier
+    ) -> <Self::Item as Exhibit>::Output;
+    fn jump(
+        &mut self,
+        offset: <Self::Item as Quantify>::Quantifier
+    ) -> <Self::Item as Exhibit>::Output;
+}
+
+pub trait SeekExtensions {
+    type Seekable: Quantify;
 
     fn se_insert(&mut self, item: Self::Seekable);
     fn se_remove(&mut self, index: usize) -> Result<Self::Seekable, usize>;
@@ -19,29 +45,31 @@ pub trait SeekingExtensions {
 //
 pub struct Seeker<'a, Item>
 where
-    Item: Seekable,
+    Item: Quantify + Exhibit
 {
     index: usize,
     vec: &'a Vec<Item>,
 }
 
-impl<'a, Item> Seeker<'a, Item>
+impl<'a, Item> Seek for Seeker<'a, Item>
 where
-    Item: Seekable,
+    Item: Quantify + Exhibit
 {
-    pub fn index(&self) -> usize {
+    type Item = Item;
+
+    fn index(&self) -> usize {
         self.index
     }
 
-    pub fn over_run(&self) -> bool {
+    fn over_run(&self) -> bool {
         self.vec.len() <= self.index
     }
 
-    pub fn under_run(&self) -> bool {
+    fn under_run(&self) -> bool {
         self.index == 0
     }
 
-    pub fn val(&self) -> &Item {
+    fn val(&self) -> &Item {
         &self.vec[if self.over_run() {
             self.vec.len() - 1
         } else {
@@ -49,11 +77,7 @@ where
         }]
     }
 
-    pub fn vec(&self) -> &Vec<Item> {
-        &self.vec
-    }
-
-    pub fn index(&self) -> usize {
+    fn index(&self) -> usize {
         self.index
     }
 
@@ -64,7 +88,7 @@ where
             }
             self.index += 1;
         }
-        self.val().exhibit(offset, &self)
+        self.exhibit(offset)
     }
 
     fn jump(&mut self, offset: Item::Quantifier) -> Item::Output {
@@ -81,7 +105,7 @@ where
                 }
             }
         };
-        self.val().exhibit(offset, &self)
+        self.exhibit(offset)
     }
 }
 //
@@ -90,25 +114,37 @@ where
 //
 //
 pub struct Epoch<Value>
-where
-    Value: Copy,
 {
     pub time: f32,
     pub val: Value,
 }
 
-impl<Value> Seekable for Epoch<Value>
+impl<Value> Quantify for Epoch<Value>
 where
     Value: Copy,
 {
-    type Output = Value;
     type Quantifier = f32;
     fn quantify(&self) -> Self::Quantifier {
         self.time
     }
-    fn exhibit(&self, _t: Self::Quantifier, _s: &Seeker<Self>) -> Self::Output {
+}
+
+impl<Value> Exhibit for Epoch<Value>
+where
+    Value: Copy
+{
+    type Item = Self;
+    type Output = Value;
+
+    fn exhibit(&self, _: f32) -> Self::Output {
         self.val
     }
+}
+
+impl <Value> Quantify for Epoch<Value>
+where
+    Value: Seek
+{
 }
 
 impl<Value> From<(f32, Value)> for Epoch<Value>
@@ -127,7 +163,7 @@ where
 //
 //
 //
-impl<T: Seekable> SeekingExtensions for Vec<T> {
+impl<T: Seek> SeekExtensions for Vec<T> {
     type Seekable = T;
 
     fn se_insert(&mut self, item: Self::Seekable) {
