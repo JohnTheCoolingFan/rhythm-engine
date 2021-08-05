@@ -167,6 +167,7 @@ impl Anchor {
         &self.point
     }
 
+
     #[rustfmt::skip]
     pub fn interp(&self, last: &Self, offset: f32) -> f32 {
         //must take last point and raw offset instead of t
@@ -177,26 +178,34 @@ impl Anchor {
             "offset out of bounds"
         );
 
-        let dy = self.point.y - last.point.y; 
+        let dy = self.point.y - last.point.y;
 
         if let SubWaveMode::Off = self.subwave.mode {
-            last.point.y + dy * self.weight.eval((offset - last.point.x) / (self.point.x - last.point.x))
-        }
-        else {
+            last.point.y
+                + dy * self
+                    .weight
+                    .eval((offset - last.point.x) / (self.point.x - last.point.x))
+        } else {
+            //really not sure of a better way to format this
             let (x0, x1) = (
-                (last.point.x 
-                    + (offset - last.point.x)
-                        .quant_floor(self.subwave.period, self.subwave.offset))
-                .clamp(last.point.x, self.point.x),
-                
                 (
-                    last.point.x 
-                    + (offset - last.point.y).quant_ceil(self.subwave.period, self.subwave.offset)
+                    last.point.x + (offset - last.point.x).quant_floor(
+                        self.subwave.period,
+                        self.subwave.offset
+                    )
+                ).clamp(last.point.x, self.point.x),
+
+                (
+                    last.point.x + (offset - last.point.y).quant_ceil(
+                        self.subwave.period,
+                        self.subwave.offset
+                    )
                 ).clamp(last.point.x, self.point.x),
             );
 
             let t = (offset - x0) / (x1 - x0);
-            let odd_parity = ((offset - self.subwave.offset) / self.subwave.period).floor() as i32 % 2 != 0;
+            let odd_parity =
+                ((offset - self.subwave.offset) / self.subwave.period).floor() as i32 % 2 != 0;
 
             let (dy0, dy1) =  match self.subwave.mode {
                 SubWaveMode::Step => {(
@@ -233,23 +242,14 @@ impl Anchor {
     }
 }
 
-impl Seekable for Anchor {
-    type Output = f32;
+impl Quantify for Anchor {
     type Quantifier = f32;
 
     fn quantify(&self) -> f32 {
         self.point.x
     }
+}
 
-    fn exhibit(&self, t: f32, seeker: &Seeker<Self>) -> Self {
-        if seeker.over_run() | self.under_run() {
-            self.y
-        }
-        else {
-            self.interp(
-                seeker.vec()[seeker.index() - 1],
-                t
-            )
-        }
-    }
+impl<'a> Exhibit for Seeker<'a, Anchor> {
+    type Output = f32;
 }

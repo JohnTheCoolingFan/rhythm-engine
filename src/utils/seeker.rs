@@ -1,7 +1,7 @@
 //for values to seek over
 pub trait Quantify {
     type Quantifier: PartialOrd;
-    
+
     fn quantify(&self) -> Self::Quantifier;
 }
 
@@ -9,44 +9,44 @@ pub trait Quantify {
 pub trait Exhibit {
     type Source: Quantify;
     type Output;
-    
-    fn exhibit(
-        &self, 
-        t: <Self::Source as Quantify>::Quantifier
-    ) -> Self::Output;
+
+    fn exhibit(&self, t: <Self::Source as Quantify>::Quantifier) -> Self::Output;
 }
 
 //for seeker of values
-pub trait Seek: Exhibit { 
+pub trait Seek: Exhibit {
     fn index(&self) -> usize;
     fn over_run(&self) -> bool;
     fn under_run(&self) -> bool;
     fn get(&self) -> &Self::Source;
-    fn seek(
-        &mut self,
-        offset: <Self::Source as Quantify>::Quantifier
-    ) -> Self::Output;
-    fn jump(
-        &mut self,
-        offset: <Self::Source as Quantify>::Quantifier
-    ) -> Self::Output;
+    fn seek(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output;
+    fn jump(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output;
 }
 
 //for collection of seekable values
 pub trait SeekExtensions<'a> {
-    type Seeker: Exhibit;
+    type Seeker: Seek;
 
     fn se_insert(&mut self, item: <Self::Seeker as Exhibit>::Source);
     fn se_remove(&mut self, index: usize) -> Result<<Self::Seeker as Exhibit>::Source, usize>;
     fn seeker(&'a self) -> Self::Seeker;
 }
+
+//for super types that have a primative seekable container within them that alter the yielded values
+pub trait MetaSeek {
+    type Leader: Seek;
+    type Meta: Copy;
+    type Output;
+
+    fn leader(&self) -> Self::Leader;
+    fn meta(&self) -> Meta;
+}
 //
 //
 //
 //
 //
-pub struct Epoch<Value>
-{
+pub struct Epoch<Value> {
     pub time: f32,
     pub val: Value,
 }
@@ -78,15 +78,15 @@ where
 //
 //
 //
-pub struct VecSeeker<'a, Item>
+pub struct Seeker<'a, Item>
 where
-    Item: Quantify
+    Item: Quantify,
 {
     index: usize,
     vec: &'a Vec<Item>,
 }
 
-impl<'a, Item> Seek for VecSeeker<'a, Item>
+impl<'a, Item> Seek for Seeker<'a, Item>
 where
     Item: Quantify,
     Self: Exhibit<Source = Item>,
@@ -145,9 +145,9 @@ where
 //
 impl<'a, T: 'a + Quantify> SeekExtensions<'a> for Vec<T>
 where
-    VecSeeker<'a, T>: Exhibit<Source = T>
+    Seeker<'a, T>: Exhibit<Source = T>,
 {
-    type Seeker = VecSeeker<'a, T>;
+    type Seeker = Seeker<'a, T>;
 
     fn se_insert(&mut self, item: T) {
         self.insert(
