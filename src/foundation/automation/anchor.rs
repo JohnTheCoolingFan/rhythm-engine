@@ -188,19 +188,25 @@ impl Anchor {
         } else {
             //really not sure of a better way to format this
             let (x0, x1) = (
-                (
-                    last.point.x + (offset - last.point.x).quant_floor(
+                (last.point.x + (offset - last.point.x)
+                    .quant_floor(
                         self.subwave.period,
                         self.subwave.offset
                     )
-                ).clamp(last.point.x, self.point.x),
+                ).clamp(
+                    last.point.x,
+                    self.point.x
+                ),
 
-                (
-                    last.point.x + (offset - last.point.y).quant_ceil(
+                (last.point.x + (offset - last.point.y)
+                    .quant_ceil(
                         self.subwave.period,
                         self.subwave.offset
                     )
-                ).clamp(last.point.x, self.point.x),
+                ).clamp(
+                    last.point.x,
+                    self.point.x
+                ),
             );
 
             let t = (offset - x0) / (x1 - x0);

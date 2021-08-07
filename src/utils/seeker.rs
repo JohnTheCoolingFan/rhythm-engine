@@ -5,7 +5,7 @@ pub trait Quantify {
     fn quantify(&self) -> Self::Quantifier;
 }
 
-//for seeker of values
+//for seeker
 pub trait Exhibit {
     type Source: Quantify;
     type Output;
@@ -13,33 +13,22 @@ pub trait Exhibit {
     fn exhibit(&self, t: <Self::Source as Quantify>::Quantifier) -> Self::Output;
 }
 
-//for seeker of values
 pub trait Seek: Exhibit {
-    fn index(&self) -> usize;
-    fn over_run(&self) -> bool;
-    fn under_run(&self) -> bool;
-    fn get(&self) -> &Self::Source;
     fn seek(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output;
     fn jump(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output;
 }
 
 //for collection of seekable values
-pub trait SeekExtensions<'a> {
+pub trait Seekable<'a> {
     type Seeker: Seek;
-
-    fn se_insert(&mut self, item: <Self::Seeker as Exhibit>::Source);
-    fn se_remove(&mut self, index: usize) -> Result<<Self::Seeker as Exhibit>::Source, usize>;
+    
     fn seeker(&'a self) -> Self::Seeker;
 }
 
-//for super types that have a primative seekable container within them that alter the yielded values
-pub trait MetaSeek {
-    type Leader: Seek;
-    type Meta: Copy;
-    type Output;
-
-    fn leader(&self) -> Self::Leader;
-    fn meta(&self) -> Meta;
+pub trait SeekExtensions
+{
+    type Item: Quantify;
+    fn quantified_insert(&mut self, item: Self::Item);
 }
 //
 //
@@ -78,98 +67,86 @@ where
 //
 //
 //
-pub struct Seeker<'a, Item>
+pub struct Seeker<Data, Meta>
 where
-    Item: Quantify,
 {
-    index: usize,
-    vec: &'a Vec<Item>,
+    data: Data, //unchanging
+    meta: Meta, //changign
 }
 
-impl<'a, Item> Seek for Seeker<'a, Item>
+impl<'a, Item> Seeker<&'a Vec<Item>, usize>
 where
     Item: Quantify,
     Self: Exhibit<Source = Item>,
 {
-    fn index(&self) -> usize {
-        self.index
-    }
-
     fn over_run(&self) -> bool {
-        self.vec.len() <= self.index
+        self.data.len() <= self.meta
     }
-
+    
     fn under_run(&self) -> bool {
-        self.index == 0
+        self.meta == 0
     }
+}
 
-    fn get(&self) -> &Self::Source {
-        &self.vec[if self.over_run() {
-            self.vec.len() - 1
-        } else {
-            self.index
-        }]
-    }
-
+impl<'a, Item> Seek for Seeker<&'a Vec<Item>, usize>
+where
+    Item: Quantify,
+    Self: Exhibit<Source = Item>,
+{
     fn seek(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output {
-        while self.index < self.vec.len() {
-            if offset < self.vec[self.index].quantify() {
+        while self.meta < self.data.len() {
+            if offset < self.data[self.meta].quantify() {
                 break;
             }
-            self.index += 1;
+            self.meta += 1;
         }
         self.exhibit(offset)
     }
 
     fn jump(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output {
-        self.index = match self
-            .vec
+        self.meta = match self
+            .data
             .binary_search_by(|elem| elem.quantify().partial_cmp(&offset).unwrap())
         {
             Ok(index) => index,
             Err(index) => {
-                if self.vec.len() < index {
+                if self.data.len() < index {
                     index
                 } else {
-                    self.vec.len()
+                    self.data.len()
                 }
             }
         };
         self.exhibit(offset)
     }
 }
-//
-//
-//
-//
-//
-impl<'a, T: 'a + Quantify> SeekExtensions<'a> for Vec<T>
-where
-    Seeker<'a, T>: Exhibit<Source = T>,
-{
-    type Seeker = Seeker<'a, T>;
 
-    fn se_insert(&mut self, item: T) {
+impl <'a, Item> Seekable<'a> for Vec<Item>
+where
+    Item: Quantify + 'a,
+    Seeker<&'a Vec<Item>, usize>: Exhibit<Source = Item>,
+{
+    type Seeker = Seeker<&'a Vec<Item>, usize>;
+    
+    fn seeker(&'a self) -> Self::Seeker {
+        Self::Seeker {
+            meta: 0,
+            data: &self
+        }
+    }
+}
+
+impl<T> SeekExtensions for Vec<T>
+where
+    T: Quantify,
+{
+    type Item = T;
+    fn quantified_insert(&mut self, item: T) {
         self.insert(
             match self.binary_search_by(|a| a.quantify().partial_cmp(&item.quantify()).unwrap()) {
                 Ok(index) | Err(index) => index,
             },
             item,
         );
-    }
-
-    fn se_remove(&mut self, index: usize) -> Result<T, usize> {
-        if index < self.len() {
-            Ok(self.remove(index))
-        } else {
-            Err(index)
-        }
-    }
-
-    fn seeker(&'a self) -> Self::Seeker {
-        Self::Seeker {
-            index: 0,
-            vec: &self,
-        }
     }
 }
