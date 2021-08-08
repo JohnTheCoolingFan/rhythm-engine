@@ -12,7 +12,7 @@ libm = ["glam/libm"]
 
 [dependencies]
 glam = { version = "0.13.0", default-features = false, features = ["mint"] }
-ggez = { git = "https://github.com/ggez/ggez", branch = "devel" }
+ggez = "0.6.0" #{ git = "https://github.com/ggez/ggez", branch = "devel" }
 lyon_geom = "0.17.0"
 duplicate = "0.3"
 undo = "0.46.2"

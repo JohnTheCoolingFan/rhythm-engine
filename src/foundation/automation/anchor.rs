@@ -1,4 +1,4 @@
-use crate::utils::{math::*, seeker::*};
+use crate::utils::{math::*, seeker::*, misc::*};
 use glam::Vec2;
 
 #[derive(Debug, Copy, Clone)]
@@ -23,7 +23,7 @@ impl Weight {
 
     pub fn set_power(&mut self, new: f32) -> Result<f32, ()> {
         match self {
-            Self::QuadLike(ref power) | Self::CubeLike(ref power) => {
+            Self::QuadLike(ref mut power) | Self::CubeLike(ref mut power) => {
                 let old = *power;
                 *power = new.clamp(-30., 30.);
                 Ok(old)
@@ -33,8 +33,8 @@ impl Weight {
     }
 
     pub fn shift_power(&mut self, shift: f32) -> Result<f32, ()> {
-        if let Self::QuadLike(power) | Self::CubeLike(power) = self {
-            self.set_power(shift + *power)
+        if let Self::QuadLike(power) | Self::CubeLike(power) = *self {
+            self.set_power(shift + power)
         } else {
             Err(())
         }
@@ -42,7 +42,8 @@ impl Weight {
 
     #[rustfmt::skip]
     pub fn eval(&self, t: f32) -> f32 {
-        debug_assert!(0. <= t && t <= 1., "t out of bounds");
+        println!("t: {}", t);
+        debug_assert!((0.0..=1.0).contains(&t), "t out of bounds");
 
         match self {
             Self::ForwardBias => 1.,
@@ -150,7 +151,7 @@ pub struct Anchor {
 
 impl Anchor {
     pub fn new(p: Vec2) -> Self {
-        debug_assert!(0. <= p.y && p.y <= 1., "anchor point y out of range");
+        debug_assert!((0.0..=1.0).contains(&p.y), "anchor point y out of range");
         Self {
             point: p,
             weight: Weight::QuadLike(0.),
@@ -166,88 +167,12 @@ impl Anchor {
     pub fn point(&self) -> &Vec2 {
         &self.point
     }
-
-
-    #[rustfmt::skip]
-    pub fn interp(&self, last: &Self, offset: f32) -> f32 {
-        //must take last point and raw offset instead of t
-        //otherwise quantizing would have to be done by caller
-        debug_assert!(last.point.x <= self.point.x, "self < last");
-        debug_assert!(
-            last.point.x <= offset && offset <= self.point.x,
-            "offset out of bounds"
-        );
-
-        let dy = self.point.y - last.point.y;
-
-        if let SubWaveMode::Off = self.subwave.mode {
-            last.point.y
-                + dy * self
-                    .weight
-                    .eval((offset - last.point.x) / (self.point.x - last.point.x))
-        } else {
-            //really not sure of a better way to format this
-            let (x0, x1) = (
-                (last.point.x + (offset - last.point.x)
-                    .quant_floor(
-                        self.subwave.period,
-                        self.subwave.offset
-                    )
-                ).clamp(
-                    last.point.x,
-                    self.point.x
-                ),
-
-                (last.point.x + (offset - last.point.y)
-                    .quant_ceil(
-                        self.subwave.period,
-                        self.subwave.offset
-                    )
-                ).clamp(
-                    last.point.x,
-                    self.point.x
-                ),
-            );
-
-            let t = (offset - x0) / (x1 - x0);
-            let odd_parity =
-                ((offset - self.subwave.offset) / self.subwave.period).floor() as i32 % 2 != 0;
-
-            let (dy0, dy1) =  match self.subwave.mode {
-                SubWaveMode::Step => {(
-                    dy * self.weight.eval(x0),
-                    dy * self.weight.eval(x1)
-                )},
-                SubWaveMode::Hop { alternate } => {
-                    if alternate && odd_parity {(
-                        dy * self.weight.eval(x0),
-                        0.
-                    )} else {(
-                        0.,
-                        dy * self.weight.eval(x1)
-                    )}
-                },
-                SubWaveMode::Oscilate { alternate } => {
-                    let h0 = dy * self.weight.eval(x0);
-                    let h1 = dy * self.weight.eval(x1);
-
-                    if alternate && odd_parity {(
-                        (dy - h0) * 0.5 + h0,
-                        (dy - h1) * 0.5
-                    )}
-                    else {(
-                        (dy - h0) * 0.5,
-                        (dy - h1) * 0.5 + h1
-                    )}
-                },
-                _ => unreachable!()
-            };
-
-            last.point.y + dy0 + (dy1 - dy0) * self.subwave.weight.eval(t)
-        }
-    }
 }
-
+//
+//
+//
+//
+//
 impl Quantify for Anchor {
     type Quantifier = f32;
 
@@ -256,6 +181,88 @@ impl Quantify for Anchor {
     }
 }
 
-impl<'a> Exhibit for Seeker<'a, Anchor> {
+impl <'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> {
+    type Source = Anchor;
     type Output = f32;
+
+    #[rustfmt::skip]
+    fn exhibit(&self, offset: f32) -> f32 {
+        if self.over_run() {
+            self.vec()[FromEnd(0)].point.y
+        }
+        else if self.under_run() {
+            self.vec()[0].point.y
+        }
+        else {
+            let end = self.vec()[self.index()];
+            let start = self.vec()[self.index() - 1];
+
+            let dy = end.point.y - start.point.y;
+            if let SubWaveMode::Off = end.subwave.mode {
+                start.point.y
+                    + dy * end
+                        .weight
+                        .eval((offset - start.point.x) / (end.point.x - start.point.x))
+            } else {
+                //really not sure of a better way to format this
+                let (x0, x1) = (
+                    (start.point.x + (offset - start.point.x)
+                        .quant_floor(
+                            end.subwave.period,
+                            end.subwave.offset
+                        )
+                    ).clamp(
+                        start.point.x,
+                        end.point.x
+                    ),
+
+                    (start.point.x + (offset - start.point.y)
+                        .quant_ceil(
+                            end.subwave.period,
+                            end.subwave.offset
+                        )
+                    ).clamp(
+                        start.point.x,
+                        end.point.x
+                    ),
+                );
+
+                let t = (offset - x0) / (x1 - x0);
+                let odd_parity =
+                    ((offset - end.subwave.offset) / end.subwave.period).floor() as i32 % 2 != 0;
+
+                let (dy0, dy1) =  match end.subwave.mode {
+                    SubWaveMode::Step => {(
+                        dy * end.weight.eval(x0),
+                        dy * end.weight.eval(x1)
+                    )},
+                    SubWaveMode::Hop { alternate } => {
+                        if alternate && odd_parity {(
+                            dy * end.weight.eval(x0),
+                            0.
+                        )} else {(
+                            0.,
+                            dy * end.weight.eval(x1)
+                        )}
+                    },
+                    SubWaveMode::Oscilate { alternate } => {
+                        let h0 = dy * end.weight.eval(x0);
+                        let h1 = dy * end.weight.eval(x1);
+
+                        if alternate && odd_parity {(
+                            (dy - h0) * 0.5 + h0,
+                            (dy - h1) * 0.5
+                        )}
+                        else {(
+                            (dy - h0) * 0.5,
+                            (dy - h1) * 0.5 + h1
+                        )}
+                    },
+                    _ => unreachable!()
+                };
+
+                start.point.y + dy0 + (dy1 - dy0) * end.subwave.weight.eval(t)
+            }
+        } 
+    }
 }

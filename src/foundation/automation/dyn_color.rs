@@ -5,8 +5,8 @@ type Color = ggez::graphics::Color;
 
 pub struct DynColor {
     pub automation: Automation,
-    upper_colors: Vec<SimpleAnchor<Color>>,
-    lower_colors: Vec<SimpleAnchor<Color>>,
+    upper_colors: Vec<Epoch<Color>>,
+    lower_colors: Vec<Epoch<Color>>,
 }
 
 impl DynColor {
@@ -18,71 +18,16 @@ impl DynColor {
         }
     }
 
-    fn insert(vec: &mut Vec<SimpleAnchor<Color>>, anch: SimpleAnchor<Color>) {
-        vec.insert(
-            match vec.binary_search_by(|anch| anch.offset.partial_cmp(&anch.offset).unwrap()) {
-                Ok(index) => index,
-                Err(index) => index,
-            },
-            anch,
-        );
+    pub fn insert_upper(&mut self, anch: Epoch<Color>) {
+        self.upper_colors.quantified_insert(anch);
     }
 
-    pub fn insert_upper(&mut self, anch: SimpleAnchor<Color>) {
-        Self::insert(&mut self.upper_colors, anch);
-    }
-
-    pub fn insert_lower(&mut self, anch: SimpleAnchor<Color>) {
-        Self::insert(&mut self.lower_colors, anch);
+    pub fn insert_lower(&mut self, anch: Epoch<Color>) {
+        self.lower_colors.quantified_insert(anch);
     }
 }
 
-pub struct DynColorSeeker<'a> {
-    upper_seeker: <Vec<SimpleAnchor<Color>> as Seekable<'a>>::SeekerType,
-    lower_seeker: <Vec<SimpleAnchor<Color>> as Seekable<'a>>::SeekerType,
-    automation_seeker: automation::AutomationSeeker<'a>,
-    dyncolor: &'a DynColor,
-}
-
-impl<'a> DynColorSeeker<'a> {
-    fn interp(&self, t: f32) -> Color {
-        let c1 = self.upper_seeker.val();
-        let c2 = self.lower_seeker.val();
-
-        Color::new(
-            (c2.r - c1.r) * t + c1.r,
-            (c2.g - c1.g) * t + c1.g,
-            (c2.b - c1.b) * t + c1.b,
-            (c2.a - c1.a) * t + c1.a,
-        )
-    }
-}
-
-impl<'a> Seeker<Color> for DynColorSeeker<'a> {
-    #[duplicate(method; [seek]; [jump])]
-    fn method(&mut self, offset: f32) -> Color {
-        self.upper_seeker.method(offset);
-        self.lower_seeker.method(offset);
-
-        let y = self.automation_seeker.method(offset);
-        self.interp(y)
-    }
-}
-
-impl<'a> Seekable<'a> for DynColor {
-    type Output = Color;
-    type SeekerType = DynColorSeeker<'a>;
-    fn seeker(&'a self) -> Self::SeekerType {
-        Self::SeekerType {
-            upper_seeker: self.upper_colors.seeker(),
-            lower_seeker: self.lower_colors.seeker(),
-            automation_seeker: self.automation.seeker(),
-            dyncolor: &self,
-        }
-    }
-}
-
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     mod graficks {
         use ggez::graphics::Color;
@@ -250,4 +195,4 @@ mod tests {
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
     }
-}
+}*/

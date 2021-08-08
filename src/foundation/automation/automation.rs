@@ -1,7 +1,8 @@
 use crate::foundation::automation::anchor::*;
-use crate::utils::{misc::*, seeker::*};
+use crate::utils::seeker::*;
 use glam::Vec2;
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
+use duplicate::duplicate;
 
 pub struct Automation {
     pub upper_bound: f32,
@@ -14,6 +15,12 @@ impl Index<usize> for Automation {
 
     fn index(&self, n: usize) -> &Self::Output {
         &self.anchors[n]
+    }
+}
+
+impl IndexMut<usize> for Automation {
+    fn index_mut(&mut self, n: usize) -> &mut Anchor {
+        &mut self.anchors[n]
     }
 }
 
@@ -35,17 +42,8 @@ impl Automation {
         self.anchors.len()
     }
 
-    pub fn insert(&mut self, anch: Anchor) {
-        self.anchors.insert(
-            match self
-                .anchors
-                .binary_search_by(|elem| elem.point().x.partial_cmp(&anch.point().x).unwrap())
-            {
-                Ok(index) => index,
-                Err(index) => index,
-            },
-            anch,
-        );
+    pub fn insert(&mut self, anch: Anchor) -> usize {
+        self.anchors.quantified_insert(anch)
     }
 
     pub fn remove(&mut self, index: usize) -> Anchor {
@@ -69,96 +67,66 @@ impl Automation {
     }
 
     pub fn set_pos(&mut self, index: usize, mut point: Vec2) -> Vec2 {
+        debug_assert!(index < self.anchors.len(), "out of bounds index");
         let old = *self.anchors[index].point();
         let minx = if index == 0 {
             0.
         } else {
             self.anchors[index - 1].point().x
         };
-        let maxx = if self.anchors.len() - index == 1 {
-            self.anchors[FromEnd(0)].point().x
+        let maxx = if self.anchors.len() - index <= 1 {
+            f32::MAX
         } else {
-            self.anchors[index + 1].point().x
+            self.anchors[index + 1].point.x
         };
 
         point.x = point.x.clamp(minx, maxx);
         point.y = point.y.clamp(0., 1.);
-        *self.anchors[index].point() = point;
+        self.anchors[index].point = point;
         old
     }
 }
+//
+//
+//
+//
+//
+type AnchVecSeeker<'a> = <Vec<Anchor> as Seekable<'a>>::Seeker;
+type AutomationSeeker<'a> = Seeker<(f32, f32), AnchVecSeeker<'a>>;
 
-pub struct AutomationSeeker<'a> {
-    index: usize,
-    automation: &'a Automation,
-}
+impl<'a> Exhibit for AutomationSeeker<'a> {
+    type Source = Anchor;
+    type Output = f32;
 
-impl<'a> AutomationSeeker<'a> {
-    //lower bound upper bound val
-    fn from_y(&self, y: f32) -> f32 {
-        debug_assert!(0. <= y && y <= 1.);
-        self.automation.lower_bound
-            + (self.automation.upper_bound - self.automation.lower_bound) * y
-    }
-
-    #[rustfmt::skip]
-    pub fn interp(&self, offset: f32) -> f32 {
-        self.from_y(
-            if 0 == self.index {
-                self.automation.anchors[0].point().y
-            } else if self.index == self.automation.anchors.len() {
-                let anch = &self.automation.anchors[FromEnd(0)];
-                match anch.weight {
-                    Weight::ReverseBias => self.automation.anchors[FromEnd(1)].point.y,
-                    _ => anch.point.y,
-                }
-            } else {
-                self.automation.anchors[self.index].interp(&self.automation.anchors[self.index - 1], offset)
-            }
-        )
+    fn exhibit(&self, t: f32) -> f32 {
+        let (lb, ub) = self.data;
+        lb + (ub - lb) * self.meta.get(t)
     }
 }
 
-impl<'a> Seeker<f32> for AutomationSeeker<'a> {
-    fn seek(&mut self, offset: f32) -> f32 {
-        while self.index < self.automation.anchors.len() {
-            if offset < self.automation.anchors[self.index].point.x {
-                break;
-            }
-            self.index += 1;
-        }
-        self.interp(offset)
-    }
-
-    fn jump(&mut self, offset: f32) -> f32 {
-        match self
-            .automation
-            .anchors
-            .binary_search_by(|t| t.point.x.partial_cmp(&offset).unwrap())
-        {
-            Ok(index) => {
-                self.index = index;
-                self.from_y(self.automation.anchors[index].point.y)
-            }
-            Err(index) => {
-                self.index = index;
-                self.interp(offset)
-            }
-        }
+impl<'a> Seek for AutomationSeeker<'a> {
+    #[duplicate(method; [seek]; [jump])]
+    fn method(&mut self, offset: f32) -> f32 {
+        self.meta.method(offset);
+        self.exhibit(offset)
     }
 }
 
 impl<'a> Seekable<'a> for Automation {
-    type Output = f32;
-    type SeekerType = AutomationSeeker<'a>;
-    fn seeker(&'a self) -> Self::SeekerType {
-        Self::SeekerType {
-            index: 0,
-            automation: &self,
+    type Seeker = AutomationSeeker<'a>;
+
+    fn seeker(&'a self) -> Self::Seeker {
+        Self::Seeker {
+            meta: self.anchors.seeker(),
+            data: (self.upper_bound, self.lower_bound)
         }
     }
 }
-
+//
+//
+//
+//
+//
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,7 +135,7 @@ mod tests {
         graphics::*,
         input::keyboard::is_key_pressed,
     };
-    use ggez::{Context, GameResult};
+    use ggez::{Context, GameResult, GameError};
 
     struct Test {
         automation: Automation,
@@ -183,7 +151,7 @@ mod tests {
         }
     }
 
-    impl EventHandler for Test {
+    impl EventHandler<GameError> for Test {
         fn update(&mut self, _ctx: &mut Context) -> GameResult {
             Ok(())
         }
@@ -207,7 +175,8 @@ mod tests {
                 .map(|x| {
                     Vec2::new(
                         (x as f32 / res as f32) * self.dimensions.x,
-                        seeker.seek((x as f32 / res as f32) * self.dimensions.x)
+                        self.dimensions.y 
+                        - seeker.seek((x as f32 / res as f32) * self.dimensions.x)
                             * self.dimensions.y,
                     )
                 })
@@ -242,7 +211,12 @@ mod tests {
                         .insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
                 }
                 MouseButton::Middle => {
-                    self.automation[index].weight.cycle();
+                    if is_key_pressed(ctx, event::KeyCode::LShift) {
+                        self.automation[index].subwave.mode.cycle();
+                    }
+                    else {
+                        self.automation[index].weight.cycle();
+                    }
                 }
                 MouseButton::Right => {
                     self.automation.remove(index);
@@ -259,11 +233,12 @@ mod tests {
                 self.automation[index]
                     .subwave
                     .shift_period(if 0. < y { 10. } else { -10. });
-            } else {
-                self.automation[index]
-                    .weight
-                    .shift_power(if 0. < y { 0.05 } else { -0.05 })
-                    .unwrap();
+            } else if self.automation[index]
+                .weight
+                .shift_power(if 0. < y { 0.05 } else { -0.05 })
+                .is_err()
+            {
+                println!("no power for this wave type");
             }
         }
     }

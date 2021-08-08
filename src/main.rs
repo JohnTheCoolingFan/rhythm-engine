@@ -4,18 +4,18 @@ mod utils;
 
 use ggez::event;
 use ggez::graphics::{self, Color};
-use ggez::{Context, GameResult};
+use ggez::{Context, GameError, GameResult};
 use glam::*;
 
 struct MainState {}
 
 impl MainState {
-    fn new() -> GameResult<MainState> {
-        Ok(MainState {})
+    fn new() -> MainState {
+        MainState {}
     }
 }
 
-impl event::EventHandler for MainState {
+impl event::EventHandler<GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
         Ok(())
     }
@@ -43,6 +43,6 @@ pub fn main() -> GameResult {
     let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese")
         .window_mode(ggez::conf::WindowMode::default().dimensions(1920., 1080.));
     let (ctx, event_loop) = cb.build()?;
-    let state = MainState::new()?;
+    let state = MainState::new();
     event::run(ctx, event_loop, state)
 }

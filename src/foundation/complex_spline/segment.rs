@@ -39,7 +39,7 @@ impl Ctrl {
 pub struct Segment {
     pub ctrls: Ctrl,
     pub tolerence: f32,
-    lut: Vec<SimpleAnchor<Vec2>>,
+    lut: Vec<Epoch<Vec2>>,
 }
 
 impl Segment {

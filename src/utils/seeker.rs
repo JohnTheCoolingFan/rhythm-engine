@@ -7,7 +7,7 @@ pub trait Quantify {
 
 //for seeker
 pub trait Exhibit {
-    type Source: Quantify;
+    type Source: Quantify; //in case of meta seekers this is the leader
     type Output;
 
     fn exhibit(&self, t: <Self::Source as Quantify>::Quantifier) -> Self::Output;
@@ -28,7 +28,8 @@ pub trait Seekable<'a> {
 pub trait SeekExtensions
 {
     type Item: Quantify;
-    fn quantified_insert(&mut self, item: Self::Item);
+
+    fn quantified_insert(&mut self, item: Self::Item) -> usize;
 }
 //
 //
@@ -70,8 +71,8 @@ where
 pub struct Seeker<Data, Meta>
 where
 {
-    data: Data, //unchanging
-    meta: Meta, //changign
+    pub data: Data, //unchanging
+    pub meta: Meta, //changign
 }
 
 impl<'a, Item> Seeker<&'a Vec<Item>, usize>
@@ -79,11 +80,23 @@ where
     Item: Quantify,
     Self: Exhibit<Source = Item>,
 {
-    fn over_run(&self) -> bool {
+    pub fn index(&self) -> usize {
+        self.meta
+    }
+
+    pub fn vec(&self) -> &Vec<Item> {
+        &self.data
+    }
+
+    pub fn get(&self, t: Item::Quantifier) -> <Self as Exhibit>::Output {
+        self.exhibit(t)
+    }
+
+    pub fn over_run(&self) -> bool {
         self.data.len() <= self.meta
     }
     
-    fn under_run(&self) -> bool {
+    pub fn under_run(&self) -> bool {
         self.meta == 0
     }
 }
@@ -141,12 +154,11 @@ where
     T: Quantify,
 {
     type Item = T;
-    fn quantified_insert(&mut self, item: T) {
-        self.insert(
-            match self.binary_search_by(|a| a.quantify().partial_cmp(&item.quantify()).unwrap()) {
-                Ok(index) | Err(index) => index,
-            },
-            item,
-        );
+    fn quantified_insert(&mut self, item: T) -> usize {
+        let index = match self.binary_search_by(|a| a.quantify().partial_cmp(&item.quantify()).unwrap()) {
+            Ok(index) | Err(index) => index,
+        };
+        self.insert(index, item);
+        index
     }
 }
