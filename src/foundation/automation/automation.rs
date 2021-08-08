@@ -94,21 +94,16 @@ impl Automation {
 type AnchVecSeeker<'a> = <Vec<Anchor> as Seekable<'a>>::Seeker;
 type AutomationSeeker<'a> = Seeker<(f32, f32), AnchVecSeeker<'a>>;
 
-impl<'a> Exhibit for AutomationSeeker<'a> {
+impl<'a> SeekerTypes for AutomationSeeker<'a> {
     type Source = Anchor;
     type Output = f32;
-
-    fn exhibit(&self, t: f32) -> f32 {
-        let (lb, ub) = self.data;
-        lb + (ub - lb) * self.meta.get(t)
-    }
 }
 
 impl<'a> Seek for AutomationSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> f32 {
-        self.meta.method(offset);
-        self.exhibit(offset)
+        let (lb, ub) = self.data;
+        lb + (ub - lb) * self.meta.method(offset)
     }
 }
 

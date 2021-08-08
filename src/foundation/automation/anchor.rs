@@ -42,7 +42,6 @@ impl Weight {
 
     #[rustfmt::skip]
     pub fn eval(&self, t: f32) -> f32 {
-        println!("t: {}", t);
         debug_assert!((0.0..=1.0).contains(&t), "t out of bounds");
 
         match self {
@@ -181,10 +180,12 @@ impl Quantify for Anchor {
     }
 }
 
-impl <'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> {
+impl<'a> SeekerTypes for Seeker<&'a Vec<Anchor>, usize> {
     type Source = Anchor;
     type Output = f32;
+}
 
+impl<'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> { 
     #[rustfmt::skip]
     fn exhibit(&self, offset: f32) -> f32 {
         if self.over_run() {
@@ -263,6 +264,6 @@ impl <'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> {
 
                 start.point.y + dy0 + (dy1 - dy0) * end.subwave.weight.eval(t)
             }
-        } 
+        }
     }
 }

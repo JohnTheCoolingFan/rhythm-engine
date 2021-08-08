@@ -6,14 +6,15 @@ pub trait Quantify {
 }
 
 //for seeker
-pub trait Exhibit {
+pub trait SeekerTypes {
     type Source: Quantify; //in case of meta seekers this is the leader
     type Output;
-
+}
+pub trait Exhibit: SeekerTypes {
     fn exhibit(&self, t: <Self::Source as Quantify>::Quantifier) -> Self::Output;
 }
 
-pub trait Seek: Exhibit {
+pub trait Seek: SeekerTypes {
     fn seek(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output;
     fn jump(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output;
 }
@@ -87,11 +88,7 @@ where
     pub fn vec(&self) -> &Vec<Item> {
         &self.data
     }
-
-    pub fn get(&self, t: Item::Quantifier) -> <Self as Exhibit>::Output {
-        self.exhibit(t)
-    }
-
+ 
     pub fn over_run(&self) -> bool {
         self.data.len() <= self.meta
     }
