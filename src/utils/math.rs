@@ -49,10 +49,20 @@ pub trait Quantize {
 
 impl Quantize for f32 {
     fn quant_floor(&self, period: Self, offset: Self) -> Self {
-        ((self - offset) / period).floor() * period + offset
+        if period == 0. {
+            *self
+        }
+        else {
+            ((self - offset) / period).floor() * period + offset
+        }
     }
     fn quant_ceil(&self, period: Self, offset: Self) -> Self {
-        ((self - offset) / period).ceil() * period + offset
+        if period == 0. {
+            *self
+        }
+        else {
+            ((self - offset) / period).ceil() * period + offset
+        }
     }
 }
 

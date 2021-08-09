@@ -209,6 +209,12 @@ mod tests {
                     if is_key_pressed(ctx, event::KeyCode::LShift) {
                         self.automation[index].subwave.mode.cycle();
                     }
+                    else if is_key_pressed(ctx, event::KeyCode::LControl) {
+                        self.automation[index].subwave.weight.cycle();
+                    }
+                    else if is_key_pressed(ctx, event::KeyCode::LAlt) {
+                        let _ = self.automation[index].subwave.mode.toggle_y_alternate();
+                    }
                     else {
                         self.automation[index].weight.cycle();
                     }
@@ -228,6 +234,12 @@ mod tests {
                 self.automation[index]
                     .subwave
                     .shift_period(if 0. < y { 10. } else { -10. });
+            }
+            else if is_key_pressed(ctx, event::KeyCode::LControl) {
+                let _ = self.automation[index]
+                    .subwave
+                    .weight
+                    .shift_power(if 0. < y { 0.05 } else { -0.05 });
             } else if self.automation[index]
                 .weight
                 .shift_power(if 0. < y { 0.05 } else { -0.05 })

@@ -1,5 +1,6 @@
 use crate::utils::{math::*, seeker::*, misc::*};
 use glam::Vec2;
+use duplicate::duplicate;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Weight {
@@ -42,7 +43,7 @@ impl Weight {
 
     #[rustfmt::skip]
     pub fn eval(&self, t: f32) -> f32 {
-        debug_assert!((0.0..=1.0).contains(&t), "t out of bounds");
+        //debug_assert!((0.0..=1.0).contains(&t), "t out of bounds");
 
         match self {
             Self::ForwardBias => 1.,
@@ -86,8 +87,8 @@ impl Weight {
 pub enum SubWaveMode {
     Off,
     Step,
-    Hop { alternate: bool },
-    Oscilate { alternate: bool },
+    Hop { x_alt: bool, y_alt: bool },
+    Oscilate { x_alt: bool, y_alt: bool },
 }
 
 impl SubWaveMode {
@@ -95,22 +96,29 @@ impl SubWaveMode {
         let old = *self;
         *self = match self {
             Self::Off => Self::Step,
-            Self::Step => Self::Hop { alternate: false },
-            Self::Hop { .. } => Self::Oscilate { alternate: false },
+            Self::Step => Self::Hop { x_alt: false, y_alt: false },
+            Self::Hop { .. } => Self::Oscilate { x_alt: false, y_alt: false },
             Self::Oscilate { .. } => Self::Off,
         };
+        println!("{:?}", self);
         old
     }
 
-    pub fn toggle_alternate(&mut self) -> Result<(), ()> {
+
+    #[duplicate(
+        method                  axis_alt;
+        [toggle_x_alternate]    [x_alt];
+        [toggle_y_alternate]    [y_alt]
+    )]
+    pub fn method(&mut self) -> Result<(), ()> {
         match self {
-            Self::Hop { ref mut alternate } | Self::Oscilate { ref mut alternate } => {
-                *alternate = !*alternate;
+            Self::Hop { ref mut axis_alt, .. } | Self::Oscilate { ref mut axis_alt, .. } => {
+                *axis_alt = !*axis_alt;
                 Ok(())
             }
             _ => Err(()),
         }
-    }
+    } 
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -156,8 +164,8 @@ impl Anchor {
             weight: Weight::QuadLike(0.),
             subwave: SubWave {
                 offset: 0.,
-                period: 0.,
-                weight: Weight::ForwardBias,
+                period: 20.,
+                weight: Weight::QuadLike(1.),
                 mode: SubWaveMode::Off,
             },
         }
@@ -199,58 +207,63 @@ impl<'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> {
             let start = self.vec()[self.index() - 1];
 
             let dy = end.point.y - start.point.y;
+            let dx = end.point.x - start.point.x;
+
+            //really not sure of a better way to format this
+            let (x0, x1) = (
+                start.point.x
+                    + (offset - start.point.x).quant_floor(
+                        end.subwave.period,
+                        end.subwave.offset
+                    ),
+                start.point.x
+                    + (offset - start.point.x).quant_ceil(
+                        end.subwave.period,
+                        end.subwave.offset
+                    )
+            );
+
+
             if let SubWaveMode::Off = end.subwave.mode {
                 start.point.y
-                    + dy * end
-                        .weight
-                        .eval((offset - start.point.x) / (end.point.x - start.point.x))
+                    + dy 
+                    * end.weight.eval((offset - start.point.x) / dx)
+            } else if x0 == x1 {
+                start.point.y
+                    + dy 
+                    * end.weight.eval((offset - start.point.x) / dx)
             } else {
-                //really not sure of a better way to format this
-                let (x0, x1) = (
-                    (start.point.x + (offset - start.point.x)
-                        .quant_floor(
-                            end.subwave.period,
-                            end.subwave.offset
-                        )
-                    ).clamp(
-                        start.point.x,
-                        end.point.x
-                    ),
-
-                    (start.point.x + (offset - start.point.y)
-                        .quant_ceil(
-                            end.subwave.period,
-                            end.subwave.offset
-                        )
-                    ).clamp(
-                        start.point.x,
-                        end.point.x
-                    ),
-                );
-
+                
                 let t = (offset - x0) / (x1 - x0);
-                let odd_parity =
-                    ((offset - end.subwave.offset) / end.subwave.period).floor() as i32 % 2 != 0;
+
+                let t0 = (x0 - start.point.x) / dx;
+                let t1 = (x1 - start.point.x) / dx;
+
+                //println!("offset {}, x0 {}, x1 {}, t {}, t0 {}, t1 {}", offset, x0, x1, t, t0, t1);
+
+                let odd_parity = (
+                    (offset - end.subwave.offset - start.point.x) / end.subwave.period
+                ).floor() as i32 % 2 != 0;
 
                 let (dy0, dy1) =  match end.subwave.mode {
                     SubWaveMode::Step => {(
-                        dy * end.weight.eval(x0),
-                        dy * end.weight.eval(x1)
+                        dy * end.weight.eval(t0),
+                        dy * end.weight.eval(t1)
                     )},
-                    SubWaveMode::Hop { alternate } => {
-                        if alternate && odd_parity {(
-                            dy * end.weight.eval(x0),
+                    SubWaveMode::Hop { x_alt, y_alt } => {
+                        if y_alt && odd_parity {(
+                            dy * end.weight.eval(t0),
                             0.
                         )} else {(
                             0.,
-                            dy * end.weight.eval(x1)
+                            dy * end.weight.eval(t1)
                         )}
                     },
-                    SubWaveMode::Oscilate { alternate } => {
-                        let h0 = dy * end.weight.eval(x0);
-                        let h1 = dy * end.weight.eval(x1);
+                    SubWaveMode::Oscilate { x_alt, y_alt } => {
+                        let h0 = dy * end.weight.eval(t0);
+                        let h1 = dy * end.weight.eval(t1);
 
-                        if alternate && odd_parity {(
+                        if y_alt && odd_parity {(
                             (dy - h0) * 0.5 + h0,
                             (dy - h1) * 0.5
                         )}
