@@ -42,12 +42,14 @@ impl ScaleAbout for PointT {
     }
 }
 
-pub trait Quantize {
+pub trait FloatUtils {
     fn quant_floor(&self, period: Self, offset: Self) -> Self;
     fn quant_ceil(&self, period: Self, offset: Self) -> Self;
+    fn if_nan(self, backup: Self) -> Self;
+    fn lerp_invert(self) -> Self;
 }
 
-impl Quantize for f32 {
+impl FloatUtils for f32 {
     fn quant_floor(&self, period: Self, offset: Self) -> Self {
         if period == 0. {
             *self
@@ -56,6 +58,7 @@ impl Quantize for f32 {
             ((self - offset) / period).floor() * period + offset
         }
     }
+    
     fn quant_ceil(&self, period: Self, offset: Self) -> Self {
         if period == 0. {
             *self
@@ -64,8 +67,21 @@ impl Quantize for f32 {
             ((self - offset) / period).ceil() * period + offset
         }
     }
-}
 
+    fn if_nan(self, backup: Self) -> Self {
+        if self.is_nan() {
+            backup
+        }
+        else {
+            self
+        }
+    }
+
+    fn lerp_invert(self) -> Self {
+        debug_assert!((0.0..=1.0).contains(&self), "out of bounds lerp val");
+        (1. - self).clamp(0., 1.)
+    }
+}
 /*
  *  THIS NEEDS TO BE RETHOUGHT
  *

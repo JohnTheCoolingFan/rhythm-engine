@@ -165,7 +165,7 @@ mod tests {
             draw(ctx, &circle, (mouse_pos,))?;
 
             let mut seeker = self.automation.seeker();
-            let res = 1000;
+            let res = 2000;
             let points: Vec<Vec2> = (0..res)
                 .map(|x| {
                     Vec2::new(
@@ -202,25 +202,32 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    self.automation
-                        .insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
+                    if is_key_pressed(ctx, event::KeyCode::LShift) {
+                        let _ = self.automation[index].subwave.mode.toggle_x_alternate();
+                    }
+                    else {
+                        self.automation
+                            .insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
+                    }
                 }
                 MouseButton::Middle => {
                     if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.automation[index].subwave.mode.cycle();
-                    }
-                    else if is_key_pressed(ctx, event::KeyCode::LControl) {
                         self.automation[index].subwave.weight.cycle();
                     }
-                    else if is_key_pressed(ctx, event::KeyCode::LAlt) {
-                        let _ = self.automation[index].subwave.mode.toggle_y_alternate();
+                    else if is_key_pressed(ctx, event::KeyCode::LControl) {
+                        self.automation[index].subwave.mode.cycle();
                     }
                     else {
                         self.automation[index].weight.cycle();
                     }
                 }
                 MouseButton::Right => {
-                    self.automation.remove(index);
+                    if is_key_pressed(ctx, event::KeyCode::LShift) {
+                        let _ = self.automation[index].subwave.mode.toggle_y_alternate();
+                    }
+                    else {
+                        self.automation.remove(index);
+                    }
                 }
                 _ => {}
             }
@@ -230,17 +237,23 @@ mod tests {
             let index = self
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            if is_key_pressed(ctx, event::KeyCode::LShift) {
+            if is_key_pressed(ctx, event::KeyCode::LControl) {
                 self.automation[index]
                     .subwave
-                    .shift_period(if 0. < y { 10. } else { -10. });
+                    .shift_period(if 0. < y { 2. } else { -2. });
             }
-            else if is_key_pressed(ctx, event::KeyCode::LControl) {
+            else if is_key_pressed(ctx, event::KeyCode::LShift) {
                 let _ = self.automation[index]
                     .subwave
                     .weight
                     .shift_power(if 0. < y { 0.05 } else { -0.05 });
-            } else if self.automation[index]
+            }
+            else if is_key_pressed(ctx, event::KeyCode::LAlt) {
+                let _ = self.automation[index]
+                    .subwave
+                    .offset += if 0. < y { 2. } else { -2. };
+            }
+            else if self.automation[index]
                 .weight
                 .shift_power(if 0. < y { 0.05 } else { -0.05 })
                 .is_err()
