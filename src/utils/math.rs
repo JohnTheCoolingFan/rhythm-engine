@@ -44,7 +44,6 @@ impl ScaleAbout for PointT {
 
 pub trait FloatUtils {
     fn quant_floor(&self, period: Self, offset: Self) -> Self;
-    fn quant_ceil(&self, period: Self, offset: Self) -> Self;
     fn if_nan(self, backup: Self) -> Self;
     fn lerp_invert(self) -> Self;
 }
@@ -58,16 +57,7 @@ impl FloatUtils for f32 {
             ((self - offset) / period).floor() * period + offset
         }
     }
-    
-    fn quant_ceil(&self, period: Self, offset: Self) -> Self {
-        if period == 0. {
-            *self
-        }
-        else {
-            ((self - offset) / period).ceil() * period + offset
-        }
-    }
-
+     
     fn if_nan(self, backup: Self) -> Self {
         if self.is_nan() {
             backup

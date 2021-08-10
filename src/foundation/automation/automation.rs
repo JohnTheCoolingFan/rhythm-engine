@@ -165,13 +165,13 @@ mod tests {
             draw(ctx, &circle, (mouse_pos,))?;
 
             let mut seeker = self.automation.seeker();
-            let res = 2000;
+            let res = 2800;
             let points: Vec<Vec2> = (0..res)
                 .map(|x| {
                     Vec2::new(
                         (x as f32 / res as f32) * self.dimensions.x,
                         self.dimensions.y 
-                        - seeker.seek((x as f32 / res as f32) * self.dimensions.x)
+                            - seeker.seek((x as f32 / res as f32) * self.dimensions.x)
                             * self.dimensions.y,
                     )
                 })

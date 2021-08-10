@@ -1,5 +1,6 @@
 pub struct FromEnd(pub usize);
 use duplicate::duplicate;
+use std::fmt::Debug;
 
 #[duplicate(itterable; [Vec<T>]; [[T]])]
 impl<T> std::ops::Index<FromEnd> for itterable {
@@ -20,3 +21,12 @@ impl<T> std::ops::IndexMut<FromEnd> for itterable {
         &mut self[len.checked_sub(1 + n).expect("out of range from end")]
     }
 }
+
+pub trait ShortHandDebug: Debug + Copy {
+    fn debug(self, ident: &str) -> Self {
+        println!("{}: {:?}", ident, self);
+        self
+    }
+}
+
+impl<T: Debug + Copy> ShortHandDebug for T {}
