@@ -245,10 +245,10 @@ impl<'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> {
                     (offset - end.subwave.offset - start.point.x) / end.subwave.period
                 ).if_nan(0.).floor() as i32 % 2 != 0;
 
-                let (y0, y1) = match end.subwave.mode {
+                let (dy0, dy1) = match end.subwave.mode {
                     SubWaveMode::Step => (
                         dy * end.weight.eval(t0),
-                        dy * end.weight.eval(t0),
+                        dy * end.weight.eval(t1),
                     ),
                     SubWaveMode::Hop{ .. } => {
                         if x_alt && odd_parity {(
@@ -257,7 +257,7 @@ impl<'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> {
                         )}
                         else {(
                             dy * 0.,
-                            dy * end.weight.eval(t0),
+                            dy * end.weight.eval(t1),
                         )}
                     },
                     SubWaveMode::Oscilate { .. } => {
@@ -276,9 +276,10 @@ impl<'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> {
                     _ => unreachable!()
                 };
 
-                let w = end.subwave.weight.eval( if x_alt && odd_parity { t.lerp_invert() } else { t });
+                let w = end.subwave.weight.checked_eval( if x_alt && odd_parity { t.lerp_invert() } else { t });
 
-                start.point.y + y0 + (y1 - y0) * if y_alt && odd_parity { w.lerp_invert() } else { w }
+                (start.point.y + dy0 + (dy1 - dy0) * if y_alt && odd_parity { w.lerp_invert() } else { w })
+                    .clamp(start.point.y, end.point.y)
             }
         }
     }

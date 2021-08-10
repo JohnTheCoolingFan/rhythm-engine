@@ -126,7 +126,7 @@ impl<'a> Seekable<'a> for Automation {
 mod tests {
     use super::*;
     use ggez::{
-        event::{self, EventHandler, MouseButton},
+        event::{self, EventHandler, MouseButton, KeyCode, KeyMods},
         graphics::*,
         input::keyboard::is_key_pressed,
     };
@@ -202,32 +202,14 @@ mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        let _ = self.automation[index].subwave.mode.toggle_x_alternate();
-                    }
-                    else {
-                        self.automation
-                            .insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
-                    }
+                    self.automation
+                        .insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
                 }
                 MouseButton::Middle => {
-                    if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        self.automation[index].subwave.weight.cycle();
-                    }
-                    else if is_key_pressed(ctx, event::KeyCode::LControl) {
-                        self.automation[index].subwave.mode.cycle();
-                    }
-                    else {
-                        self.automation[index].weight.cycle();
-                    }
+                    self.automation[index].weight.cycle();
                 }
                 MouseButton::Right => {
-                    if is_key_pressed(ctx, event::KeyCode::LShift) {
-                        let _ = self.automation[index].subwave.mode.toggle_y_alternate();
-                    }
-                    else {
-                        self.automation.remove(index);
-                    }
+                    self.automation.remove(index);
                 }
                 _ => {}
             }
@@ -237,28 +219,47 @@ mod tests {
             let index = self
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            if is_key_pressed(ctx, event::KeyCode::LControl) {
-                self.automation[index]
-                    .subwave
-                    .shift_period(if 0. < y { 2. } else { -2. });
-            }
-            else if is_key_pressed(ctx, event::KeyCode::LShift) {
-                let _ = self.automation[index]
-                    .subwave
-                    .weight
-                    .shift_power(if 0. < y { 0.05 } else { -0.05 });
-            }
-            else if is_key_pressed(ctx, event::KeyCode::LAlt) {
-                let _ = self.automation[index]
-                    .subwave
-                    .offset += if 0. < y { 2. } else { -2. };
-            }
-            else if self.automation[index]
+            let _ = self.automation[index]
                 .weight
-                .shift_power(if 0. < y { 0.05 } else { -0.05 })
-                .is_err()
-            {
-                println!("no power for this wave type");
+                .shift_power(if 0. < y { 0.05 } else { -0.05 });
+        }
+
+        fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, mods: KeyMods, _: bool) {
+            let index = self
+                .automation
+                .closest_to(ggez::input::mouse::position(ctx).into());
+            match key {
+                KeyCode::Q => {
+                    let _ =self.automation[index].subwave.mode.toggle_x_alternate();
+                }
+                KeyCode::E => {
+                    let _ = self.automation[index].subwave.mode.toggle_y_alternate();
+                }
+                KeyCode::D => {
+                    self.automation[index].subwave.shift_period(2.);
+                }
+                KeyCode::A => {
+                    self.automation[index].subwave.shift_period(-2.);
+                }
+                KeyCode::W => {
+                    let _ = self.automation[index].subwave.weight.shift_power(2.);
+                }
+                KeyCode::S => {
+                    let _ = self.automation[index].subwave.weight.shift_power(-2.);
+                }
+                KeyCode::Key1 => {
+                    self.automation[index].subwave.offset -= 2.;
+                }
+                KeyCode::Key2 => {
+                    self.automation[index].subwave.offset += 2.;
+                }
+                KeyCode::Key3 => {
+                    self.automation[index].subwave.weight.cycle();
+                }
+                KeyCode::Key4 => {
+                    self.automation[index].subwave.mode.cycle();
+                }
+                _ => (),
             }
         }
     }
