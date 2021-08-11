@@ -1,3 +1,5 @@
+use crate::utils::misc::*;
+
 //for values to seek over
 pub trait Quantify {
     type Quantifier: PartialOrd;
@@ -106,6 +108,27 @@ where
     
     pub fn under_run(&self) -> bool {
         self.meta == 0
+    }
+
+    pub fn current(&self) -> &Item {
+        if self.meta < self.data.len() {
+            &self.data[self.meta]
+        }
+        else {
+            &self.data[FromEnd(0)]
+        }
+    }
+
+    pub fn previous(&self) -> &Item {
+        if 0 == self.meta {
+            &self.data[0]
+        }
+        else if self.data.len() <= self.meta {
+            &self.data[FromEnd(0)]
+        }
+        else {
+            &self.data[self.meta - 1]
+        }
     }
 }
 

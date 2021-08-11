@@ -5,8 +5,8 @@ type Color = ggez::graphics::Color;
 
 pub struct DynColor {
     pub automation: Automation,
-    upper_colors: Vec<Epoch<Color>>,
     lower_colors: Vec<Epoch<Color>>,
+    upper_colors: Vec<Epoch<Color>>, 
 }
 
 impl DynColor {
@@ -31,16 +31,11 @@ type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Color>>;
 
 impl<'a> Exhibit for ColorVecSeeker<'a> {
     fn exhibit(&self, _: f32) -> Color {
-        if self.over_run() {
-            self.vec()[FromEnd(0)].val
-        }
-        else {
-            self.vec()[self.index()].val
-        }
+        self.previous().val
     }
 }
 
-type DynColSeekerMeta<'a> = (ColorVecSeeker<'a>, BPSeeker<'a, Anchor>, ColorVecSeeker<'a>);
+type DynColSeekerMeta<'a> = (BPSeeker<'a, Anchor>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
 pub type DynColorSeeker<'a> = Seeker<(), DynColSeekerMeta<'a>>;
 
 impl<'a> SeekerTypes for DynColorSeeker<'a> {
@@ -51,7 +46,7 @@ impl<'a> SeekerTypes for DynColorSeeker<'a> {
 impl<'a> Seek for DynColorSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> Color {
-        let (lower, anchors, upper) = &mut self.meta;
+        let (anchors, lower, upper) = &mut self.meta;
         let c1 = lower.method(offset);
         let t = anchors.method(offset);
         let c2 = upper.method(offset);
@@ -64,7 +59,22 @@ impl<'a> Seek for DynColorSeeker<'a> {
     }
 }
 
-/*#[cfg(test)]
+impl<'a> Seekable<'a> for DynColor {
+    type Seeker = DynColorSeeker<'a>;
+
+    fn seeker(&'a self) -> Self::Seeker {
+        Self::Seeker {
+            data: (),
+            meta: (
+                self.automation.anchors.seeker(),
+                self.lower_colors.seeker(),
+                self.upper_colors.seeker(),
+            )
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     mod graficks {
         use ggez::graphics::Color;
@@ -72,10 +82,10 @@ mod tests {
     }
     use super::*;
     use ggez::{
-        event::{self, EventHandler, MouseButton},
+        event::{self, EventHandler, MouseButton, KeyCode, KeyMods},
         input::keyboard::is_key_pressed,
         timer::time_since_start,
-        Context, GameResult,
+        Context, GameResult, GameError,
     };
     use glam::Vec2;
     use graficks::*;
@@ -104,7 +114,7 @@ mod tests {
         }
     }
 
-    impl EventHandler for Test {
+    impl EventHandler<GameError> for Test {
         fn update(&mut self, _ctx: &mut Context) -> GameResult {
             Ok(())
         }
@@ -123,7 +133,11 @@ mod tests {
                     col.val,
                 )?;
 
-                draw(ctx, &rect, (Vec2::new(col.offset, 0.),))?;
+                draw(
+                    ctx,
+                    &rect,
+                    (Vec2::new(col.time, self.dimensions.y - 20.),),
+                )?;
             }
 
             for col in &self.color.upper_colors {
@@ -134,11 +148,7 @@ mod tests {
                     col.val,
                 )?;
 
-                draw(
-                    ctx,
-                    &rect,
-                    (Vec2::new(col.offset, self.dimensions.y - 20.),),
-                )?;
+                draw(ctx, &rect, (Vec2::new(col.time, 0.),))?;
             }
 
             let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
@@ -154,11 +164,11 @@ mod tests {
 
             let mut auto_seeker = self.color.automation.seeker();
             let d = self.dimensions;
-            let auto_points: Vec<Vec2> = (0..200)
+            let auto_points: Vec<Vec2> = (0..d.x as i32)
                 .map(|x| {
                     Vec2::new(
-                        (x as f32 / 200.) * d.x,
-                        auto_seeker.seek((x as f32 / 200.) * d.x) * d.y,
+                        (x as f32 / d.x) * d.x,
+                        auto_seeker.seek((x as f32 / d.x) * d.x) * d.y,
                     )
                 })
                 .collect();
@@ -196,10 +206,13 @@ mod tests {
             let index = automation.closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    automation.insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
+                    automation.insert(Anchor::new(Vec2::new(x, (self.dimensions.y - y) / self.dimensions.y)));
                 }
                 MouseButton::Middle => {
                     automation[index].weight.cycle();
+                }
+                MouseButton::Right => {
+                    automation.remove(index);
                 }
                 _ => {}
             }
@@ -210,17 +223,52 @@ mod tests {
                 .color
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            if is_key_pressed(ctx, event::KeyCode::LShift) {
-                self.color.automation[index]
-                    .subwave
-                    .shift_period(if 0. < y { 10. } else { -10. });
-            } else {
-                self.color.automation[index]
-                    .weight
-                    .shift_power(if 0. < y { 0.05 } else { -0.05 })
-                    .unwrap();
+            let _ = self.color
+                .automation[index]
+                .weight
+                .shift_power(if 0. < y { 0.05 } else { -0.05 });
+        }
+
+        fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
+            let index = self.color
+                .automation
+                .closest_to(ggez::input::mouse::position(ctx).into());
+            let automation = &mut self.color.automation;
+            match key {
+                KeyCode::Q => {
+                    let _ = automation[index].subwave.mode.toggle_x_alternate();
+                }
+                KeyCode::E => {
+                    let _ = automation[index].subwave.mode.toggle_y_alternate();
+                }
+                KeyCode::D => {
+                    automation[index].subwave.shift_period(2.);
+                }
+                KeyCode::A => {
+                    automation[index].subwave.shift_period(-2.);
+                }
+                KeyCode::W => {
+                    let _ = automation[index].subwave.weight.shift_power(2.);
+                }
+                KeyCode::S => {
+                    let _ = automation[index].subwave.weight.shift_power(-2.);
+                }
+                KeyCode::Key1 => {
+                    automation[index].subwave.offset -= 2.;
+                }
+                KeyCode::Key2 => {
+                    automation[index].subwave.offset += 2.;
+                }
+                KeyCode::Key3 => {
+                    automation[index].subwave.weight.cycle();
+                }
+                KeyCode::Key4 => {
+                    automation[index].subwave.mode.cycle();
+                }
+                _ => (),
             }
         }
+
     }
 
     #[test]
@@ -232,4 +280,4 @@ mod tests {
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
     }
-}*/
+}

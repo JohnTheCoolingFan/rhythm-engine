@@ -7,7 +7,7 @@ use duplicate::duplicate;
 pub struct Automation {
     pub upper_bound: f32,
     pub lower_bound: f32,
-    anchors: Vec<Anchor>,
+    pub(super) anchors: Vec<Anchor>,
 }
 
 impl Index<usize> for Automation {
@@ -225,7 +225,7 @@ mod tests {
                 .shift_power(if 0. < y { 0.05 } else { -0.05 });
         }
 
-        fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, mods: KeyMods, _: bool) {
+        fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
             let index = self
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());

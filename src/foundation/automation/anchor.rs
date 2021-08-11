@@ -275,6 +275,12 @@ impl<'a> Exhibit for BPSeeker<'a, Anchor> {
                 )
             };
 
+            let (min, max) = if start.point.y < end.point.y  {
+                (start.point.y, end.point.y)
+            } else {
+                (end.point.y, start.point.y)
+            };
+
             (start.point.y + dy0 + 
                 (dy1 - dy0) * if y_alt && odd_parity {
                     l.lerp_invert()
@@ -282,7 +288,7 @@ impl<'a> Exhibit for BPSeeker<'a, Anchor> {
                 else {
                     l
                 }
-            ).clamp(start.point.y, end.point.y)
+            ).clamp(min, max)
         }
     }
 }
