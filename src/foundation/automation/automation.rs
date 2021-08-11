@@ -91,8 +91,9 @@ impl Automation {
 //
 //
 //
-type AnchVecSeeker<'a> = <Vec<Anchor> as Seekable<'a>>::Seeker;
-type AutomationSeeker<'a> = Seeker<(f32, f32), AnchVecSeeker<'a>>;
+
+type AnchVecSeeker<'a> = BPSeeker<'a, Anchor>;
+pub type AutomationSeeker<'a> = Seeker<(f32, f32), AnchVecSeeker<'a>>;
 
 impl<'a> SeekerTypes for AutomationSeeker<'a> {
     type Source = Anchor;

@@ -43,7 +43,6 @@ impl Weight {
 
     #[rustfmt::skip]
     pub fn eval(&self, t: f32) -> f32 {
-        //debug_assert!((0.0..=1.0).contains(&t), "t out of bounds");
         match self {
             Self::ForwardBias => 1.,
             Self::ReverseBias => 0.,
@@ -186,12 +185,12 @@ impl Quantify for Anchor {
     }
 }
 
-impl<'a> SeekerTypes for Seeker<&'a Vec<Anchor>, usize> {
+impl<'a> SeekerTypes for BPSeeker<'a, Anchor> {
     type Source = Anchor;
     type Output = f32;
 }
 
-impl<'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> { 
+impl<'a> Exhibit for BPSeeker<'a, Anchor> { 
     #[rustfmt::skip]
     fn exhibit(&self, offset: f32) -> f32 {
         if self.over_run() {
@@ -272,7 +271,6 @@ impl<'a> Exhibit for Seeker<&'a Vec<Anchor>, usize> {
             let l = {
                 let t = ((offset - start.point.x - x0) / end.subwave.period).if_nan(0.);
                 end.subwave.weight.eval(
-                    //t
                     if x_alt && odd_parity { t.lerp_invert() } else { t }
                 )
             };

@@ -64,6 +64,14 @@ where
     }
 }
 
+impl<'a, T> SeekerTypes for BPSeeker<'a, Epoch<T>> 
+where
+    T: Copy
+{
+    type Source = Epoch<T>;
+    type Output = T;
+}
+
 //
 //
 //
@@ -76,7 +84,10 @@ where
     pub meta: Meta, //changign
 }
 
-impl<'a, Item> Seeker<&'a Vec<Item>, usize>
+//BP prefix means "boiler plate"
+pub type BPSeeker<'a, Item> = Seeker<&'a Vec<Item>, usize>;
+
+impl<'a, Item> BPSeeker<'a, Item>
 where
     Item: Quantify,
     Self: Exhibit<Source = Item>,
@@ -98,7 +109,7 @@ where
     }
 }
 
-impl<'a, Item> Seek for Seeker<&'a Vec<Item>, usize>
+impl<'a, Item> Seek for BPSeeker<'a, Item>
 where
     Item: Quantify,
     Self: Exhibit<Source = Item>,
@@ -134,7 +145,7 @@ where
 impl <'a, Item> Seekable<'a> for Vec<Item>
 where
     Item: Quantify + 'a,
-    Seeker<&'a Vec<Item>, usize>: Exhibit<Source = Item>,
+    BPSeeker<'a, Item>: Exhibit<Source = Item>,
 {
     type Seeker = Seeker<&'a Vec<Item>, usize>;
     

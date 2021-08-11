@@ -1,4 +1,4 @@
-use crate::{foundation::automation::*, utils::seeker::*};
+use crate::{foundation::automation::*, utils::*};
 use duplicate::duplicate;
 
 type Color = ggez::graphics::Color;
@@ -18,12 +18,49 @@ impl DynColor {
         }
     }
 
-    pub fn insert_upper(&mut self, anch: Epoch<Color>) {
-        self.upper_colors.quantified_insert(anch);
+    pub fn insert_upper(&mut self, color: Epoch<Color>) {
+        self.upper_colors.quantified_insert(color);
     }
 
-    pub fn insert_lower(&mut self, anch: Epoch<Color>) {
-        self.lower_colors.quantified_insert(anch);
+    pub fn insert_lower(&mut self, color: Epoch<Color>) {
+        self.lower_colors.quantified_insert(color);
+    }
+}
+
+type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Color>>;
+
+impl<'a> Exhibit for ColorVecSeeker<'a> {
+    fn exhibit(&self, _: f32) -> Color {
+        if self.over_run() {
+            self.vec()[FromEnd(0)].val
+        }
+        else {
+            self.vec()[self.index()].val
+        }
+    }
+}
+
+type DynColSeekerMeta<'a> = (ColorVecSeeker<'a>, BPSeeker<'a, Anchor>, ColorVecSeeker<'a>);
+pub type DynColorSeeker<'a> = Seeker<(), DynColSeekerMeta<'a>>;
+
+impl<'a> SeekerTypes for DynColorSeeker<'a> {
+    type Source = <BPSeeker<'a, Anchor> as SeekerTypes>::Source;
+    type Output = Color;
+}
+
+impl<'a> Seek for DynColorSeeker<'a> {
+    #[duplicate(method; [seek]; [jump])]
+    fn method(&mut self, offset: f32) -> Color {
+        let (lower, anchors, upper) = &mut self.meta;
+        let c1 = lower.method(offset);
+        let t = anchors.method(offset);
+        let c2 = upper.method(offset);
+        Color::new(
+            (c2.r - c1.r) * t + c1.r,
+            (c2.g - c1.g) * t + c1.g,
+            (c2.b - c1.b) * t + c1.b,
+            (c2.a - c1.a) * t + c1.a,
+        )
     }
 }
 
