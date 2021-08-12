@@ -1,7 +1,6 @@
 use std::f32::consts::PI;
-
-use crate::utils::*;
 use duplicate::duplicate;
+use crate::utils::*;
 use glam::{f32::Mat3, Vec2};
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
 
@@ -35,6 +34,11 @@ impl Ctrl {
         old
     }
 }
+//
+//
+//
+//
+//
 
 pub struct Segment {
     pub ctrls: Ctrl,
@@ -65,7 +69,7 @@ impl Segment {
         let mut callback = |p: Point<f32>| {
             let last = self.lut[FromEnd(0)].val;
             let s = 
-                self.lut[FromEnd(0)].offset
+                self.lut[FromEnd(0)].time
                 + (
                     p.to_vector() - Point::new(last.x, last.y).to_vector()
                 ).length();
@@ -158,62 +162,52 @@ impl Segment {
         match ctrls {
             Ctrl::ThreePointCircle(_, _) => {}
             _ => {
-                let max_displ = self.lut[FromEnd(0)].offset;
+                let max_displ = self.lut[FromEnd(0)].time;
                 for elem in &mut self.lut {
-                    elem.offset /= max_displ;
+                    elem.time /= max_displ;
                 }
             }
         }
     }
 }
 
-pub struct SegmentSeeker<'a> {
-    index: usize,
-    segment: &'a Segment,
-    lut_seeker: <Vec<SimpleAnchor<Vec2>> as Seekable<'a>>::SeekerType,
+impl<'a> Exhibit for BPSeeker<'a, Epoch<Vec2>> {
+    fn exhibit(&self, t: f32) -> Vec2 {
+        self.previous().val.lerp(self.current().val, t)
+    }
 }
 
-///0. <= t <= 1.
-impl<'a> Seeker<Vec2> for SegmentSeeker<'a> {
-    #[duplicate(method; [seek]; [jump];)]
+pub type SegmentSeeker<'a> = Seeker<&'a Segment, BPSeeker<'a, Epoch<Vec2>>>;
+
+impl<'a> SeekerTypes for SegmentSeeker<'a> {
+    type Source = <BPSeeker<'a, Epoch<Vec2>> as SeekerTypes>::Source;
+    type Output = Vec2;
+}
+
+impl<'a> Seek for SegmentSeeker<'a> {
+    #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, t: f32) -> Vec2 {
-        debug_assert!(0. <= t && t <= 1.);
-        if let Ctrl::ThreePointCircle(_, _) = self.segment.ctrls {
-            if self.segment.lut.len() == 3 {
-                self.segment.lut[0]
+        if let Ctrl::ThreePointCircle(_, _) = self.data.ctrls {
+            if self.data.lut.len() == 3 {
+                self.data.lut[0]
                     .val
-                    .rotate_about(&self.segment.lut[1].val, self.segment.lut[2].offset * t)
+                    .rotate_about(&self.data.lut[1].val, self.data.lut[2].time * t)
             } else {
-                self.segment.lut[0].val.lerp(self.segment.lut[1].val, t)
+                self.data.lut[0].val.lerp(self.data.lut[1].val, t)
             }
-        } else {
-            let d = t * self.segment.lut[FromEnd(0)].offset;
-            let end = self.lut_seeker.method(d);
-            if self.lut_seeker.over_run() | self.lut_seeker.under_run() {
-                end
-            } else {
-                let curr_index = self.lut_seeker.index();
-                let prev_index = curr_index - 1;
-
-                let start = self.segment.lut[prev_index].val;
-
-                let s = (d - self.segment.lut[prev_index].offset)
-                    / (self.segment.lut[curr_index].offset - self.segment.lut[prev_index].offset);
-
-                start.lerp(end, s)
-            }
+        }
+        else {
+            self.meta.method(t)
         }
     }
 }
 
 impl<'a> Seekable<'a> for Segment {
-    type Output = Vec2;
-    type SeekerType = SegmentSeeker<'a>;
-    fn seeker(&'a self) -> SegmentSeeker<'a> {
-        Self::SeekerType {
-            index: 0,
-            segment: &self,
-            lut_seeker: self.lut.seeker(),
+    type Seeker = SegmentSeeker<'a>;
+    fn seeker(&'a self) -> Self::Seeker {
+        Self::Seeker {
+            data: &self,
+            meta: self.lut.seeker()
         }
     }
 }

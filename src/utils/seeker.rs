@@ -91,8 +91,6 @@ pub type BPSeeker<'a, Item> = Seeker<&'a Vec<Item>, usize>;
 
 impl<'a, Item> BPSeeker<'a, Item>
 where
-    Item: Quantify,
-    Self: Exhibit<Source = Item>,
 {
     pub fn index(&self) -> usize {
         self.meta

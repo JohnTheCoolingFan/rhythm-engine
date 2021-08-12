@@ -56,9 +56,9 @@ impl Automation {
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                (*a.point() - point)
+                (a.point - point)
                     .length()
-                    .partial_cmp(&(*b.point() - point).length())
+                    .partial_cmp(&(b.point - point).length())
                     .unwrap()
             })
             .unwrap();
@@ -68,11 +68,11 @@ impl Automation {
 
     pub fn set_pos(&mut self, index: usize, mut point: Vec2) -> Vec2 {
         debug_assert!(index < self.anchors.len(), "out of bounds index");
-        let old = *self.anchors[index].point();
+        let old = self.anchors[index].point;
         let minx = if index == 0 {
             0.
         } else {
-            self.anchors[index - 1].point().x
+            self.anchors[index - 1].point.x
         };
         let maxx = if self.anchors.len() - index <= 1 {
             f32::MAX

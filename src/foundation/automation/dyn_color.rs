@@ -26,7 +26,11 @@ impl DynColor {
         self.lower_colors.quantified_insert(color);
     }
 }
-
+//
+//
+//
+//
+//
 type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Color>>;
 
 impl<'a> Exhibit for ColorVecSeeker<'a> {
@@ -44,6 +48,7 @@ impl<'a> SeekerTypes for DynColorSeeker<'a> {
 }
 
 impl<'a> Seek for DynColorSeeker<'a> {
+    //Exhibit is immutable so have to do this
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> Color {
         let (anchors, lower, upper) = &mut self.meta;
@@ -73,7 +78,11 @@ impl<'a> Seekable<'a> for DynColor {
         }
     }
 }
-
+//
+//
+//
+//
+//
 #[cfg(test)]
 mod tests {
     mod graficks {

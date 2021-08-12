@@ -1,6 +1,7 @@
-/*mod complex_spline;
-mod curve_chain;
+mod complex_spline;
 mod segment;
 
-pub use complex_spline::ComplexSpline;
-pub use curve_chain::CurveChain;*/
+pub use segment::{Segment, SegmentSeeker};
+
+//pub use complex_spline::ComplexSpline;
+//pub use curve_chain::CurveChain;

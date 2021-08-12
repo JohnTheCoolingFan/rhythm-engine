@@ -120,7 +120,7 @@ impl SubWaveMode {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SubWave {
-    pub(super) period: f32,
+    period: f32,
     pub offset: f32,
     pub weight: Weight,
     pub mode: SubWaveMode,
@@ -148,7 +148,7 @@ impl SubWave {
 //
 #[derive(Debug, Clone, Copy)]
 pub struct Anchor {
-    pub(super) point: Vec2,
+    pub point: Vec2,
     pub weight: Weight,
     pub subwave: SubWave,
 }
@@ -161,15 +161,11 @@ impl Anchor {
             weight: Weight::QuadLike(0.),
             subwave: SubWave {
                 offset: 0.,
-                period: 100.,
+                period: 0.,
                 weight: Weight::QuadLike(1.),
                 mode: SubWaveMode::Off,
             },
         }
-    }
-
-    pub fn point(&self) -> &Vec2 {
-        &self.point
     }
 }
 //
