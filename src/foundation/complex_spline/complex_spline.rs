@@ -1,7 +1,8 @@
 use crate::foundation::{automation::*, complex_spline::*};
-use crate::utils::{misc::*, seeker::*};
+use crate::utils::*;
 use duplicate::duplicate;
 use glam::Vec2;
+use lyon_geom::Point;
 
 pub struct ComplexSpline {
     anchors: Vec<Anchor>,
@@ -17,8 +18,46 @@ impl ComplexSpline {
         index
     }
 
+    //can't use index for the parallel vectors because that requires GATs
+    //which at the time of writing this code is unstable
+    pub fn anchor(&self, index: usize) -> &Anchor {
+        &self.anchors[index]
+    }
+
+    pub fn anchor_mut(&mut self, index: usize) -> &mut Anchor {
+        &mut self.anchors[index]
+    }
+
+    pub fn segment(&self, index: usize) -> &Segment {
+        &self.segments[index]
+    }
+
+    pub fn segment_mut(&mut self, index: usize) -> &mut Segment {
+        &mut self.segments[index]
+    }
+
     pub fn remove(&mut self, index: usize) -> Critical {
         (self.anchors.remove(index), self.segments.remove(index))
+    }
+
+    pub fn replace(&mut self, index: usize, anch: Anchor) -> Anchor {
+        self.anchors.quantified_replace(index, anch,
+            |a, min, max| {
+                let minx = min.unwrap_or(0.);
+                let maxx = max.unwrap_or(f32::MAX);
+
+                a.point.x = a.point.x.clamp(minx, maxx);
+            }
+        )
+    }
+
+    pub fn move_segment(&mut self, index: usize, pos: Point<f32>) -> Point<f32> {
+        debug_assert!(index != 0, "can't move first segment");
+        let old = self.segments[index].ctrls.get_end();
+        self.segments[index].ctrls.set_end(pos);
+        let end = self.segments[index - 1].ctrls.get_end();
+        self.segments[index].recompute(end);
+        old
     }
 }
 //
@@ -38,8 +77,12 @@ impl<'a> Seek for CompSplSeeker<'a> {
     fn method(&mut self, offset: f32) -> Vec2 {
         let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
         let old = anchorseeker.index();
-        let t = anchorseeker.method(offset);
+        let mut t = anchorseeker.method(offset);
         let new = anchorseeker.index();
+
+        if new % 2 != 0 {
+            t = t.lerp_invert()
+        }
 
         if old != new {
             *lutseeker = self.data[new].seeker();
@@ -48,7 +91,6 @@ impl<'a> Seek for CompSplSeeker<'a> {
         lutseeker.method(t)
     }
 }
-
 //
 //
 //

@@ -33,12 +33,22 @@ pub trait SeekExtensions
     type Item: Quantify;
 
     fn quantified_insert(&mut self, item: Self::Item) -> usize;
+    
+    //now this is what I call a signature
+    fn quantified_replace<F>(&mut self, index: usize, item: Self::Item, adjust: F) -> Self::Item
+    where
+        F: Fn(
+            &mut Self::Item,
+            Option<<Self::Item as Quantify>::Quantifier>,
+            Option<<Self::Item as Quantify>::Quantifier>
+        );
 }
 //
 //
 //
 //
 //
+#[derive(Clone, Copy)]
 pub struct Epoch<Value> {
     pub time: f32,
     pub val: Value,
@@ -180,7 +190,7 @@ where
 
 impl<T> SeekExtensions for Vec<T>
 where
-    T: Quantify,
+    T: Quantify + Copy,
 {
     type Item = T;
     fn quantified_insert(&mut self, item: T) -> usize {
@@ -189,5 +199,25 @@ where
         };
         self.insert(index, item);
         index
+    }
+
+    fn quantified_replace<F>(&mut self, index: usize, mut item: T, adjust: F) -> T
+    where
+        F: Fn(
+            &mut Self::Item,
+            Option<<Self::Item as Quantify>::Quantifier>,
+            Option<<Self::Item as Quantify>::Quantifier>
+        )
+    {
+        let old = self[index];
+        
+        let min = if index == 0 { None } else { Some(self[index - 1].quantify()) };
+        let max = if self.len() - index <= 1 { None } else { Some(self[index + 1].quantify()) };
+
+        self.remove(index);
+        adjust(&mut item,  min, max);
+        self.insert(index, item);
+
+        old
     }
 }

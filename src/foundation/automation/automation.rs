@@ -18,12 +18,6 @@ impl Index<usize> for Automation {
     }
 }
 
-impl IndexMut<usize> for Automation {
-    fn index_mut(&mut self, n: usize) -> &mut Anchor {
-        &mut self.anchors[n]
-    }
-}
-
 impl Automation {
     pub fn new(lb: f32, ub: f32, len: f32) -> Self {
         assert!(lb < ub, "upper bound must be greater than lower bound");
@@ -66,24 +60,15 @@ impl Automation {
         index
     }
 
-    pub fn set_pos(&mut self, index: usize, mut point: Vec2) -> Vec2 {
-        debug_assert!(index < self.anchors.len(), "out of bounds index");
-        let old = self.anchors[index].point;
-        let minx = if index == 0 {
-            0.
-        } else {
-            self.anchors[index - 1].point.x
-        };
-        let maxx = if self.anchors.len() - index <= 1 {
-            f32::MAX
-        } else {
-            self.anchors[index + 1].point.x
-        };
+    pub fn replace(&mut self, index: usize, anch: Anchor) -> Anchor {
+        self.anchors.quantified_replace(index, anch,
+            |a, min, max| {
+                let minx = min.unwrap_or(0.);
+                let maxx = max.unwrap_or(f32::MAX);
 
-        point.x = point.x.clamp(minx, maxx);
-        point.y = point.y.clamp(0., 1.);
-        self.anchors[index].point = point;
-        old
+                a.point.x = a.point.x.clamp(minx, maxx);
+            }
+        )
     }
 }
 //
