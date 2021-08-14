@@ -12,6 +12,23 @@ pub struct ComplexSpline {
 type Critical = (Anchor, Segment);
 
 impl ComplexSpline {
+    fn new(len: f32, initial: Segment) -> Self {
+        let mut new = Self {
+            anchors: vec![
+                Anchor::new(Vec2::new(0., 0.)),
+                Anchor::new(Vec2::new(len, 1.))
+            ],
+            segments: vec![
+                Segment::new(Ctrl::Linear(Point::new(0., 0.)), 0.),
+                initial
+            ]
+        };
+
+        let p = &new.segments[0].ctrls.get_end();
+        new.segments[1].recompute(p);
+        new
+    }
+
     pub fn insert(&mut self, (anchor, segment): Critical) -> usize {
         let index = self.anchors.quantified_insert(anchor);
         self.segments.insert(index, segment);
@@ -20,45 +37,99 @@ impl ComplexSpline {
 
     //can't use index for the parallel vectors because that requires GATs
     //which at the time of writing this code is unstable
-    pub fn anchor(&self, index: usize) -> &Anchor {
-        &self.anchors[index]
+    pub fn anchors(&self) -> &Vec<Anchor> {
+        &self.anchors
     }
-
-    pub fn anchor_mut(&mut self, index: usize) -> &mut Anchor {
-        &mut self.anchors[index]
+    
+    pub fn segments(&self) -> &Vec<Segment> {
+        &self.segments
     }
-
-    pub fn segment(&self, index: usize) -> &Segment {
-        &self.segments[index]
-    }
-
-    pub fn segment_mut(&mut self, index: usize) -> &mut Segment {
-        &mut self.segments[index]
-    }
-
+ 
     pub fn remove(&mut self, index: usize) -> Critical {
         (self.anchors.remove(index), self.segments.remove(index))
     }
 
-    pub fn replace(&mut self, index: usize, anch: Anchor) -> Anchor {
-        self.anchors.quantified_replace(index, anch,
-            |a, min, max| {
-                let minx = min.unwrap_or(0.);
-                let maxx = max.unwrap_or(f32::MAX);
+    pub fn emplace_anchor(&mut self, index: usize, anch: Anchor) -> Result<Anchor, ()> {
+        if index == 0 {
+            Err(())
+        }
+        else {
+            Ok(self.anchors.quantified_replace(index, anch,
+                |a, min, max| {
+                    a.point.x = a.point.x.clamp(
+                        min.unwrap_or(0.),
+                        max.unwrap_or(f32::MAX)
+                    );
+                    a.point.y = if index % 2 == 0 { 0. } else { 1. }
+                }
+            ))
+        }
+    }
 
-                a.point.x = a.point.x.clamp(minx, maxx);
+    pub fn emplace_segment(&mut self, index: usize, seg: Segment) -> Result<Option<Segment>, ()> {
+        if index == 0 {
+            Err(())
+        }
+        else {
+            let old = Ok(if index < self.segments.len() {
+                Some(self.segments.remove(index))
             }
-        )
+            else {
+                None
+            });
+            
+            let (p0, p1) = (
+                &self.segments[index - 1].ctrls.get_end(),
+                &seg.ctrls.get_end()
+            );
+            self.segments.insert(index, seg);
+            self.segments[index].recompute(p0);
+            if index + 1 < self.segments.len() {
+                self.segments[index + 1].recompute(p1);
+            }
+            
+            old
+        }
     }
 
-    pub fn move_segment(&mut self, index: usize, pos: Point<f32>) -> Point<f32> {
-        debug_assert!(index != 0, "can't move first segment");
-        let old = self.segments[index].ctrls.get_end();
-        self.segments[index].ctrls.set_end(pos);
-        let end = self.segments[index - 1].ctrls.get_end();
-        self.segments[index].recompute(end);
-        old
+    pub fn absolute_replace_segment(&mut self, index: usize, mut seg: Segment) -> Result<Option<Segment>, ()> {
+        seg.ctrls = match seg.ctrls {
+            Ctrl::Cubic(p0, p1, p2) => {
+                let start = self.segments[index - 1].ctrls.get_end();
+                let a1 = Point::new(p0.x - start.x, p0.y - start.y);
+                let a2 = p1.to_vector() - p2.to_vector();
+                Ctrl::Cubic(a1, Point::new(a2.x, a2.y), p2)
+            }
+            _ => seg.ctrls,
+        };
+        self.replace_segment(index, seg)
     }
+
+    pub fn closest_segment(&self, point: Point<f32>) -> usize {
+        self.segments
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                (a.ctrls.get_end() - point)
+                    .length()
+                    .partial_cmp(&(b.ctrls.get_end() - point).length())
+                    .unwrap()
+            })
+            .unwrap().0
+    }
+
+    pub fn closest_anchor(&self, x: f32) -> usize {
+        self.anchors
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                (a.point.x - x)
+                    .partial_cmp(&(b.point.x - x))
+                    .unwrap()
+            })
+            .unwrap().0
+    }
+
 }
 //
 //
@@ -91,12 +162,22 @@ impl<'a> Seek for CompSplSeeker<'a> {
         lutseeker.method(t)
     }
 }
+
+impl<'a> Seekable<'a> for ComplexSpline {
+    type Seeker = CompSplSeeker<'a>;
+    fn seeker(&'a self) -> Self::Seeker {
+        Self::Seeker {
+            data: &self.segments,
+            meta: (self.anchors.seeker(), self.segments[0].seeker())
+        }
+    }
+}
 //
 //
 //
 //
 //
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use ggez::{
@@ -104,7 +185,7 @@ mod tests {
         graphics::*,
         input::keyboard::is_key_pressed,
         timer::time_since_start,
-        Context, GameResult,
+        Context, GameResult, GameError
     };
     use lyon_geom::Point;
 
@@ -120,7 +201,7 @@ mod tests {
             let x = 2000.;
             let y = 1000.;
             Ok(Self {
-                cmpspl: ComplexSpline::new(x, Ctrl::Linear(Point::new(x, 0.))),
+                cmpspl: ComplexSpline::new(x, Segment::new(Ctrl::Linear(Point::new(x, 0.)), 1.)),
                 point_buff: vec![],
                 dimensions: Vec2::new(x, y),
                 selection: None,
@@ -128,12 +209,15 @@ mod tests {
         }
     }
 
-    impl EventHandler for Test {
+    impl EventHandler<GameError> for Test {
         fn update(&mut self, _ctx: &mut Context) -> GameResult {
             Ok(())
         }
 
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
+            //
+            //  setup
+            //
             clear(ctx, Color::new(0., 0., 0., 1.));
             let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
 
@@ -147,8 +231,20 @@ mod tests {
             )?;
             draw(ctx, &circle, (mouse_pos,))?;
 
-            let t =
-                ((time_since_start(ctx).as_millis() as f32 % 5000.) / 5000.) * self.dimensions.x;
+            let rect = Mesh::new_rectangle(
+                ctx,
+                DrawMode::fill(),
+                Rect::new(-5., -5., 10., 10.),
+                Color::new(1., 0., 0., 0.5),
+            )?;
+
+            //
+            //  time
+            //
+            let t = self.dimensions.x * (
+                (time_since_start(ctx).as_millis() as f32 % 5000.)
+                / 5000.
+            );
 
             let t_line = MeshBuilder::new()
                 .polyline(
@@ -164,15 +260,17 @@ mod tests {
             draw(ctx, &t_line, (Vec2::new(t, 0.),))?;
             draw(ctx, &circle, (self.cmpspl.seeker().jump(t),))?;
 
-            let mut seeker = self.cmpspl.automation.seeker();
+            //
+            //  automation
+            //
+            let mut anch_seeker = self.cmpspl.anchors().seeker();
             let res = 200;
             let auto_points: Vec<Vec2> = (0..res)
                 .map(|x| {
                     Vec2::new(
                         (x as f32 / res as f32) * self.dimensions.x,
-                        self.dimensions.y
-                            - seeker.seek((x as f32 / res as f32) * self.dimensions.x)
-                                * (self.dimensions.y / 4.),
+                        self.dimensions.y - (self.dimensions.y / 4.)
+                        * anch_seeker.seek((x as f32 / res as f32) * self.dimensions.x),
                     )
                 })
                 .collect();
@@ -186,14 +284,11 @@ mod tests {
                 .build(ctx)?;
             draw(ctx, &auto_lines, (Vec2::new(0.0, 0.0),))?;
 
-            let rect = Mesh::new_rectangle(
-                ctx,
-                DrawMode::fill(),
-                Rect::new(-5., -5., 10., 10.),
-                Color::new(1., 0., 0., 0.5),
-            )?;
-            for i in 0..self.cmpspl.curve.segments().len() {
-                let segment = &self.cmpspl.curve.segments()[i];
+            //
+            //  spline
+            //
+            for i in 0..self.cmpspl.segments().len() {
+                let segment = &self.cmpspl.segments()[i];
                 match segment.ctrls {
                     Ctrl::Linear(p) => {
                         draw(ctx, &circle, (Vec2::new(p.x, p.y),))?;
@@ -203,7 +298,7 @@ mod tests {
                         draw(ctx, &circle, (Vec2::new(p2.x, p2.y),))?;
                     }
                     Ctrl::Cubic(p1, p2, p3) => {
-                        let start = self.cmpspl.curve.segments()[i - 1].ctrls.get_end();
+                        let start = self.cmpspl.segments()[i - 1].ctrls.get_end();
                         draw(ctx, &rect, (Vec2::new(start.x + p1.x, start.y + p1.y),))?;
                         draw(ctx, &rect, (Vec2::new(p2.x + p3.x, p2.y + p3.y),))?;
                         draw(ctx, &circle, (Vec2::new(p3.x, p3.y),))?;
@@ -215,15 +310,14 @@ mod tests {
                 }
             }
 
-            for i in 1..self.cmpspl.curve.segments().len() {
+            for i in 1..self.cmpspl.segments().len() {
                 let mut points = Vec::<Vec2>::new();
-                let mut seeker = self.cmpspl.curve.segments()[i].seeker();
+                let mut seeker = self.cmpspl.segments()[i].seeker();
                 let mut t = 0.;
                 while t <= 1. {
                     points.push(seeker.seek(t));
                     t += 0.05;
                 }
-                //let last = self.curve.segments[i].ctrls.end();
                 points.push(seeker.seek(1.));
 
                 let lines = MeshBuilder::new()
@@ -250,10 +344,8 @@ mod tests {
             match button {
                 MouseButton::Left => {
                     if self.dimensions.y * (3. / 4.) < y {
-                        let c = self.cmpspl.closest_critical(x);
-                        let dist = (self.cmpspl.get_critical_pos(c) - x).abs();
-                        println!("nearest pont x distance to click: {}", dist);
-                        if dist < 10. {
+                        let index = self.cmpspl.closest_anchor(x);
+                        if self.cmpspl.anchors()[index].point.x - x < 10. {
                             self.selection = Some(c);
                         } else {
                             match self.selection {
@@ -342,4 +434,4 @@ mod tests {
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
     }
-}*/
+}

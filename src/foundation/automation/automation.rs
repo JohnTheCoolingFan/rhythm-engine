@@ -18,6 +18,12 @@ impl Index<usize> for Automation {
     }
 }
 
+impl IndexMut<usize> for Automation {
+    fn index_mut(&mut self, n: usize) -> &mut Anchor {
+        &mut self.anchors[n]
+    }
+}
+
 impl Automation {
     pub fn new(lb: f32, ub: f32, len: f32) -> Self {
         assert!(lb < ub, "upper bound must be greater than lower bound");
@@ -45,8 +51,7 @@ impl Automation {
     }
 
     pub fn closest_to(&self, point: Vec2) -> usize {
-        let (index, _) = self
-            .anchors
+        self.anchors
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
@@ -55,18 +60,16 @@ impl Automation {
                     .partial_cmp(&(b.point - point).length())
                     .unwrap()
             })
-            .unwrap();
-
-        index
+            .unwrap().0
     }
 
     pub fn replace(&mut self, index: usize, anch: Anchor) -> Anchor {
         self.anchors.quantified_replace(index, anch,
             |a, min, max| {
-                let minx = min.unwrap_or(0.);
-                let maxx = max.unwrap_or(f32::MAX);
-
-                a.point.x = a.point.x.clamp(minx, maxx);
+                a.point.x = a.point.x.clamp(
+                    min.unwrap_or(0.),
+                    max.unwrap_or(f32::MAX)
+                );
             }
         )
     }
@@ -109,7 +112,7 @@ impl<'a> Seekable<'a> for Automation {
 //
 //
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use ggez::{
         event::{self, EventHandler, MouseButton, KeyCode, KeyMods},
@@ -131,6 +134,42 @@ mod tests {
             })
         }
     }
+
+    pub fn key_handle(anch: &mut Anchor, key: KeyCode) {
+        match key {
+            KeyCode::Q => {
+                let _ =anch.subwave.mode.toggle_x_alternate();
+            }
+            KeyCode::E => {
+                let _ = anch.subwave.mode.toggle_y_alternate();
+            }
+            KeyCode::D => {
+                anch.subwave.shift_period(2.);
+            }
+            KeyCode::A => {
+                anch.subwave.shift_period(-2.);
+            }
+            KeyCode::W => {
+                let _ = anch.subwave.weight.shift_power(2.);
+            }
+            KeyCode::S => {
+                let _ = anch.subwave.weight.shift_power(-2.);
+            }
+            KeyCode::Key1 => {
+                anch.subwave.offset -= 2.;
+            }
+            KeyCode::Key2 => {
+                anch.subwave.offset += 2.;
+            }
+            KeyCode::Key3 => {
+                anch.subwave.weight.cycle();
+            }
+            KeyCode::Key4 => {
+                anch.subwave.mode.cycle();
+            }
+            _ => (),
+        }
+    } 
 
     impl EventHandler<GameError> for Test {
         fn update(&mut self, _ctx: &mut Context) -> GameResult {
@@ -211,42 +250,14 @@ mod tests {
         }
 
         fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
-            let index = self
-                .automation
-                .closest_to(ggez::input::mouse::position(ctx).into());
-            match key {
-                KeyCode::Q => {
-                    let _ =self.automation[index].subwave.mode.toggle_x_alternate();
-                }
-                KeyCode::E => {
-                    let _ = self.automation[index].subwave.mode.toggle_y_alternate();
-                }
-                KeyCode::D => {
-                    self.automation[index].subwave.shift_period(2.);
-                }
-                KeyCode::A => {
-                    self.automation[index].subwave.shift_period(-2.);
-                }
-                KeyCode::W => {
-                    let _ = self.automation[index].subwave.weight.shift_power(2.);
-                }
-                KeyCode::S => {
-                    let _ = self.automation[index].subwave.weight.shift_power(-2.);
-                }
-                KeyCode::Key1 => {
-                    self.automation[index].subwave.offset -= 2.;
-                }
-                KeyCode::Key2 => {
-                    self.automation[index].subwave.offset += 2.;
-                }
-                KeyCode::Key3 => {
-                    self.automation[index].subwave.weight.cycle();
-                }
-                KeyCode::Key4 => {
-                    self.automation[index].subwave.mode.cycle();
-                }
-                _ => (),
-            }
+            key_handle(
+                &mut self.automation[
+                    self.automation.closest_to(
+                        ggez::input::mouse::position(ctx).into()
+                    )
+                ],
+                key
+            );
         }
     }
 

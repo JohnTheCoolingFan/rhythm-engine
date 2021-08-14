@@ -56,7 +56,7 @@ impl Segment {
     }
 
     #[rustfmt::skip]
-    pub(super) fn recompute(&mut self, start: Point<f32>) {
+    pub(super) fn recompute(&mut self, start: &Point<f32>) {
         let end = self.ctrls.get_end();
 
         self.lut.clear();
@@ -83,7 +83,7 @@ impl Segment {
             }
             Ctrl::Quadratic(c, _) => {
                 QuadraticBezierSegment::<f32> {
-                    from: start,
+                    from: *start,
                     ctrl: c,
                     to: end,
                 }
@@ -91,7 +91,7 @@ impl Segment {
             }
             Ctrl::Cubic(a1, a2, _) => {
                 CubicBezierSegment::<f32> {
-                    from: start,
+                    from: *start,
                     ctrl1: Point::new(a1.x + start.x, a1.y + start.y), //they're different point types
                     ctrl2: Point::new(a2.x + end.x, a2.y + end.y), //so no common addition interface
                     to: end,
@@ -135,7 +135,7 @@ impl Segment {
                         false => -1.
                     };
 
-                    let center_to_start = start - center;
+                    let center_to_start = *start - center;
                     let center_to_end = end - center;
 
                     let theta = (

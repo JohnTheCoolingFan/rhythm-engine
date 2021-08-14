@@ -201,7 +201,7 @@ where
         index
     }
 
-    fn quantified_replace<F>(&mut self, index: usize, mut item: T, adjust: F) -> T
+    fn quantified_emplace<F>(&mut self, index: usize, mut item: T, adjust: F) -> T
     where
         F: Fn(
             &mut Self::Item,

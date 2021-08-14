@@ -92,7 +92,6 @@ mod tests {
     use super::*;
     use ggez::{
         event::{self, EventHandler, MouseButton, KeyCode, KeyMods},
-        input::keyboard::is_key_pressed,
         timer::time_since_start,
         Context, GameResult, GameError,
     };
@@ -242,40 +241,7 @@ mod tests {
             let index = self.color
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            let automation = &mut self.color.automation;
-            match key {
-                KeyCode::Q => {
-                    let _ = automation[index].subwave.mode.toggle_x_alternate();
-                }
-                KeyCode::E => {
-                    let _ = automation[index].subwave.mode.toggle_y_alternate();
-                }
-                KeyCode::D => {
-                    automation[index].subwave.shift_period(2.);
-                }
-                KeyCode::A => {
-                    automation[index].subwave.shift_period(-2.);
-                }
-                KeyCode::W => {
-                    let _ = automation[index].subwave.weight.shift_power(2.);
-                }
-                KeyCode::S => {
-                    let _ = automation[index].subwave.weight.shift_power(-2.);
-                }
-                KeyCode::Key1 => {
-                    automation[index].subwave.offset -= 2.;
-                }
-                KeyCode::Key2 => {
-                    automation[index].subwave.offset += 2.;
-                }
-                KeyCode::Key3 => {
-                    automation[index].subwave.weight.cycle();
-                }
-                KeyCode::Key4 => {
-                    automation[index].subwave.mode.cycle();
-                }
-                _ => (),
-            }
+            automation::tests::key_handle(&mut self.color.automation[index], key);
         }
 
     }
