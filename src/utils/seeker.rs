@@ -35,7 +35,7 @@ pub trait SeekExtensions
     fn quantified_insert(&mut self, item: Self::Item) -> usize;
     
     //now this is what I call a signature
-    fn quantified_replace<F>(&mut self, index: usize, item: Self::Item, adjust: F) -> Self::Item
+    fn quantified_emplace<F>(&mut self, index: usize, item: Self::Item, adjust: F) -> Self::Item
     where
         F: Fn(
             &mut Self::Item,

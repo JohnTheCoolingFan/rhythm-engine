@@ -63,8 +63,8 @@ impl Automation {
             .unwrap().0
     }
 
-    pub fn replace(&mut self, index: usize, anch: Anchor) -> Anchor {
-        self.anchors.quantified_replace(index, anch,
+    pub fn emplace(&mut self, index: usize, anch: Anchor) -> Anchor {
+        self.anchors.quantified_emplace(index, anch,
             |a, min, max| {
                 a.point.x = a.point.x.clamp(
                     min.unwrap_or(0.),
@@ -117,7 +117,6 @@ pub mod tests {
     use ggez::{
         event::{self, EventHandler, MouseButton, KeyCode, KeyMods},
         graphics::*,
-        input::keyboard::is_key_pressed,
     };
     use ggez::{Context, GameResult, GameError};
 
@@ -250,12 +249,9 @@ pub mod tests {
         }
 
         fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
+            let index = self.automation.closest_to(ggez::input::mouse::position(ctx).into());
             key_handle(
-                &mut self.automation[
-                    self.automation.closest_to(
-                        ggez::input::mouse::position(ctx).into()
-                    )
-                ],
+                &mut self.automation[index],
                 key
             );
         }

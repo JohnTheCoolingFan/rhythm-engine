@@ -4,7 +4,7 @@ use crate::utils::*;
 use glam::{f32::Mat3, Vec2};
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Ctrl {
     Linear(Point<f32>),
     Quadratic(Point<f32>, Point<f32>),
@@ -39,11 +39,10 @@ impl Ctrl {
 //
 //
 //
-
 pub struct Segment {
     pub ctrls: Ctrl,
     pub tolerence: f32,
-    lut: Vec<Epoch<Vec2>>,
+    pub(super) lut: Vec<Epoch<Vec2>>,
 }
 
 impl Segment {
@@ -52,6 +51,14 @@ impl Segment {
             ctrls: ctrl_type,
             tolerence: segment_tolerence,
             lut: vec![(0., Vec2::new(0., 0.)).into()],
+        }
+    }
+
+    pub fn yoink(&self) -> Self {
+        Self {
+            ctrls: self.ctrls,
+            tolerence: self.tolerence,
+            lut: vec![]
         }
     }
 
@@ -92,8 +99,8 @@ impl Segment {
             Ctrl::Cubic(a1, a2, _) => {
                 CubicBezierSegment::<f32> {
                     from: *start,
-                    ctrl1: Point::new(a1.x + start.x, a1.y + start.y), //they're different point types
-                    ctrl2: Point::new(a2.x + end.x, a2.y + end.y), //so no common addition interface
+                    ctrl1: a1,
+                    ctrl2: a2,
                     to: end,
                 }
                 .for_each_flattened(tolerence, &mut callback)

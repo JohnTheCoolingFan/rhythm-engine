@@ -162,7 +162,7 @@ impl Anchor {
             subwave: SubWave {
                 offset: 0.,
                 period: 0.,
-                weight: Weight::QuadLike(1.),
+                weight: Weight::QuadLike(0.),
                 mode: SubWaveMode::Off,
             },
         }

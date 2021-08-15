@@ -9,7 +9,10 @@ pub struct ComplexSpline {
     segments: Vec<Segment>,
 }
 
-type Critical = (Anchor, Segment);
+pub struct Critical {
+    pub anchor: Anchor,
+    pub segment: Segment
+}
 
 impl ComplexSpline {
     fn new(len: f32, initial: Segment) -> Self {
@@ -29,12 +32,33 @@ impl ComplexSpline {
         new
     }
 
-    pub fn insert(&mut self, (anchor, segment): Critical) -> usize {
-        let index = self.anchors.quantified_insert(anchor);
-        self.segments.insert(index, segment);
-        index
+    fn resample(&mut self, index: usize) {
+        assert!(index != 0);
+        let (p0, p1) = (
+            &self.segments[index - 1].ctrls.get_end(),
+            &self.segments[index].ctrls.get_end()
+        );
+        self.segments[index].recompute(p0);
+        if index + 1 < self.segments.len() {
+            self.segments[index + 1].recompute(p1);
+        }
     }
 
+    fn correct_anchor(&mut self, index: usize) {
+        assert!((1..self.anchors.len()).contains(&index));
+        self.anchors[index].point.y = if index % 2 == 0 { 0. } else { 1. };
+
+        self.anchors[index].point.x = self.anchors[index].point.x.clamp(
+            self.anchors[index - 1].point.x,
+            if index + 1 < self.anchors.len() {
+                self.anchors[index + 1].point.x
+            }
+            else {
+                f32::MAX
+            }
+        );
+    }
+ 
     //can't use index for the parallel vectors because that requires GATs
     //which at the time of writing this code is unstable
     pub fn anchors(&self) -> &Vec<Anchor> {
@@ -44,17 +68,68 @@ impl ComplexSpline {
     pub fn segments(&self) -> &Vec<Segment> {
         &self.segments
     }
+
+    pub fn insert(&mut self, Critical{anchor, segment}: Critical) -> usize {
+        let index = self.anchors.quantified_insert(anchor);
+        self.segments.insert(index, segment);
+        self.correct_anchor(index);
+        self.resample(index);
+        index
+    }
  
     pub fn remove(&mut self, index: usize) -> Critical {
-        (self.anchors.remove(index), self.segments.remove(index))
+        self.segments[index].lut.clear();
+        let removed = Critical{
+            anchor: self.anchors.remove(index),
+            segment: self.segments.remove(index)
+        };
+        self.resample(index);
+        removed
     }
 
-    pub fn emplace_anchor(&mut self, index: usize, anch: Anchor) -> Result<Anchor, ()> {
-        if index == 0 {
+    pub fn modify<Func>(&mut self, index: usize, mut func: Func)
+        -> Result<Critical, ()>
+    where
+        Func: FnMut(&mut Anchor, &mut Segment)
+    {
+        if (1..self.segments.len()).contains(&index) {
+            let old = Critical{
+                anchor: self.anchors[index],
+                segment: self.segments[index].yoink()
+            };
+
+            func(&mut self.anchors[index], &mut self.segments[index]);
+
+            self.correct_anchor(index);
+            if old.segment.ctrls != self.segments[index].ctrls {
+                self.resample(index);
+            }
+
+            Ok(old)
+        }
+        else {
+            Err(())
+        }
+    }
+
+    pub fn insert_anchor(&mut self, index: usize, anch: Anchor) -> Result<Anchor, ()> {
+        if !(1..self.anchors.len()).contains(&index.debug("index")) {
             Err(())
         }
         else {
-            Ok(self.anchors.quantified_replace(index, anch,
+            let start = self.segments[index - 1].ctrls.get_end();
+            let end = self.segments[index].ctrls.get_end();
+            self.segments[index].ctrls = Ctrl::Linear(
+                start 
+                + ((end.to_vector() - start.to_vector())
+                * (1. / 2.))
+            );
+            self.segments.insert(
+                index + 1,
+                Segment::new(Ctrl::Linear(end), 0.5)
+            );
+            self.resample(index);
+            Ok(self.anchors.quantified_emplace(index, anch,
                 |a, min, max| {
                     a.point.x = a.point.x.clamp(
                         min.unwrap_or(0.),
@@ -66,68 +141,41 @@ impl ComplexSpline {
         }
     }
 
-    pub fn emplace_segment(&mut self, index: usize, seg: Segment) -> Result<Option<Segment>, ()> {
-        if index == 0 {
-            Err(())
-        }
-        else {
-            let old = Ok(if index < self.segments.len() {
-                Some(self.segments.remove(index))
-            }
-            else {
-                None
-            });
-            
-            let (p0, p1) = (
-                &self.segments[index - 1].ctrls.get_end(),
-                &seg.ctrls.get_end()
-            );
-            self.segments.insert(index, seg);
-            self.segments[index].recompute(p0);
-            if index + 1 < self.segments.len() {
-                self.segments[index + 1].recompute(p1);
-            }
-            
-            old
-        }
+    pub fn emplace_segment(&mut self, anch_pos: f32, seg: Segment) -> usize {
+        assert!(0. < anch_pos);
+        let index = self.anchors.quantified_insert(Anchor::new(Vec2::new(anch_pos, 0.)));
+        self.segments.insert(index, seg);
+        self.correct_anchor(index);
+        self.resample(index);
+        index
     }
-
-    pub fn absolute_replace_segment(&mut self, index: usize, mut seg: Segment) -> Result<Option<Segment>, ()> {
-        seg.ctrls = match seg.ctrls {
-            Ctrl::Cubic(p0, p1, p2) => {
-                let start = self.segments[index - 1].ctrls.get_end();
-                let a1 = Point::new(p0.x - start.x, p0.y - start.y);
-                let a2 = p1.to_vector() - p2.to_vector();
-                Ctrl::Cubic(a1, Point::new(a2.x, a2.y), p2)
-            }
-            _ => seg.ctrls,
-        };
-        self.replace_segment(index, seg)
-    }
-
+ 
     pub fn closest_segment(&self, point: Point<f32>) -> usize {
-        self.segments
+        let index = self.segments
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                (a.ctrls.get_end() - point)
-                    .length()
+                (a.ctrls.get_end() - point).length()
                     .partial_cmp(&(b.ctrls.get_end() - point).length())
                     .unwrap()
             })
-            .unwrap().0
+            .unwrap().0;
+
+        if index == 0 { 1 } else { index }
     }
 
     pub fn closest_anchor(&self, x: f32) -> usize {
-        self.anchors
+        let index = self.anchors
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                (a.point.x - x)
-                    .partial_cmp(&(b.point.x - x))
+                (a.point.x - x).abs()
+                    .partial_cmp(&(b.point.x - x).abs())
                     .unwrap()
             })
-            .unwrap().0
+            .unwrap().0;
+
+        if index == 0 { 1 } else { index }
     }
 
 }
@@ -155,7 +203,7 @@ impl<'a> Seek for CompSplSeeker<'a> {
             t = t.lerp_invert()
         }
 
-        if old != new {
+        if old != new && !anchorseeker.over_run() {
             *lutseeker = self.data[new].seeker();
         }
 
@@ -189,11 +237,18 @@ mod tests {
     };
     use lyon_geom::Point;
 
+    #[derive(Debug)]
+    enum Selection {
+        Segment(usize),
+        Anchor(usize),
+        None
+    }
+
     struct Test {
         cmpspl: ComplexSpline,
         point_buff: Vec<Point<f32>>,
         dimensions: Vec2,
-        selection: Option<Critical>,
+        selection: Selection,
     }
 
     impl Test {
@@ -204,7 +259,7 @@ mod tests {
                 cmpspl: ComplexSpline::new(x, Segment::new(Ctrl::Linear(Point::new(x, 0.)), 1.)),
                 point_buff: vec![],
                 dimensions: Vec2::new(x, y),
-                selection: None,
+                selection: Selection::None,
             })
         }
     }
@@ -250,7 +305,7 @@ mod tests {
                 .polyline(
                     DrawMode::Stroke(StrokeOptions::DEFAULT),
                     &[
-                        Vec2::new(0., self.dimensions.y * (3. / 4.)),
+                        Vec2::new(0., self.dimensions.y * 0.75),
                         Vec2::new(0., self.dimensions.y),
                     ],
                     Color::WHITE,
@@ -343,35 +398,45 @@ mod tests {
         ) {
             match button {
                 MouseButton::Left => {
-                    if self.dimensions.y * (3. / 4.) < y {
+                    if self.dimensions.y * 0.75 < y {
                         let index = self.cmpspl.closest_anchor(x);
-                        if self.cmpspl.anchors()[index].point.x - x < 10. {
-                            self.selection = Some(c);
+                        if (self.cmpspl.anchors()[index].point.x - x).abs() < 10. {
+                            self.selection = Selection::Anchor(index);
                         } else {
                             match self.selection {
-                                None => self.cmpspl.insert_critical(x),
-                                Some(i) => {
-                                    self.cmpspl.set_critical_pos(i, x);
-                                    self.selection = None;
+                                Selection::Anchor(n) | Selection::Segment(n) => {
+                                    self.cmpspl.modify(n, |anch, _| {
+                                        anch.point.x = x
+                                    }).unwrap();
+                                },
+                                _ => {
+                                    self.cmpspl.insert_anchor(index, Anchor::new(Vec2::new(x, 0.))).unwrap();
                                 }
                             }
                         }
                     } else {
-                        let c = self.cmpspl.closest_segment(Vec2::new(x, y));
-                        if (self.cmpspl.curve[c.get()].ctrls.get_end() - Point::new(x, y)).length()
-                            < 30.
-                        {
-                            self.selection = Some(c);
-                        } else {
-                            self.point_buff.push(Point::new(x, y));
-                            println!("points: {:?}", self.point_buff);
+                        let index = self.cmpspl.closest_segment(Point::new(x, y));
+                        let dist = (self.cmpspl.segments[index].ctrls.get_end() - Point::new(x, y)).length();
+                        if dist < 10. {
+                            self.selection = Selection::Segment(index);
+                        }
+                        else {
+                            match self.selection {
+                                Selection::None => self.point_buff.push(Point::new(x, y)),
+                                Selection::Anchor(n) | Selection::Segment(n) => {
+                                    self.cmpspl.modify(n, |_, segment| {
+                                        segment.ctrls.set_end(Point::new(x, y));
+                                    }).unwrap();
+                                }    
+                            }
                         }
                     }
-                }
+                },
                 MouseButton::Middle => {
-                    if self.dimensions.y * (3. / 4.) < y {
-                        let c = self.cmpspl.closest_critical(x);
-                        self.cmpspl.cycle_weight(c);
+                    if let Selection::Anchor(n) | Selection::Segment(n) = self.selection {
+                        self.cmpspl.modify(n, |anch, _| {
+                            anch.weight.cycle();
+                        }).unwrap();
                     }
                 }
                 _ => {}
@@ -379,48 +444,37 @@ mod tests {
         }
 
         fn key_down_event(&mut self, _ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
-            match key {
-                KeyCode::Escape => {
-                    self.selection = None;
-                    return;
-                }
-                _ => {}
-            }
-
             let points = &self.point_buff;
-
             let ctrls = match key {
                 KeyCode::Key1 => Ctrl::Linear(points[FromEnd(0)]),
                 KeyCode::Key2 => Ctrl::Quadratic(points[FromEnd(1)], points[FromEnd(0)]),
                 KeyCode::Key3 => Ctrl::ThreePointCircle(points[FromEnd(1)], points[FromEnd(0)]),
                 KeyCode::Key4 => Ctrl::Cubic(points[0], points[1], points[2]),
+                KeyCode::Escape => {
+                    self.selection = Selection::None;
+                    return;
+                }
                 _ => {
+                    if let Selection::Anchor(index) = self.selection {
+                        automation::tests::key_handle(&mut self.cmpspl.anchors[index], key);
+                    }
                     return;
                 }
             };
-            self.point_buff.clear();
 
-            if let Some(c) = self.selection {
-                self.cmpspl.set_ctrls(c, ctrls);
-                self.selection = None;
+            if let Selection::Segment(index) = self.selection {
+                self.cmpspl.modify(index, |_, seg| seg.ctrls = ctrls).unwrap();
+                self.point_buff.clear();
             }
         }
 
-        fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
-            let pos = ggez::input::mouse::position(ctx);
-            let c = if pos.y < self.dimensions.y * (3. / 4.) {
-                self.cmpspl.closest_segment(pos.into())
-            } else {
-                self.cmpspl.closest_critical(pos.x)
-            };
-            if is_key_pressed(ctx, event::KeyCode::LShift) {
-                self.cmpspl
-                    .shift_period(c, if 0. < y { 10. } else { -10. })
-                    .unwrap();
-            } else {
-                self.cmpspl
-                    .shift_power(c, if 0. < y { 0.05 } else { -0.05 })
-                    .unwrap();
+        fn mouse_wheel_event(&mut self, _ctx: &mut Context, _x: f32, y: f32) {
+            if let Selection::Anchor(index) | Selection::Segment(index) = self.selection {
+                self.cmpspl.modify(index, 
+                    |anchor, _| { 
+                        anchor.weight.shift_power(if 0. < y { 0.05 } else { -0.05 }).unwrap();
+                    }
+                ).unwrap();
             }
         }
     }
