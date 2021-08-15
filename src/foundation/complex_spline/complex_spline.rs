@@ -3,14 +3,74 @@ use crate::utils::*;
 use duplicate::duplicate;
 use glam::Vec2;
 use lyon_geom::Point;
+use std::ops::{Deref, DerefMut};
 
+
+#[derive(Debug, Clone, Copy)]
+pub struct CmpSplAnchor(pub Anchor);
+
+impl From<Anchor> for CmpSplAnchor {
+    fn from(anchor: Anchor) -> Self {
+        Self(anchor)
+    }
+}
+
+impl Deref for CmpSplAnchor {
+    type Target = Anchor;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for CmpSplAnchor {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+
+impl Quantify for CmpSplAnchor {
+    type Quantifier = f32;
+    
+    fn quantify(&self) -> f32 {
+        self.0.quantify()
+    }
+}
+
+impl<'a> SeekerTypes for BPSeeker<'a, CmpSplAnchor> {
+    type Source = CmpSplAnchor;
+    type Output = f32;
+}
+
+impl<'a> Exhibit for BPSeeker<'a, CmpSplAnchor> { 
+    fn exhibit(&self, t: f32) -> Self::Output {
+        if self.over_run() {
+            self.vec()[FromEnd(0)].point.y
+        }
+        else if self.under_run() {
+            self.vec()[0].point.y
+        }
+        else {
+            let mut start = self.vec()[self.index() - 1];
+            let mut end = self.vec()[self.index()];
+            start.point.y = 0.;
+            end.point.y = 1.;
+            end.eval(&start, t)
+        }
+    }
+}
+//
+//
+//
+//
+//
 pub struct ComplexSpline {
-    anchors: Vec<Anchor>,
+    anchors: Vec<CmpSplAnchor>,
     segments: Vec<Segment>,
 }
 
 pub struct Critical {
-    pub anchor: Anchor,
+    pub anchor: CmpSplAnchor,
     pub segment: Segment
 }
 
@@ -18,8 +78,8 @@ impl ComplexSpline {
     fn new(len: f32, initial: Segment) -> Self {
         let mut new = Self {
             anchors: vec![
-                Anchor::new(Vec2::new(0., 0.)),
-                Anchor::new(Vec2::new(len, 1.))
+                Anchor::new(Vec2::new(0., 0.)).into(),
+                Anchor::new(Vec2::new(len, 1.)).into()
             ],
             segments: vec![
                 Segment::new(Ctrl::Linear(Point::new(0., 0.)), 0.),
@@ -46,7 +106,6 @@ impl ComplexSpline {
 
     fn correct_anchor(&mut self, index: usize) {
         assert!((1..self.anchors.len()).contains(&index));
-        self.anchors[index].point.y = if index % 2 == 0 { 0. } else { 1. };
 
         self.anchors[index].point.x = self.anchors[index].point.x.clamp(
             self.anchors[index - 1].point.x,
@@ -59,9 +118,7 @@ impl ComplexSpline {
         );
     }
  
-    //can't use index for the parallel vectors because that requires GATs
-    //which at the time of writing this code is unstable
-    pub fn anchors(&self) -> &Vec<Anchor> {
+    pub fn anchors(&self) -> &Vec<CmpSplAnchor> {
         &self.anchors
     }
     
@@ -112,38 +169,25 @@ impl ComplexSpline {
         }
     }
 
-    pub fn insert_anchor(&mut self, index: usize, anch: Anchor) -> Result<Anchor, ()> {
-        if !(1..self.anchors.len()).contains(&index.debug("index")) {
-            Err(())
-        }
-        else {
-            let start = self.segments[index - 1].ctrls.get_end();
-            let end = self.segments[index].ctrls.get_end();
-            self.segments[index].ctrls = Ctrl::Linear(
-                start 
-                + ((end.to_vector() - start.to_vector())
-                * (1. / 2.))
-            );
-            self.segments.insert(
-                index + 1,
-                Segment::new(Ctrl::Linear(end), 0.5)
-            );
-            self.resample(index);
-            Ok(self.anchors.quantified_emplace(index, anch,
-                |a, min, max| {
-                    a.point.x = a.point.x.clamp(
-                        min.unwrap_or(0.),
-                        max.unwrap_or(f32::MAX)
-                    );
-                    a.point.y = if index % 2 == 0 { 0. } else { 1. }
-                }
-            ))
-        }
+    pub fn insert_anchor(&mut self, anch: Anchor) {
+        let index = self.anchors.quantified_insert(anch.into());            
+        let start = self.segments[index - 1].ctrls.get_end();
+        let end = self.segments[index].ctrls.get_end();
+        self.segments[index].ctrls = Ctrl::Linear(
+            start 
+            + (end.to_vector() - start.to_vector()) * 0.5
+        );
+        self.segments.insert(
+            index + 1,
+            Segment::new(Ctrl::Linear(end), 0.5)
+        );
+        self.correct_anchor(index);
+        self.resample(index);
     }
 
-    pub fn emplace_segment(&mut self, anch_pos: f32, seg: Segment) -> usize {
+    pub fn insert_segment(&mut self, anch_pos: f32, seg: Segment) -> usize {
         assert!(0. < anch_pos);
-        let index = self.anchors.quantified_insert(Anchor::new(Vec2::new(anch_pos, 0.)));
+        let index = self.anchors.quantified_insert(Anchor::new(Vec2::new(anch_pos, 0.)).into());
         self.segments.insert(index, seg);
         self.correct_anchor(index);
         self.resample(index);
@@ -183,25 +227,21 @@ impl ComplexSpline {
 //
 //
 //
-//
-type CompSplSeeker<'a> = Seeker<&'a Vec<Segment>, (BPSeeker<'a, Anchor>, SegmentSeeker<'a>)>;
+// 
+type CompSplSeeker<'a> = Seeker<&'a Vec<Segment>, (BPSeeker<'a, CmpSplAnchor>, SegmentSeeker<'a>)>;
 
 impl<'a> SeekerTypes for CompSplSeeker<'a> {
-    type Source = <BPSeeker<'a, Anchor> as SeekerTypes>::Source;
+    type Source = <BPSeeker<'a, CmpSplAnchor> as SeekerTypes>::Source;
     type Output = Vec2;
 }
 
 impl<'a> Seek for CompSplSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
-    fn method(&mut self, offset: f32) -> Vec2 {
+    fn method(&mut self, x: f32) -> Vec2 {
         let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
         let old = anchorseeker.index();
-        let mut t = anchorseeker.method(offset);
+        let t = anchorseeker.method(x);
         let new = anchorseeker.index();
-
-        if new % 2 != 0 {
-            t = t.lerp_invert()
-        }
 
         if old != new && !anchorseeker.over_run() {
             *lutseeker = self.data[new].seeker();
@@ -231,7 +271,6 @@ mod tests {
     use ggez::{
         event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
         graphics::*,
-        input::keyboard::is_key_pressed,
         timer::time_since_start,
         Context, GameResult, GameError
     };
@@ -319,13 +358,16 @@ mod tests {
             //  automation
             //
             let mut anch_seeker = self.cmpspl.anchors().seeker();
-            let res = 200;
+            let res = self.dimensions.x as i32;
             let auto_points: Vec<Vec2> = (0..res)
                 .map(|x| {
                     Vec2::new(
                         (x as f32 / res as f32) * self.dimensions.x,
-                        self.dimensions.y - (self.dimensions.y / 4.)
-                        * anch_seeker.seek((x as f32 / res as f32) * self.dimensions.x),
+                        self.dimensions.y - (
+                            0.25 
+                            * self.dimensions.y
+                            * anch_seeker.seek((x as f32 / res as f32) * self.dimensions.x)
+                        )
                     )
                 })
                 .collect();
@@ -353,9 +395,8 @@ mod tests {
                         draw(ctx, &circle, (Vec2::new(p2.x, p2.y),))?;
                     }
                     Ctrl::Cubic(p1, p2, p3) => {
-                        let start = self.cmpspl.segments()[i - 1].ctrls.get_end();
-                        draw(ctx, &rect, (Vec2::new(start.x + p1.x, start.y + p1.y),))?;
-                        draw(ctx, &rect, (Vec2::new(p2.x + p3.x, p2.y + p3.y),))?;
+                        draw(ctx, &rect, (Vec2::new(p1.x, p1.y),))?;
+                        draw(ctx, &rect, (Vec2::new(p2.x, p2.y),))?;
                         draw(ctx, &circle, (Vec2::new(p3.x, p3.y),))?;
                     }
                     Ctrl::ThreePointCircle(p1, p2) => {
@@ -373,7 +414,7 @@ mod tests {
                     points.push(seeker.seek(t));
                     t += 0.05;
                 }
-                points.push(seeker.seek(1.));
+                points.push(seeker.seek(t));
 
                 let lines = MeshBuilder::new()
                     .polyline(
@@ -410,7 +451,7 @@ mod tests {
                                     }).unwrap();
                                 },
                                 _ => {
-                                    self.cmpspl.insert_anchor(index, Anchor::new(Vec2::new(x, 0.))).unwrap();
+                                    self.cmpspl.insert_anchor(Anchor::new(Vec2::new(x, 0.)));
                                 }
                             }
                         }
@@ -444,6 +485,11 @@ mod tests {
         }
 
         fn key_down_event(&mut self, _ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
+            if let Selection::Anchor(index) = self.selection {
+                automation::tests::key_handle(&mut self.cmpspl.anchors[index], key);
+                return;
+            }
+                    
             let points = &self.point_buff;
             let ctrls = match key {
                 KeyCode::Key1 => Ctrl::Linear(points[FromEnd(0)]),
@@ -455,9 +501,6 @@ mod tests {
                     return;
                 }
                 _ => {
-                    if let Selection::Anchor(index) = self.selection {
-                        automation::tests::key_handle(&mut self.cmpspl.anchors[index], key);
-                    }
                     return;
                 }
             };

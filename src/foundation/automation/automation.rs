@@ -38,12 +38,28 @@ impl Automation {
         }
     }
 
+    fn correct_anchor(&mut self, index: usize) {
+        assert!((1..self.anchors.len()).contains(&index));
+        self.anchors[index].point.x = self.anchors[index].point.x.clamp(
+            self.anchors[index - 1].point.x,
+            if index + 1 < self.anchors.len() {
+                self.anchors[index + 1].point.x
+            }
+            else {
+                f32::MAX
+            }
+        );
+    }
+
+
     pub fn len(&self) -> usize {
         self.anchors.len()
     }
 
     pub fn insert(&mut self, anch: Anchor) -> usize {
-        self.anchors.quantified_insert(anch)
+        let index = self.anchors.quantified_insert(anch);
+        self.correct_anchor(index);
+        index
     }
 
     pub fn remove(&mut self, index: usize) -> Anchor {
@@ -61,17 +77,6 @@ impl Automation {
                     .unwrap()
             })
             .unwrap().0
-    }
-
-    pub fn emplace(&mut self, index: usize, anch: Anchor) -> Anchor {
-        self.anchors.quantified_emplace(index, anch,
-            |a, min, max| {
-                a.point.x = a.point.x.clamp(
-                    min.unwrap_or(0.),
-                    max.unwrap_or(f32::MAX)
-                );
-            }
-        )
     }
 }
 //

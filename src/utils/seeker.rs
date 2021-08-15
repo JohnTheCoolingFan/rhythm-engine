@@ -33,15 +33,6 @@ pub trait SeekExtensions
     type Item: Quantify;
 
     fn quantified_insert(&mut self, item: Self::Item) -> usize;
-    
-    //now this is what I call a signature
-    fn quantified_emplace<F>(&mut self, index: usize, item: Self::Item, adjust: F) -> Self::Item
-    where
-        F: Fn(
-            &mut Self::Item,
-            Option<<Self::Item as Quantify>::Quantifier>,
-            Option<<Self::Item as Quantify>::Quantifier>
-        );
 }
 //
 //
@@ -161,13 +152,7 @@ where
             .binary_search_by(|elem| elem.quantify().partial_cmp(&offset).unwrap())
         {
             Ok(index) => index,
-            Err(index) => {
-                if self.data.len() < index {
-                    index
-                } else {
-                    self.data.len()
-                }
-            }
+            Err(index) => index 
         };
         self.exhibit(offset)
     }
@@ -199,25 +184,5 @@ where
         };
         self.insert(index, item);
         index
-    }
-
-    fn quantified_emplace<F>(&mut self, index: usize, mut item: T, adjust: F) -> T
-    where
-        F: Fn(
-            &mut Self::Item,
-            Option<<Self::Item as Quantify>::Quantifier>,
-            Option<<Self::Item as Quantify>::Quantifier>
-        )
-    {
-        let old = self[index];
-        
-        let min = if index == 0 { None } else { Some(self[index - 1].quantify()) };
-        let max = if self.len() - index <= 1 { None } else { Some(self[index + 1].quantify()) };
-
-        self.remove(index);
-        adjust(&mut item,  min, max);
-        self.insert(index, item);
-
-        old
     }
 }

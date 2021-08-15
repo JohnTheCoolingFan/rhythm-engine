@@ -106,7 +106,6 @@ impl Segment {
                 .for_each_flattened(tolerence, &mut callback)
             }
             Ctrl::ThreePointCircle(c, end) => {
-                self.lut.clear();
                 //https://math.stackexchange.com/a/1460096
                 let m11 = Mat3::from_cols_array(&[
                     start.x, start.y, 1.,
