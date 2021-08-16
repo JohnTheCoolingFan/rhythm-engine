@@ -1,6 +1,5 @@
-use crate::foundation::{automation::*, complex_spline::*};
+use super::{anchor::*, segment::*};
 use crate::utils::*;
-use duplicate::duplicate;
 use glam::Vec2;
 use lyon_geom::Point;
 use std::ops::{Deref, DerefMut};
@@ -235,6 +234,8 @@ impl<'a> SeekerTypes for CompSplSeeker<'a> {
     type Output = Vec2;
 }
 
+
+use duplicate::duplicate;
 impl<'a> Seek for CompSplSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, x: f32) -> Vec2 {
@@ -249,6 +250,40 @@ impl<'a> Seek for CompSplSeeker<'a> {
 
         lutseeker.method(t)
     }
+
+    /*fn jump(&mut self, x: f32) -> Vec2 {
+        let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
+        let old = anchorseeker.index();
+        let t = anchorseeker.jump(x);
+        let new = anchorseeker.index();
+
+        if old != new && !anchorseeker.over_run() {
+            *lutseeker = self.data[new].seeker();
+        }
+
+        lutseeker.jump(t)
+    }
+
+    fn seek(&mut self, x: f32) -> Vec2 {
+        let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
+        let old = anchorseeker.index();
+        let t = anchorseeker.seek(x);
+        let new = anchorseeker.index();
+
+        if old != new && !anchorseeker.over_run() {
+            *lutseeker = self.data[new].seeker();
+        }
+
+        let subwave = &anchorseeker.current().subwave;
+
+        if let SubWaveMode::Hop{ .. } | SubWaveMode::Oscilate{ .. } = subwave.mode {
+            if subwave.period != 0. {
+                return lutseeker.jump(t)
+            }
+        }
+
+        lutseeker.seek(t)
+    }*/
 }
 
 impl<'a> Seekable<'a> for ComplexSpline {
@@ -268,6 +303,7 @@ impl<'a> Seekable<'a> for ComplexSpline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::automation;
     use ggez::{
         event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
         graphics::*,
@@ -352,7 +388,7 @@ mod tests {
                 .build(ctx)?;
 
             draw(ctx, &t_line, (Vec2::new(t, 0.),))?;
-            draw(ctx, &circle, (self.cmpspl.seeker().jump(t),))?;
+            draw(ctx, &circle, (self.cmpspl.seeker().seek(t),))?;
 
             //
             //  automation
@@ -407,14 +443,13 @@ mod tests {
             }
 
             for i in 1..self.cmpspl.segments().len() {
-                let mut points = Vec::<Vec2>::new();
-                let mut seeker = self.cmpspl.segments()[i].seeker();
-                let mut t = 0.;
-                while t <= 1. {
-                    points.push(seeker.seek(t));
-                    t += 0.05;
-                }
-                points.push(seeker.seek(t));
+                let points: Vec<Vec2> = self
+                    .cmpspl
+                    .segments()[i]
+                    .lut
+                    .iter()
+                    .map(|e| e.val)
+                    .collect();
 
                 let lines = MeshBuilder::new()
                     .polyline(

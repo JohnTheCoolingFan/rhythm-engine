@@ -120,7 +120,7 @@ impl SubWaveMode {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SubWave {
-    period: f32,
+    pub(super) period: f32,
     pub offset: f32,
     pub weight: Weight,
     pub mode: SubWaveMode,

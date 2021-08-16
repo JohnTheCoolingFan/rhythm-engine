@@ -172,14 +172,20 @@ impl Segment {
                 for elem in &mut self.lut {
                     elem.time /= max_displ;
                 }
+                let p = ctrls.get_end();
+                self.lut.push((1., Vec2::new(p.x, p.y)).into());
             }
         }
     }
 }
 
 impl<'a> Exhibit for BPSeeker<'a, Epoch<Vec2>> {
-    fn exhibit(&self, t: f32) -> Vec2 {
-        self.previous().val.lerp(self.current().val, t)
+    fn exhibit(&self, offset: f32) -> Vec2 {
+        let curr = self.current();
+        let prev = self.previous();
+        let t = (offset - prev.time) / (curr.time - prev.time);
+        prev.val.lerp(curr.val, t)
+
     }
 }
 
