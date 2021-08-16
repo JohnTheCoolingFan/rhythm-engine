@@ -236,22 +236,8 @@ impl<'a> SeekerTypes for CompSplSeeker<'a> {
 
 
 use duplicate::duplicate;
-impl<'a> Seek for CompSplSeeker<'a> {
-    #[duplicate(method; [seek]; [jump])]
-    fn method(&mut self, x: f32) -> Vec2 {
-        let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
-        let old = anchorseeker.index();
-        let t = anchorseeker.method(x);
-        let new = anchorseeker.index();
-
-        if old != new && !anchorseeker.over_run() {
-            *lutseeker = self.data[new].seeker();
-        }
-
-        lutseeker.method(t)
-    }
-
-    /*fn jump(&mut self, x: f32) -> Vec2 {
+impl<'a> Seek for CompSplSeeker<'a> { 
+    fn jump(&mut self, x: f32) -> Vec2 {
         let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
         let old = anchorseeker.index();
         let t = anchorseeker.jump(x);
@@ -283,7 +269,7 @@ impl<'a> Seek for CompSplSeeker<'a> {
         }
 
         lutseeker.seek(t)
-    }*/
+    }
 }
 
 impl<'a> Seekable<'a> for ComplexSpline {
