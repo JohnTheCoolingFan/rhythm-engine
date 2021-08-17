@@ -147,6 +147,12 @@ pub mod tests {
             KeyCode::E => {
                 let _ = anch.subwave.mode.toggle_y_alternate();
             }
+            KeyCode::F => {
+                let _ = anch.weight.flip_x();
+            }
+            KeyCode::C => {
+                anch.weight.flip_y();
+            }
             KeyCode::D => {
                 anch.subwave.shift_period(2.);
             }
@@ -154,10 +160,10 @@ pub mod tests {
                 anch.subwave.shift_period(-2.);
             }
             KeyCode::W => {
-                let _ = anch.subwave.weight.shift_power(2.);
+                let _ = anch.subwave.weight.shift_curvature(2.);
             }
             KeyCode::S => {
-                let _ = anch.subwave.weight.shift_power(-2.);
+                let _ = anch.subwave.weight.shift_curvature(-2.);
             }
             KeyCode::Key1 => {
                 anch.subwave.offset -= 2.;
@@ -250,7 +256,7 @@ pub mod tests {
                 .closest_to(ggez::input::mouse::position(ctx).into());
             let _ = self.automation[index]
                 .weight
-                .shift_power(if 0. < y { 0.05 } else { -0.05 });
+                .shift_curvature(if 0. < y { 0.05 } else { -0.05 });
         }
 
         fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {

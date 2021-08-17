@@ -1,79 +1,107 @@
 use crate::utils::{math::*, seeker::*, misc::*};
 use glam::Vec2;
+use std::mem::swap;
 use duplicate::duplicate;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Weight {
-    ForwardBias,
-    QuadLike(f32),
-    CubeLike(f32),
-    ReverseBias,
+    Constant {
+        y_flip: bool
+    },
+    QuadLike{
+        curvature: f32,
+        x_flip: bool,
+        y_flip: bool
+    },
+    CubeLike{
+        curvature: f32,
+        y_flip: bool
+    },
 }
 
 impl Weight {
     pub fn cycle(&mut self) -> Self {
         let old = *self;
         *self = match self {
-            Self::ForwardBias => Self::QuadLike(0.),
-            Self::QuadLike(_) => Self::CubeLike(0.),
-            Self::CubeLike(_) => Self::ReverseBias,
-            Self::ReverseBias => Self::ForwardBias,
+            Self::Constant{ .. } => Self::QuadLike{ curvature: 0., x_flip: false, y_flip: false },
+            Self::QuadLike{ .. } => Self::CubeLike{ curvature: 0., y_flip: false },
+            Self::CubeLike{ .. } => Self::Constant{ y_flip: false },
         };
         old
     }
 
-    pub fn set_power(&mut self, new: f32) -> Result<f32, ()> {
+    pub fn set_curvature(&mut self, new: f32) -> Result<f32, ()> {
         match self {
-            Self::QuadLike(ref mut power) | Self::CubeLike(ref mut power) => {
-                let old = *power;
-                *power = new.clamp(-30., 30.);
+            Self::QuadLike{ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } => {
+                let old = *curvature;
+                *curvature = new.clamp(-30., 30.);
                 Ok(old)
             }
             _ => Err(()),
         }
     }
 
-    pub fn shift_power(&mut self, shift: f32) -> Result<f32, ()> {
-        if let Self::QuadLike(power) | Self::CubeLike(power) = *self {
-            self.set_power(shift + power)
+    pub fn shift_curvature(&mut self, shift: f32) -> Result<f32, ()> {
+        if let Self::QuadLike{ curvature, .. } | Self::CubeLike{ curvature, .. } = *self {
+            self.set_curvature(shift + curvature)
         } else {
             Err(())
         }
     }
 
+    pub fn flip_x(&mut self) -> Result<bool, ()> {
+        match self {
+            Self::QuadLike{ ref mut x_flip, .. } => {
+                *x_flip = !*x_flip;
+                Ok(!*x_flip)
+            }
+            _ => Err(())
+        }
+    }
+
+    pub fn flip_y(&mut self) -> Self {
+        let old = *self;
+        match self {
+            Self::Constant{ ref mut y_flip, .. }
+            | Self::QuadLike{ ref mut y_flip, .. }
+            | Self::CubeLike{ ref mut y_flip, .. }=> {
+                *y_flip = !*y_flip;
+            } 
+        }
+        old
+    }
+
     #[rustfmt::skip]
     pub fn eval(&self, t: f32) -> f32 {
-        match self {
-            Self::ForwardBias => 1.,
-            Self::ReverseBias => 0.,
-            Self::QuadLike(power) | Self::CubeLike(power) => {
-                //cubic is basically 2 quadratics with the 2nd
-                //being inverted about the half way point
-                let (starting, delta, x) = if let Self::CubeLike(_) = self {
-                    if 0.5 < t {(
-                        1.,
-                        -0.5,
-                        (0.5 - t % 0.5) / 0.5
-                    )} else {(
-                        0.,
-                        0.5,
-                        t / 0.5
-                    )}
-                } else {(
-                    0.,
-                    1.,
-                    t
-                )};
+        let (curvature, x_flip, y_flip) = match self {
+            Self::Constant{ y_flip } => return if *y_flip { 0. } else { 1. },
+            Self::QuadLike{ curvature, x_flip, y_flip } => (*curvature, *x_flip, *y_flip),
+            Self::CubeLike{ curvature, y_flip } => (*curvature, false, *y_flip)
+        };
 
-                starting + delta * x.powf(
-                    if *power < 0. {
-                        1. / (power.abs() + 1.)
-                    } else {
-                        *power + 1.
-                    }
-                )
+        //cubic is basically 2 quadratics with the 2nd
+        //being inverted about the half way point
+        let (starting, delta, mut x) = if let Self::CubeLike{ .. } = self {
+            if 0.5 < t {
+                (1.,    -0.5,   (0.5 - t % 0.5) / 0.5   )
+            } else {
+                (0.,    0.5,    t / 0.5                 )
             }
-        }
+        } else {
+                (0.,    1.,     t                       )
+        };
+
+        if x_flip { x = 1. - x }
+
+        let out = starting + delta * x.powf(
+            if curvature < 0. {
+                1. / (curvature.abs() + 1.)
+            } else {
+                curvature + 1.
+            }
+        );
+
+        if y_flip { 1. - out } else { out }
     }
 }
 //
@@ -158,19 +186,20 @@ impl Anchor {
         debug_assert!((0.0..=1.0).contains(&p.y), "anchor point y out of range");
         Self {
             point: p,
-            weight: Weight::QuadLike(0.),
+            weight: Weight::QuadLike{ curvature: 0., x_flip: false, y_flip: false },
             subwave: SubWave {
                 offset: 0.,
                 period: 0.,
-                weight: Weight::QuadLike(0.),
+                weight: Weight::QuadLike{ curvature: 0., x_flip: false, y_flip: false },
                 mode: SubWaveMode::Off,
             },
         }
     }
 
     #[rustfmt::skip]
-    pub fn eval(&self, start: &Self, offset: f32) -> f32 {
-        let end = self;
+    pub fn eval(&self, last: &Self, offset: f32) -> f32 {
+        let start = *last;
+        let end = *self;
 
         let dy = end.point.y - start.point.y;
         let dx = end.point.x - start.point.x; 
@@ -178,24 +207,21 @@ impl Anchor {
         if let SubWaveMode::Off = end.subwave.mode {
             return start.point.y
                 + dy 
-                * end.weight.eval(
-                    ((offset - start.point.x) / dx).if_nan(0.)
-                )
+                * end.weight.eval((offset - start.point.x) / dx).if_nan(0.)
         }
+        
+        let x0 = (offset - start.point.x).quant_floor(
+            end.subwave.period,
+            end.subwave.offset
+        );
 
-        let x0 = 
-            (offset - start.point.x)
-                .quant_floor(
-                    end.subwave.period,
-                    end.subwave.offset
-                );
         let x1 = x0 + end.subwave.period;
 
         let odd_parity = 
             ((offset - end.subwave.offset - start.point.x) / end.subwave.period)
                 .if_nan(0.)
                 .floor()
-            as i32 % 2 != 0;
+                as i32 % 2 != 0;
 
         let (x_alt, y_alt) = match end.subwave.mode {
             SubWaveMode::Oscilate{ x_alt, y_alt } | SubWaveMode::Hop{ x_alt, y_alt } => (
@@ -280,7 +306,7 @@ impl<'a> SeekerTypes for BPSeeker<'a, Anchor> {
 }
 
 impl<'a> Exhibit for BPSeeker<'a, Anchor> { 
-    fn exhibit(&self, t: f32) -> Self::Output {
+    fn exhibit(&self, offset: f32) -> Self::Output {
         if self.over_run() {
             self.vec()[FromEnd(0)].point.y
         }
@@ -288,7 +314,7 @@ impl<'a> Exhibit for BPSeeker<'a, Anchor> {
             self.vec()[0].point.y
         }
         else {
-            self.vec()[self.index()].eval(&self.vec()[self.index() - 1], t)
+            self.current().eval(self.previous(), offset)
         }
     }
 }
