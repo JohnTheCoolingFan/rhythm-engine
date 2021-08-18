@@ -231,10 +231,9 @@ mod tests {
                 .color
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            let _ = self.color
-                .automation[index]
-                .weight
-                .shift_curvature(if 0. < y { 0.05 } else { -0.05 });
+            if let Some(curvature) = self.color.automation[index].weight.curvature_mut() {
+                    *curvature += if 0. < y { 0.05 } else { -0.05 };
+                }
         }
 
         fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {

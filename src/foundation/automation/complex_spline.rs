@@ -536,7 +536,9 @@ mod tests {
             if let Selection::Anchor(index) | Selection::Segment(index) = self.selection {
                 self.cmpspl.modify(index, 
                     |anchor, _| { 
-                        anchor.weight.shift_curvature(if 0. < y { 0.05 } else { -0.05 }).unwrap();
+                        if let Some(curvature) = anchor.weight.curvature_mut() {
+                            *curvature += if 0. < y { 0.05 } else { -0.05 };
+                        }
                     }
                 ).unwrap();
             }
