@@ -24,8 +24,25 @@ impl Weight {
         let old = *self;
         *self = match self {
             Self::Constant{ .. } => Self::QuadLike{ curvature: 0., x_flip: false, y_flip: false },
-            Self::QuadLike{ .. } => Self::CubeLike{ curvature: 0., y_flip: false },
-            Self::CubeLike{ .. } => Self::Constant{ y_flip: false },
+            Self::QuadLike{ ref mut curvature, .. } => {
+                //"floating point types cannot be used in patterns" :(
+                if *curvature == 0. {
+                    Self::CubeLike{ curvature: 0., y_flip: false }
+                }
+                else {
+                    *curvature = 0.;
+                    *self
+                }
+            },
+            Self::CubeLike{ curvature, .. } => {
+                if *curvature == 0. {
+                    Self::Constant{ y_flip: false }
+                }
+                else {
+                    *curvature = 0.;
+                    *self
+                }
+            }
         };
         old
     }
@@ -42,7 +59,7 @@ impl Weight {
     pub fn set_curvature(&mut self, new: f32) -> Result<f32, ()> {
         if let Self::QuadLike{ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } = self {
             let old = *curvature;
-            *curvature = new.clamp(0., 10.);
+            *curvature = new.clamp(-10., 10.);
             Ok(old)
         }
         else {
@@ -53,7 +70,7 @@ impl Weight {
     pub fn shift_curvature(&mut self, shift: f32) -> Result<f32, ()> {
         if let Self::QuadLike{ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } = self {
             let old = *curvature;
-            *curvature = (old + shift).clamp(0., 10.);
+            *curvature = (old + shift).clamp(-10., 10.);
             Ok(old)
         }
         else {
@@ -118,15 +135,18 @@ impl Weight {
                 (0.,    1.,     t                       )
         };
 
-        if x_flip { x = 1. - x }
+        let k = curvature.abs();
 
-        let out = starting + delta * if 0.5 < curvature {
-            ((curvature.powi(5) + 1.).powf(x) - 1.) / curvature.powi(5)
-        } else {
-            x
-        };
+        if x_flip ^ (0.5 < k && curvature < 0.) { x = 1. - x }
 
-        if y_flip { 1. - out } else { out }
+        let out = starting + delta * 
+            if 0.5 < k {
+                ((k.powi(5) + 1.).powf(x) - 1.) / k.powi(5)
+            } else {
+                x
+            };
+
+        if y_flip ^ (0.5 < k && curvature < 0.) { 1. - out } else { out }
     }
 }
 //
@@ -230,7 +250,8 @@ impl Anchor {
 
         let odd_parity = 
             ((offset - end.subwave.offset - start.point.x) / end.subwave.period)
-                .floor().abs()
+                .floor()
+                .abs()
                 as i32 % 2 == 1;
 
         if !odd_parity {
@@ -248,6 +269,8 @@ impl Anchor {
 
         let (sub_start, sub_scale) = match end.subwave.mode {
             SubWaveMode::Step => {
+                *x_alt = false;
+                *y_alt = false;
                 (e0 * dy, e1 - e0)
             },
             SubWaveMode::Hop => {
