@@ -88,14 +88,14 @@ impl Weight {
 
     #[rustfmt::skip]
     pub fn eval(&self, t: f32) -> f32 {
+        debug_assert!((0.0..=1.0).contains(&t), "t must be between 0 and 1");
+        
         let (curvature, x_flip, y_flip) = match self {
             Self::Constant{ y_flip } => return if *y_flip { 0. } else { 1. },
             Self::QuadLike{ curvature, x_flip, y_flip } => (*curvature, *x_flip, *y_flip),
             Self::CubeLike{ curvature, y_flip } => (*curvature, false, *y_flip)
         };
 
-        //cubic is basically 2 quadratics with the 2nd
-        //being inverted about the half way point
         let (starting, delta, mut x) = if let Self::CubeLike{ .. } = self {
             if 0.5 < t {
                 (1.,    -0.5,   (0.5 - t % 0.5) / 0.5   )
@@ -244,12 +244,9 @@ impl Anchor {
             _ => (0., 0.)
         };
 
-        let o = start.point.y + dy0 + (dy1 - dy0) * end.subwave.weight.eval(
+        start.point.y + dy0 + (dy1 - dy0) * end.subwave.weight.eval(
             (offset - start.point.x - x0) / end.subwave.period
-        );
-
-        if x0 < 0. { println!("x0: {}, eval out: {}", x0, o); }
-        o
+        )
     }
 
 }
