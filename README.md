@@ -5,8 +5,8 @@ As someone who enjoys rhythm games it's hard to not notice that in almost every 
 was initially designed for in order to achieve more stimulating, complex and expressive experiences around the music.
 
 This project aims to create a pointer based rhythm game (similar to osu!) from the ground up with this in mind.
-The goal is to use linear interpolation and an editor that takes inspiration from Digital Audio Workstations to produce a game that
-lets users more easily achieve their creativity.
+The goal is to use linear interpolation tools to enable interesting mechanics and make an editor that 
+takes inspiration from Digital Audio Workstations to produce a game that lets users more easily achieve their creativity.
 
 ---
 
