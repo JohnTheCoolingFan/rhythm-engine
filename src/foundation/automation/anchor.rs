@@ -88,13 +88,15 @@ impl Weight {
 
     #[rustfmt::skip]
     pub fn eval(&self, t: f32) -> f32 {
-        debug_assert!((0.0..=1.0).contains(&t), "t must be between 0 and 1");
-        
         let (curvature, x_flip, y_flip) = match self {
             Self::Constant{ y_flip } => return if *y_flip { 0. } else { 1. },
             Self::QuadLike{ curvature, x_flip, y_flip } => (*curvature, *x_flip, *y_flip),
             Self::CubeLike{ curvature, y_flip } => (*curvature, false, *y_flip)
         };
+
+        if curvature < 0.001 {
+            return t
+        }
 
         let (starting, delta, mut x) = if let Self::CubeLike{ .. } = self {
             if 0.5 < t {
@@ -108,13 +110,7 @@ impl Weight {
 
         if x_flip { x = 1. - x }
 
-        let out = starting + delta * x.powf(
-            if curvature < 0. {
-                1. / (curvature.abs() + 1.)
-            } else {
-                curvature + 1.
-            }
-        );
+        let out = starting + delta * (((curvature + 1.).powf(x) - 1.) / curvature);
 
         if y_flip { 1. - out } else { out }
     }
@@ -203,7 +199,7 @@ impl Anchor {
         let dy = end.point.y - start.point.y;
         let dx = end.point.x - start.point.x; 
         
-        if dx.abs() < f32::EPSILON {
+        if dx < end.subwave.period {
             return end.point.y
         }
         if matches!(end.subwave.mode, SubWaveMode::Off) || end.subwave.period == 0. {
@@ -232,7 +228,7 @@ impl Anchor {
             end.subwave.offset
         );
         let x1 = x0 + start.subwave.period;
-
+        
         let t0 = x0 / dx;
         let t1 = t0 + (end.subwave.period / dx);
 
