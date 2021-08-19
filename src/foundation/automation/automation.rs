@@ -166,14 +166,10 @@ pub mod tests {
                 anch.subwave.shift_period(-2.);
             }
             KeyCode::W => {
-                if let Some(curvature) = anch.subwave.weight.curvature_mut() {
-                    *curvature += 2.
-                }
+                let _ = anch.subwave.weight.shift_curvature(0.05);
             }
             KeyCode::S => {
-                if let Some(curvature) = anch.subwave.weight.curvature_mut() {
-                    *curvature -= 2.
-                }
+                let _ = anch.subwave.weight.shift_curvature(-0.05);
             }
             KeyCode::Key1 => {
                 anch.subwave.offset -= 2.;
@@ -264,9 +260,9 @@ pub mod tests {
             let index = self
                 .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            if let Some(curvature) = self.automation[index].weight.curvature_mut() {
-                *curvature += if 0. < y { 0.05 } else { -0.05 };
-            }
+            let _ = self.automation[index].weight.shift_curvature(
+                if 0. < y { 0.05 } else { -0.05 }
+            );
         }
 
         fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {

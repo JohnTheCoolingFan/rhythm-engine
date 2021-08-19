@@ -39,14 +39,28 @@ impl Weight {
         }
     }
 
-    pub fn curvature_mut(&mut self) -> Option<&mut f32> {
+    pub fn set_curvature(&mut self, new: f32) -> Result<f32, ()> {
         if let Self::QuadLike{ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } = self {
-            Some(curvature)
+            let old = *curvature;
+            *curvature = new.clamp(0., 10.);
+            Ok(old)
         }
         else {
-            None
+            Err(())
         }
     }
+
+    pub fn shift_curvature(&mut self, shift: f32) -> Result<f32, ()> {
+        if let Self::QuadLike{ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } = self {
+            let old = *curvature;
+            *curvature = (old + shift).clamp(0., 10.);
+            Ok(old)
+        }
+        else {
+            Err(())
+        }
+    }
+
 
     pub fn x_flip(&self) -> Option<&bool> {
         if let Self::QuadLike{ ref x_flip, .. } = self {
@@ -93,14 +107,10 @@ impl Weight {
             Self::QuadLike{ curvature, x_flip, y_flip } => (*curvature, *x_flip, *y_flip),
             Self::CubeLike{ curvature, y_flip } => (*curvature, false, *y_flip)
         };
-
-        if curvature < 0.001 {
-            return t
-        }
-
+ 
         let (starting, delta, mut x) = if let Self::CubeLike{ .. } = self {
             if 0.5 < t {
-                (1.,    -0.5,   (0.5 - t % 0.5) / 0.5   )
+                (1.,    -0.5,   (0.5 - (t - 0.5)) / 0.5 )
             } else {
                 (0.,    0.5,    t / 0.5                 )
             }
@@ -110,7 +120,11 @@ impl Weight {
 
         if x_flip { x = 1. - x }
 
-        let out = starting + delta * (((curvature + 1.).powf(x) - 1.) / curvature);
+        let out = starting + delta * if 0.5 < curvature {
+            ((curvature.powi(5) + 1.).powf(x) - 1.) / curvature.powi(5)
+        } else {
+            x
+        };
 
         if y_flip { 1. - out } else { out }
     }
@@ -194,7 +208,7 @@ impl Anchor {
     #[rustfmt::skip]
     pub fn eval(&self, last: &Self, offset: f32) -> f32 {
         let start = last;
-        let end = *self;
+        let mut end = *self;
 
         let dy = end.point.y - start.point.y;
         let dx = end.point.x - start.point.x; 
@@ -208,14 +222,15 @@ impl Anchor {
                 * end.weight.eval((offset - start.point.x) / dx)
         }
 
-        let (ref mut x_alt, ref mut y_alt) = match end.subwave.weight {
-            Weight::Constant{ y_flip } | Weight::CubeLike{ y_flip, .. } => (false, y_flip),
-            Weight::QuadLike{ x_flip, y_flip, .. } => (x_flip, y_flip)
+        let mut f = false;
+        let (x_alt, y_alt) = match end.subwave.weight {
+            Weight::Constant{ ref mut y_flip } | Weight::CubeLike{ ref mut y_flip, .. } => (&mut f, y_flip),
+            Weight::QuadLike{ ref mut x_flip, ref mut y_flip, .. } => (x_flip, y_flip)
         };
 
         let odd_parity = 
             ((offset - end.subwave.offset - start.point.x) / end.subwave.period)
-                .floor()
+                .floor().abs()
                 as i32 % 2 == 1;
 
         if !odd_parity {
@@ -227,22 +242,43 @@ impl Anchor {
             end.subwave.period,
             end.subwave.offset
         );
-        let x1 = x0 + start.subwave.period;
-        
-        let t0 = x0 / dx;
-        let t1 = t0 + (end.subwave.period / dx);
+ 
+        let e0 = end.weight.eval(x0 / dx);
+        let e1 = end.weight.eval(x0 / dx + (end.subwave.period / dx));
 
-        let (dy0, dy1) = match end.subwave.mode {
+        let (sub_start, sub_scale) = match end.subwave.mode {
             SubWaveMode::Step => {
-                *x_alt = false;
-                (dy * end.weight.eval(t0), dy * end.weight.eval(t1))
+                (e0 * dy, e1 - e0)
             },
+            SubWaveMode::Hop => {
+                if odd_parity && (*x_alt ^ *y_alt) {
+                    (0., e0)
+                }
+                else {
+                    (0., e1)
+                }
+            }
+            SubWaveMode::Oscilate => {
+                let h0 = dy * e0;
+                let h1 = dy * e1;
+                if (*x_alt ^ *y_alt) && odd_parity {
+                    ((dy - h1) * 0.5, e0 + (e1 - e0) * 0.5)
+                }
+                else {
+                    ((dy - h0) * 0.5, e0 + (e1 - e0) * 0.5)
+                }            
+            }
             _ => (0., 0.)
         };
 
-        start.point.y + dy0 + (dy1 - dy0) * end.subwave.weight.eval(
-            (offset - start.point.x - x0) / end.subwave.period
+        let (mut min, mut max) = (start.point.y, end.point.y);
+        if max < min { std::mem::swap(&mut min, &mut max); }
+
+        (start.point.y + sub_start + dy * sub_scale * end.subwave.weight.eval(
+                (offset - start.point.x - x0) / end.subwave.period
+            )
         )
+        .clamp(min, max)
     }
 
 }
