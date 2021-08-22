@@ -1,56 +1,51 @@
-/*
- * THIS NEEDS TO BE RETHOUGHT
- *
- * use crate::{
-    foundation::automation::*,
-    utils::{Seekable, Seeker},
-};
+use std::ops::{Deref, DerefMut};
 use duplicate::duplicate;
-use glam::{Mat2, Vec2};
-use std::marker::PhantomData;
+use glam::{Vec2, Mat2};
+use super::Automation;
 
-pub struct TransformPoint<T>
-where
-    T: Into<Mat2>,
-    f32: Into<T>,
-{
-    pub point: Option<Vec2>,
-    pub automation: Automation,
-    _phantom: PhantomData<T>,
-}
+pub struct Rotation(pub f32);
+pub struct Scale(pub f32);
 
-pub struct TransPointSeeker<'a, T>
-where
-    T: Into<Mat2>,
-    f32: Into<T>,
-{
-    seeker: AutomationSeeker<'a>,
-    tp: &'a TransformPoint<T>,
-}
-
-impl<'a, T> Seeker<Mat2> for TransPointSeeker<'a, T>
-where
-    T: Into<Mat2>,
-    f32: Into<T>,
-{
-    #[duplicate(method; [seek]; [jump])]
-    fn method(&mut self, val: f32) -> Mat2 {
-        let t: T = self.seeker.method(val).into();
-        t.into()
+#[duplicate(T; [Rotation]; [Scale])]
+impl Deref for T {
+    type Target = f32;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-impl<'a, T> Seekable<'a> for TransformPoint<T>
+#[duplicate(T; [Rotation]; [Scale])]
+impl DerefMut for T {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+pub enum Transform<T>
 where
-    T: Into<Mat2> + 'a,
-    f32: Into<T>,
+    Mat2: From<T>
 {
-    type Output = Mat2;
-    type SeekerType = TransPointSeeker<'a, T>;
-    fn seeker(&'a self) -> Self::SeekerType {
-        Self::SeekerType {
-            seeker: self.automation.seeker(),
-            tp: &self,
+    PreTrans(T, Option<Vec2>),
+    Trans(Mat2)
+}
+
+impl<T> Transform<T> 
+where
+    Mat2: From<T>
+{
+    pub fn process(&mut self, auxiliary: Vec2) {
+        if let Self::PreTrans(factor, point) = self {
+            *self = Self::Trans(factor.into())
         }
     }
-}*/
+}
+
+struct TransformPoint<T>
+where
+    Mat2: From<T>,
+{
+    pub auto: Automation,
+    point: Option<Vec2>
+}
+
+
