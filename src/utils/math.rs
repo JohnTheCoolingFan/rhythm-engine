@@ -44,7 +44,6 @@ impl ScaleAbout for PointT {
 
 pub trait FloatUtils {
     fn quant_floor(&self, period: Self, offset: Self) -> Self;
-    fn if_nan(self, backup: Self) -> Self;
 }
 
 impl FloatUtils for f32 {
@@ -56,47 +55,4 @@ impl FloatUtils for f32 {
             ((self - offset) / period).floor() * period + offset
         }
     }
-     
-    fn if_nan(self, backup: Self) -> Self {
-        if self.is_nan() {
-            backup
-        }
-        else {
-            self
-        }
-    }
 }
-/*
- *  THIS NEEDS TO BE RETHOUGHT
- *
-pub struct Rotation(f32);
-pub struct Scale(f32);
-
-#[duplicate(NT; [Rotation]; [Scale])]
-impl Into<NT> for f32 {
-    fn into(self) -> NT {
-        NT(self)
-    }
-}
-
-impl Into<Mat2> for Rotation {
-    #[rustfmt::skip]
-    fn into(self) -> glam::Mat2 {
-        let c = self.0.to_radians().cos();
-        let s = self.0.to_radians().sin();
-        Mat2::from_cols_array(&[
-            c, -s,
-            s, c
-        ]).transpose()
-    }
-}
-
-impl Into<Mat2> for Scale {
-    #[rustfmt::skip]
-    fn into(self) -> Mat2 {
-        Mat2::from_cols_array(&[
-            self.0, 0.,
-            0., self.0
-        ])
-    }
-}*/
