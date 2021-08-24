@@ -2,43 +2,14 @@ use crate::{foundation::automation::*, utils::*};
 use duplicate::duplicate;
 
 type Color = ggez::graphics::Color;
-
-pub struct DynColor {
-    pub automation: Automation,
-    lower_colors: Vec<Epoch<Color>>,
-    upper_colors: Vec<Epoch<Color>>, 
-}
-
-impl DynColor {
-    pub fn new(len: f32) -> Self {
-        Self {
-            upper_colors: vec![(0., Color::WHITE).into()],
-            automation: Automation::new(0., 1., len),
-            lower_colors: vec![(0., Color::BLACK).into()],
-        }
-    }
-
-    pub fn insert_upper(&mut self, color: Epoch<Color>) {
-        self.upper_colors.quantified_insert(color);
-    }
-
-    pub fn insert_lower(&mut self, color: Epoch<Color>) {
-        self.lower_colors.quantified_insert(color);
-    }
-}
-//
-//
-//
-//
-//
 type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Color>>;
-
 impl<'a> Exhibit for ColorVecSeeker<'a> {
     fn exhibit(&self, _: f32) -> Color {
         self.previous().val
     }
 }
 
+pub type DynColor = Automation<Vec<Epoch<Color>>>;
 type DynColSeekerMeta<'a> = (BPSeeker<'a, Anchor>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
 pub type DynColorSeeker<'a> = Seeker<(), DynColSeekerMeta<'a>>;
 
@@ -71,9 +42,9 @@ impl<'a> Seekable<'a> for DynColor {
         Self::Seeker {
             data: (),
             meta: (
-                self.automation.anchors.seeker(),
-                self.lower_colors.seeker(),
-                self.upper_colors.seeker(),
+                self.anchors.seeker(),
+                self.lower.seeker(),
+                self.upper.seeker(),
             )
         }
     }
@@ -106,19 +77,21 @@ mod tests {
     impl Test {
         fn new() -> GameResult<Test> {
             let x: f32 = 2800.;
-            let mut test = Self {
-                color: DynColor::new(x),
+            Ok(Self {
+                color: DynColor::new(
+                    vec![
+                        (0., Color::BLACK).into(),
+                        (x / 2., Color::new(1., 0., 0., 1.)).into()
+                    ],
+                    vec![
+                        (0., Color::WHITE).into(),
+                        (x / 2., Color::new(0., 1., 1., 1.)).into(),
+                        (x * (2. / 3.), Color::new(0., 1., 0., 1.)).into()
+                    ],
+                    x
+                ),
                 dimensions: Vec2::new(x, 1100.),
-            };
-
-            test.color
-                .insert_lower((x / 2., Color::new(1., 0., 0., 1.)).into());
-            test.color
-                .insert_upper((x * (2. / 3.), Color::new(0., 1., 0., 1.)).into());
-            test.color
-                .insert_upper((x / 2., Color::new(0., 1., 1., 1.)).into());
-
-            Ok(test)
+            })
         }
     }
 
@@ -133,7 +106,7 @@ mod tests {
             let mut seeker = self.color.seeker();
             clear(ctx, seeker.seek(t));
 
-            for col in &self.color.lower_colors {
+            for col in &self.color.lower {
                 let rect = Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
@@ -148,7 +121,7 @@ mod tests {
                 )?;
             }
 
-            for col in &self.color.upper_colors {
+            for col in &self.color.upper {
                 let rect = Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
@@ -170,13 +143,15 @@ mod tests {
             )?;
             draw(ctx, &circle, (mouse_pos,))?;
 
-            let mut auto_seeker = self.color.automation.seeker();
-            let d = self.dimensions;
-            let auto_points: Vec<Vec2> = (0..d.x as i32)
+            let mut seeker = self.color.anchors.seeker();
+            let res = 2800;
+            let points: Vec<Vec2> = (0..res)
                 .map(|x| {
                     Vec2::new(
-                        (x as f32 / d.x) * d.x,
-                        auto_seeker.seek((x as f32 / d.x) * d.x) * d.y,
+                        (x as f32 / res as f32) * self.dimensions.x,
+                        self.dimensions.y 
+                            - seeker.seek((x as f32 / res as f32) * self.dimensions.x)
+                            * self.dimensions.y,
                     )
                 })
                 .collect();
@@ -184,7 +159,7 @@ mod tests {
             let lines = MeshBuilder::new()
                 .polyline(
                     DrawMode::Stroke(StrokeOptions::DEFAULT),
-                    auto_points.as_slice(),
+                    points.as_slice(),
                     Color::new(1., 1., 1., 1.),
                 )?
                 .build(ctx)?;
@@ -210,17 +185,16 @@ mod tests {
             x: f32,
             y: f32,
         ) {
-            let automation = &mut self.color.automation;
-            let index = automation.closest_to(ggez::input::mouse::position(ctx).into());
+            let index = self.color.closest_to(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    automation.insert(Anchor::new(Vec2::new(x, (self.dimensions.y - y) / self.dimensions.y)));
+                    self.color.insert(Anchor::new(Vec2::new(x, (self.dimensions.y - y) / self.dimensions.y)));
                 }
                 MouseButton::Middle => {
-                    automation[index].weight.cycle();
+                    self.color[index].weight.cycle();
                 }
                 MouseButton::Right => {
-                    automation.remove(index);
+                    self.color.remove(index);
                 }
                 _ => {}
             }
@@ -229,18 +203,16 @@ mod tests {
         fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
             let index = self
                 .color
-                .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            let _ = self.color.automation[index].weight.shift_curvature(
+            let _ = self.color[index].weight.shift_curvature(
                 if 0. < y { 0.05 } else { -0.05 }
             );
         }
 
         fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
             let index = self.color
-                .automation
                 .closest_to(ggez::input::mouse::position(ctx).into());
-            automation::tests::key_handle(&mut self.color.automation[index], key);
+            automation::tests::key_handle(&mut self.color[index], key);
         }
 
     }

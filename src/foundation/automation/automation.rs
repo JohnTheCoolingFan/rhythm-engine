@@ -82,7 +82,6 @@ impl<T> Automation<T> {
 //
 //
 //
-
 type AnchVecSeeker<'a> = BPSeeker<'a, Anchor>;
 pub type AutomationSeeker<'a, T> = Seeker<(T, T), AnchVecSeeker<'a>>;
 
