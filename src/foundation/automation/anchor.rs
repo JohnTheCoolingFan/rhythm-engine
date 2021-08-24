@@ -139,14 +139,13 @@ impl Weight {
 
         if x_flip ^ (1.5 < k && curvature < 0.) { x = 1. - x }
 
-        let out = starting + delta * 
-            if 1.5 < k {
-                (k.powi(5).powf(x) - 1.) / (k.powi(5) - 1.)
-            } else {
-                x
-            };
+        let y = if 1.5 < k {
+            (k.powi(5).powf(x) - 1.) / (k.powi(5) - 1.)
+        } else {
+            x
+        };
 
-        if y_flip ^ (1.5 < k && curvature < 0.) { 1. - out } else { out }
+        starting + delta * if y_flip ^ (1.5 < k && curvature < 0.) { 1. - y } else { y }
     }
 }
 //
