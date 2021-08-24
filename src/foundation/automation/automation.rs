@@ -4,13 +4,13 @@ use glam::Vec2;
 use std::ops::{Index, IndexMut};
 use duplicate::duplicate;
 
-pub struct Automation {
-    pub upper_bound: f32,
-    pub lower_bound: f32,
+pub struct Automation<T> {
+    pub upper: T,
+    pub lower: T,
     pub(super) anchors: Vec<Anchor>,
 }
 
-impl Index<usize> for Automation {
+impl<T> Index<usize> for Automation<T> {
     type Output = Anchor;
 
     fn index(&self, n: usize) -> &Self::Output {
@@ -18,19 +18,17 @@ impl Index<usize> for Automation {
     }
 }
 
-impl IndexMut<usize> for Automation {
+impl<T> IndexMut<usize> for Automation<T> {
     fn index_mut(&mut self, n: usize) -> &mut Anchor {
         &mut self.anchors[n]
     }
 }
 
-impl Automation {
-    pub fn new(lb: f32, ub: f32, len: f32) -> Self {
-        assert!(lb < ub, "upper bound must be greater than lower bound");
-        assert!(0. < len, "length cannot be zero or negative");
-        Automation {
-            upper_bound: ub,
-            lower_bound: lb,
+impl<T> Automation<T> {
+    pub fn new(lower: T, upper: T, len: f32) -> Self {
+        Self {
+            upper,
+            lower,
             anchors: vec![
                 Anchor::new(Vec2::new(0., 0.0)),
                 Anchor::new(Vec2::new(len, 0.0)),
@@ -86,14 +84,14 @@ impl Automation {
 //
 
 type AnchVecSeeker<'a> = BPSeeker<'a, Anchor>;
-pub type AutomationSeeker<'a> = Seeker<(f32, f32), AnchVecSeeker<'a>>;
+pub type AutomationSeeker<'a, T> = Seeker<(T, T), AnchVecSeeker<'a>>;
 
-impl<'a> SeekerTypes for AutomationSeeker<'a> {
+impl<'a> SeekerTypes for AutomationSeeker<'a, f32> {
     type Source = Anchor;
     type Output = f32;
 }
 
-impl<'a> Seek for AutomationSeeker<'a> {
+impl<'a> Seek for AutomationSeeker<'a, f32> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> f32 {
         let (lb, ub) = self.data;
@@ -101,13 +99,13 @@ impl<'a> Seek for AutomationSeeker<'a> {
     }
 }
 
-impl<'a> Seekable<'a> for Automation {
-    type Seeker = AutomationSeeker<'a>;
+impl<'a> Seekable<'a> for Automation<f32> {
+    type Seeker = AutomationSeeker<'a, f32>;
 
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
             meta: self.anchors.seeker(),
-            data: (self.upper_bound, self.lower_bound)
+            data: (self.upper, self.lower)
         }
     }
 }
@@ -126,7 +124,7 @@ pub mod tests {
     use ggez::{Context, GameResult, GameError};
 
     struct Test {
-        automation: Automation,
+        automation: Automation<f32>,
         dimensions: Vec2,
     }
 

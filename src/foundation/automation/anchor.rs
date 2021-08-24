@@ -205,7 +205,7 @@ impl SubWave {
 //
 #[derive(Debug, Clone, Copy)]
 pub struct Anchor {
-    pub(in super::super) point: Vec2,
+    pub(super) point: Vec2,
     pub weight: Weight,
     pub subwave: SubWave,
 }
