@@ -235,7 +235,6 @@ impl<'a> SeekerTypes for CompSplSeeker<'a> {
 }
 
 
-use duplicate::duplicate;
 impl<'a> Seek for CompSplSeeker<'a> { 
     fn jump(&mut self, x: f32) -> Vec2 {
         let (ref mut anchorseeker, ref mut lutseeker) = self.meta;

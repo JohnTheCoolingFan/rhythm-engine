@@ -135,8 +135,8 @@ impl Segment {
 
                     self.lut.push((0., Vec2::new(center.x, center.y)).into());
 
-                    let side = c.is_left(&start, &end);
-                    let rot_sign = match start.rotate_about(&center, 1.).is_left(&start, &end) == side {
+                    let side = c.is_left(start, &end);
+                    let rot_sign = match start.rotate_about(&center, 1.).is_left(start, &end) == side {
                         true => 1.,
                         false => -1.
                     };
@@ -218,7 +218,7 @@ impl<'a> Seekable<'a> for Segment {
     type Seeker = SegmentSeeker<'a>;
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
-            data: &self,
+            data: self,
             meta: self.lut.seeker()
         }
     }

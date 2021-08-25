@@ -1,7 +1,7 @@
 use crate::foundation::automation::anchor::*;
 use crate::utils::seeker::*;
 use glam::Vec2;
-use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut, Add, Sub, Mul};
 use duplicate::duplicate;
 
 pub struct Automation<T> {
@@ -82,24 +82,42 @@ impl<T> Automation<T> {
 //
 //
 //
-type AnchVecSeeker<'a> = BPSeeker<'a, Anchor>;
-pub type AutomationSeeker<'a, T> = Seeker<(T, T), AnchVecSeeker<'a>>;
-
-impl<'a> SeekerTypes for AutomationSeeker<'a, f32> {
-    type Source = Anchor;
-    type Output = f32;
+pub trait BoundLerp {
+    fn blerp(self, other: Self, amount: f32) -> Self;
 }
 
-impl<'a> Seek for AutomationSeeker<'a, f32> {
-    #[duplicate(method; [seek]; [jump])]
-    fn method(&mut self, offset: f32) -> f32 {
-        let (lb, ub) = self.data;
-        lb + (ub - lb) * self.meta.method(offset)
+impl BoundLerp for f32 {
+    fn blerp(self, other: Self, amount: f32) -> Self {
+        self + (other - self) * amount
     }
 }
 
-impl<'a> Seekable<'a> for Automation<f32> {
-    type Seeker = AutomationSeeker<'a, f32>;
+pub type AutomationSeeker<'a, T> = Seeker<(T, T), BPSeeker<'a, Anchor>>;
+
+impl<'a, T> SeekerTypes for AutomationSeeker<'a, T> 
+where
+    T: BoundLerp + Copy
+{
+    type Source = Anchor;
+    type Output = T;
+}
+
+impl<'a, T> Seek for AutomationSeeker<'a, T>
+where
+    T: BoundLerp + Copy
+{
+    #[duplicate(method; [seek]; [jump])]
+    fn method(&mut self, offset: f32) -> T {
+        let (lb, ub) = self.data;
+        lb.blerp(ub, self.meta.method(offset))
+    }
+}
+
+impl<'a, T> Seekable<'a> for Automation<T>
+where
+    T: BoundLerp + Copy
+{
+    type Seeker = AutomationSeeker<'a, T>;
 
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {

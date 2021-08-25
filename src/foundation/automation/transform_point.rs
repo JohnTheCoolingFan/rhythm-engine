@@ -1,17 +1,51 @@
-use std::ops::{Deref, DerefMut};
-use duplicate::duplicate;
+use std::ops::{Deref, DerefMut, Add, Sub, Mul};
+use duplicate::*;
 use glam::{Vec2, Mat3};
 use super::{automation::*, anchor::*};
 use crate::utils::seeker::*;
-use std::marker::PhantomData;
 
+duplicate_inline! {
+    [T; [Rotation]; [Scale]] //more stuff like shear, pinch, explode later
+    
+    #[derive(Clone, Copy)]
+    pub struct T(pub f32);
+    
+    impl Deref for T {
+        type Target = f32;
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+    
+    impl DerefMut for T {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
+
+    impl From<f32> for T {
+        fn from(v: f32) -> Self {
+            Self(v)
+        }
+    }
+
+    impl BoundLerp for T {
+        fn blerp(self, other: Self, amount: f32) -> Self {
+            Self(self.0 + (other.0 - self.0) * amount)
+        }
+    }
+}
+//
+//
+//
+//
+//
 pub trait TransformDictator: Copy + Deref<Target = f32> + From<f32> {}
 impl<T> TransformDictator for T 
 where
     T: Copy + Deref<Target = f32> + From<f32>
 {}
 
-//need this cause orphan rules
 pub struct CrudeTransform<T>
 where
     Mat3: From<Self>,
@@ -21,33 +55,37 @@ where
     pub pivot: Vec2
 }
 
-#[derive(Clone, Copy)]
-pub struct Rotation(pub f32);
-#[derive(Clone, Copy)]
-pub struct Scale(pub f32);
-
-#[duplicate(T; [Rotation]; [Scale])]
-impl Deref for T {
-    type Target = f32;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+pub enum Transform<T>
+where
+    Mat3: From<CrudeTransform<T>>,
+    T: TransformDictator
+{
+    Pre(T, Option<Vec2>),
+    Post(Mat3)
 }
 
-#[duplicate(T; [Rotation]; [Scale])]
-impl DerefMut for T {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+impl<T> Transform<T> 
+where
+    Mat3: From<CrudeTransform<T>>,
+    T: TransformDictator
+{
+    pub fn process(&mut self, auxiliary: &Vec2) -> &Mat3 {
+        match self {
+            Self::Pre(factor, point) =>
+                *self = Self::Post(CrudeTransform{factor:*factor, pivot:
+                    if let Some(p) = point { *p }
+                    else { *auxiliary }
+                }.into()),
+            Self::Post(ref transform) => return transform
+        }
+        self.process(auxiliary)
     }
 }
-
-#[duplicate(T; [Rotation]; [Scale])]
-impl From<f32> for T {
-    fn from(v: f32) -> Self {
-        Self(v)
-    }
-}
-
+//
+//
+//
+//
+//
 impl From<CrudeTransform<Rotation>> for Mat3 {
     #[rustfmt::skip]
     fn from(CrudeTransform{ factor, pivot }: CrudeTransform<Rotation>) -> Self {
@@ -80,48 +118,16 @@ impl From<CrudeTransform<Scale>> for Mat3 {
 //
 //
 //
-pub enum Transform<T>
+pub struct TransformPoint<T> 
 where
     Mat3: From<CrudeTransform<T>>,
     T: TransformDictator
 {
-    Pre(T, Option<Vec2>),
-    Post(Mat3)
+    pub automation: Automation<T>,
+    pub point: Option<Vec2>
 }
 
-impl<T> Transform<T> 
-where
-    Mat3: From<CrudeTransform<T>>,
-    T: TransformDictator
-{
-    pub fn process(&mut self, auxiliary: &Vec2) -> &Mat3 {
-        match self {
-            Self::Pre(factor, point) =>
-                *self = Self::Post(CrudeTransform{factor:*factor, pivot:
-                    if let Some(p) = point { *p }
-                    else { *auxiliary }
-                }.into()),
-            Self::Post(ref transform) => return transform
-        }
-        self.process(auxiliary)
-    }
-}
-
-struct TransformPoint<T>
-where
-    Mat3: From<CrudeTransform<T>>,
-    T: TransformDictator
-{
-    pub auto: Automation,
-    pub point: Option<Vec2>,
-    _phantom: PhantomData<T>
-}
-//
-//
-//
-//
-//
-pub type TransformPointSeeker<'a, T> = Seeker<(Option<Vec2>, PhantomData<T>), AutomationSeeker<'a>>;
+pub type TransformPointSeeker<'a, T> = Seeker<&'a Option<Vec2>, AutomationSeeker<'a, T>>;
 
 impl<'a, T> SeekerTypes for TransformPointSeeker<'a, T>
 where
@@ -135,14 +141,14 @@ where
 impl<'a, T> Seek for TransformPointSeeker<'a, T>
 where
     Mat3: From<CrudeTransform<T>>,
-    T: TransformDictator
+    T: TransformDictator + BoundLerp
+
 {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> Transform<T> {
-        let (point, _) = self.data;
         Transform::<T>::Pre(
             self.meta.method(offset).into(),
-            point
+            *self.data
         )
     }
 }
@@ -150,13 +156,13 @@ where
 impl <'a, T> Seekable<'a> for TransformPoint<T>
 where
     Mat3: From<CrudeTransform<T>>,
-    T: TransformDictator
+    T: TransformDictator + BoundLerp
 {
     type Seeker = TransformPointSeeker<'a, T>;
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker{
-            data: (self.point, PhantomData),
-            meta: self.auto.seeker()
+            data: &self.point,
+            meta: self.automation.seeker()
         }
     }
 }
@@ -165,7 +171,7 @@ where
 //
 //
 //
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use super::*;
     use ggez::{
@@ -195,4 +201,4 @@ mod tests {
     pub fn transform_point() -> GameResult {
         
     }
-}
+}*/
