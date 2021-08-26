@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut, Add, Sub, Mul};
 use duplicate::*;
 use glam::{Vec2, Mat3};
 use super::{automation::*, anchor::*};
-use crate::utils::seeker::*;
+use crate::utils::*;
 
 duplicate_inline! {
     [T; [Rotation]; [Scale]] //more stuff like shear, pinch, explode later
@@ -174,6 +174,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cmp::Ordering;
     use ggez::{
         event::{self, EventHandler, MouseButton, KeyCode},
         graphics::*,
@@ -184,7 +185,8 @@ mod tests {
     struct Test {
         rotation: TransformPoint<Rotation>,
         scale: TransformPoint<Scale>,
-        dimensions: Vec2
+        dimensions: Vec2,
+        point_cache: Option<Vec2>
     }
 
     impl Test {
@@ -199,7 +201,8 @@ mod tests {
                     automation: Automation::<Scale>::new(Scale(1.), Scale(3.), dimensions.x),
                     point: Some(Vec2::new(dimensions.x * (2. / 3.), dimensions.y / 2.))
                 },
-                dimensions
+                dimensions,
+                point_cache: None
             })
         }
     }
@@ -210,6 +213,7 @@ mod tests {
         }
 
         fn draw(&mut self, ctx: &mut Context) -> GameResult {
+            clear(ctx, Color::new(0., 0., 0., 1.));
             let rect = Mesh::new_rectangle(
                 ctx,
                 DrawMode::fill(),
@@ -217,9 +221,9 @@ mod tests {
                 Color::new(1., 0., 0., 0.5),
             )?;
 
-            draw(ctx, &rect, (self.rotation.point.unwrap(),))?;
-            draw(ctx, &rect, (self.scale.point.unwrap(),))?;
-
+            for point in IntoIterator::into_iter([&self.rotation.point, &self.scale.point]).flatten() {
+                draw(ctx, &rect, (*point,))?;
+            }
 
             let res = 500;
             duplicate_inline! {
@@ -252,9 +256,78 @@ mod tests {
                 draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
             }
 
-
             present(ctx)?;
             Ok(())
+        }
+
+        fn mouse_button_down_event(
+            &mut self,
+            ctx: &mut Context,
+            button: MouseButton,
+            x: f32,
+            y: f32,
+        ) {
+            let pos = Vec2::new(x, y);
+            if y < self.dimensions.y - self.dimensions.y * 2. * 0.15 {
+                match button {
+                    MouseButton::Left => self.point_cache = Some(pos),
+                    MouseButton::Right => {
+                        let closest: &mut Option<Vec2> = 
+                            //this is stoopid https://github.com/rust-lang/rust/issues/25725
+                            IntoIterator::into_iter([&mut self.rotation.point, &mut self.scale.point])
+                                .min_by(|a, b| { match (a, b) {
+                                    (None, Some(_)) => Ordering::Greater,
+                                    (Some(p0), Some(p1)) =>
+                                        (*p0 - pos)
+                                            .length()
+                                            .partial_cmp(&(*p1 - pos).length())
+                                            .unwrap(),
+                                    _ => Ordering::Less
+                                }})
+                                .unwrap();
+
+                        if let Some(ref mut p) = closest {
+                            if (*p - pos).length() < 10. {
+                                *closest = None;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            else {
+                //Generic closures not possible yet :pensive:
+                duplicate_inline! {
+                    [
+                        handle              T;
+                        [rotation_handle]   [Rotation];
+                        [scale_handle]      [Scale];
+                    ]
+                    let handle = |auto:&mut Automation<T>, adjusted_y: f32| {
+                        let index = auto.closest_to(ggez::input::mouse::position(ctx).into());
+
+                        match button {
+                            MouseButton::Left => { auto.insert(Anchor::new(Vec2::new(x, adjusted_y))); },
+                            MouseButton::Middle => { auto[index].weight.cycle(); },
+                            MouseButton::Right => { auto.remove(index); },
+                            _ => {}
+                        }
+                    };
+                }
+                if pos.y < self.dimensions.y - self.dimensions.y * 1. * 0.15 {
+                    let adj_y = 
+                        1. 
+                        - (y - (self.dimensions.y - self.dimensions.y * 2. * 0.15)) 
+                            / (self.dimensions.y * 0.15);
+                    rotation_handle(&mut self.rotation.automation, adj_y);
+                } else {
+                    let adj_y = 
+                        1. 
+                        - (y - (self.dimensions.y - self.dimensions.y * 1. * 0.15)) 
+                            / (self.dimensions.y * 0.15);
+                    scale_handle(&mut self.scale.automation, adj_y);
+                };
+            }
         }
     }
 
