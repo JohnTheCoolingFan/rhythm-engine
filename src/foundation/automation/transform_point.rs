@@ -171,7 +171,7 @@ where
 //
 //
 //
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use ggez::{
@@ -188,17 +188,83 @@ mod tests {
     }
 
     impl Test {
-        fn new(len: f32) -> GameResult<Self> {
+        fn new() -> GameResult<Self> {
+            let dimensions = Vec2::new(2000., 1000.);
             Ok(Self{
-                rotation: TransformPoint<Rotation>{
-
+                rotation: TransformPoint::<Rotation>{
+                    automation: Automation::<Rotation>::new(Rotation(0.), Rotation(180.), dimensions.x),
+                    point: Some(Vec2::new(dimensions.x / 3., dimensions.y / 2.))
                 },
-                scale: 
+                scale: TransformPoint::<Scale>{
+                    automation: Automation::<Scale>::new(Scale(1.), Scale(3.), dimensions.x),
+                    point: Some(Vec2::new(dimensions.x * (2. / 3.), dimensions.y / 2.))
+                },
+                dimensions
             })
         }
     }
 
-    pub fn transform_point() -> GameResult {
-        
+    impl EventHandler<GameError> for Test {
+        fn update(&mut self, _ctx: &mut Context) -> GameResult {
+            Ok(())
+        }
+
+        fn draw(&mut self, ctx: &mut Context) -> GameResult {
+            let rect = Mesh::new_rectangle(
+                ctx,
+                DrawMode::fill(),
+                Rect::new(-5., -5., 10., 10.),
+                Color::new(1., 0., 0., 0.5),
+            )?;
+
+            draw(ctx, &rect, (self.rotation.point.unwrap(),))?;
+            draw(ctx, &rect, (self.scale.point.unwrap(),))?;
+
+
+            let res = 500;
+            duplicate_inline! {
+                [
+                    transform       lines               points              n;
+                    [scale]         [scale_lines]       [scale_points]      [0.];
+                    [rotation]      [rotation_lines]    [rotation_points]   [1.];
+                ]
+                let mut transform = self.transform.automation.anchors.seeker();
+                let points: Vec<Vec2> = (0..res)
+                    .map(|x| {
+                        Vec2::new(
+                            (x as f32 / res as f32) * self.dimensions.x,
+                            self.dimensions.y - (self.dimensions.y * n * 0.15) - (
+                                0.15 
+                                * self.dimensions.y
+                                * transform.seek((x as f32 / res as f32) * self.dimensions.x)
+                            )
+                        )
+                    })
+                    .collect();
+
+                let lines = MeshBuilder::new()
+                    .polyline(
+                        DrawMode::Stroke(StrokeOptions::DEFAULT),
+                        points.as_slice(),
+                        Color::new(1., 1., 1., 1.),
+                    )?
+                    .build(ctx)?;
+                draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
+            }
+
+
+            present(ctx)?;
+            Ok(())
+        }
     }
-}*/
+
+    #[test]
+    pub fn transform_point() -> GameResult {
+        let state = Test::new()?;
+        let cb = ggez::ContextBuilder::new("Transform Point test", "iiYese").window_mode(
+            ggez::conf::WindowMode::default().dimensions(state.dimensions.x, state.dimensions.y),
+        );
+        let (ctx, event_loop) = cb.build()?;
+        event::run(ctx, event_loop, state)
+    }
+}
