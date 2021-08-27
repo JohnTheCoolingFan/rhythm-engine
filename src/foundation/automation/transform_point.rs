@@ -107,9 +107,9 @@ impl From<CrudeTransform<Scale>> for Mat3 {
     fn from(CrudeTransform{ factor, pivot }: CrudeTransform<Scale>) -> Self {
         let s = factor.0;
         Mat3::from_cols_array(&[
-            s,      0.,     pivot.x - s * pivot.x,
-            0.,     s,      pivot.y - s * pivot.y,
-            0.,     0.,     1.
+            s,                      0.,                     0.,
+            0.,                     s,                      0.,
+            pivot.x - s * pivot.x,  pivot.y - s * pivot.y,  1.
         ])
     }
 }
@@ -184,6 +184,8 @@ mod tests {
         GameResult
     };
     use crate::foundation::automation::automation::tests::key_handle;
+    use glam::Vec3;
+
     struct Test {
         rotation: TransformPoint<Rotation>,
         scale: TransformPoint<Scale>,
@@ -196,7 +198,7 @@ mod tests {
             let dimensions = Vec2::new(2000., 1000.);
             Ok(Self{
                 rotation: TransformPoint::<Rotation>{
-                    automation: Automation::<Rotation>::new(Rotation(0.), Rotation(180.), dimensions.x),
+                    automation: Automation::<Rotation>::new(Rotation(0.), Rotation(360.), dimensions.x),
                     point: Some(Vec2::new(dimensions.x / 3., dimensions.y / 2.))
                 },
                 scale: TransformPoint::<Scale>{
@@ -242,7 +244,9 @@ mod tests {
                             self.dimensions.y - (self.dimensions.y * n * 0.15) - (
                                 0.15 
                                 * self.dimensions.y
-                                * transform.jump((x as f32 / res as f32) * self.dimensions.x)
+                                * (1. - transform.jump(
+                                    (x as f32 / res as f32) * self.dimensions.x
+                                ))
                             )
                         )
                     })
@@ -276,6 +280,62 @@ mod tests {
 
             draw(ctx, &t_line, (Vec2::new(t, 0.),))?;
 
+            let center = Vec2::new(0.5 * self.dimensions.x, 0.5 * self.dimensions.y);
+
+            let rect =[
+                center + Vec2::new(-20., 20.), center + Vec2::new(20., 20.),
+                center + Vec2::new(20., -20.), center + Vec2::new(-20., -20.) 
+            ];
+
+            let mut scale = self.scale.seeker().jump(t);
+            let s = scale.process(&center);
+            let mut rotate = self.rotation.seeker().jump(t);
+            let r = rotate.process(&center);
+
+            let scaled: Vec<Vec2> = rect.iter().map(
+                |p| -> Vec2 {
+                    let v3 = *s * p.extend(1.);
+                    (v3.x, v3.y).into()
+                }
+            ).collect();
+
+            let rotated: Vec<Vec2> = rect.iter().map(
+                |p| -> Vec2 {
+                    let v3 = *r * p.extend(1.);
+                    (v3.x, v3.y).into()
+                }
+            ).collect();
+
+
+            let r0 = MeshBuilder::new()
+                .polygon(
+                    DrawMode::Fill(FillOptions::DEFAULT),
+                    &rect,
+                    Color::BLUE
+                )?
+                .build(ctx)?;
+
+
+            let r1 = MeshBuilder::new()
+                .polygon(
+                    DrawMode::Fill(FillOptions::DEFAULT),
+                    scaled.as_slice(),
+                    Color::CYAN
+                )?
+                .build(ctx)?;
+
+            let r2 = MeshBuilder::new()
+                .polygon(
+                    DrawMode::Fill(FillOptions::DEFAULT),
+                    rotated.as_slice(),
+                    Color::GREEN
+                )?
+                .build(ctx)?;
+
+
+            draw(ctx, &r0, (Vec2::new(0., 0.),))?;
+            draw(ctx, &r1, (Vec2::new(0., 0.),))?;
+            draw(ctx, &r2, (Vec2::new(0., 0.),))?;
 
             present(ctx)?;
             Ok(())
@@ -337,15 +397,13 @@ mod tests {
                 }
                 if pos.y < self.dimensions.y - self.dimensions.y * 1. * 0.15 {
                     let adj_y = 
-                        1. 
-                        - (y - (self.dimensions.y - self.dimensions.y * 2. * 0.15)) 
-                            / (self.dimensions.y * 0.15);
+                        (y - (self.dimensions.y - self.dimensions.y * 2. * 0.15)) 
+                        / (self.dimensions.y * 0.15);
                     rotation_handle(&mut self.rotation.automation, adj_y);
                 } else {
                     let adj_y = 
-                        1. 
-                        - (y - (self.dimensions.y - self.dimensions.y * 1. * 0.15)) 
-                            / (self.dimensions.y * 0.15);
+                        (y - (self.dimensions.y - self.dimensions.y * 1. * 0.15)) 
+                        / (self.dimensions.y * 0.15);
                     scale_handle(&mut self.scale.automation, adj_y);
                 };
             }
