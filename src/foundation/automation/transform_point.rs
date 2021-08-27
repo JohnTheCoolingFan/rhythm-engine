@@ -176,12 +176,14 @@ mod tests {
     use super::*;
     use std::cmp::Ordering;
     use ggez::{
-        event::{self, EventHandler, MouseButton, KeyCode},
+        event::{self, EventHandler, MouseButton, KeyCode, KeyMods},
         graphics::*,
+        timer::time_since_start,
         Context,
         GameError,
         GameResult
     };
+    use crate::foundation::automation::automation::tests::key_handle;
     struct Test {
         rotation: TransformPoint<Rotation>,
         scale: TransformPoint<Scale>,
@@ -240,7 +242,7 @@ mod tests {
                             self.dimensions.y - (self.dimensions.y * n * 0.15) - (
                                 0.15 
                                 * self.dimensions.y
-                                * transform.seek((x as f32 / res as f32) * self.dimensions.x)
+                                * transform.jump((x as f32 / res as f32) * self.dimensions.x)
                             )
                         )
                     })
@@ -255,6 +257,25 @@ mod tests {
                     .build(ctx)?;
                 draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
             }
+
+            let t = self.dimensions.x * (
+                (time_since_start(ctx).as_millis() as f32 % 5000.)
+                / 5000.
+            );
+
+            let t_line = MeshBuilder::new()
+                .polyline(
+                    DrawMode::Stroke(StrokeOptions::DEFAULT),
+                    &[
+                        Vec2::new(0., self.dimensions.y * 0.7),
+                        Vec2::new(0., self.dimensions.y),
+                    ],
+                    Color::WHITE,
+                )?
+                .build(ctx)?;
+
+            draw(ctx, &t_line, (Vec2::new(t, 0.),))?;
+
 
             present(ctx)?;
             Ok(())
@@ -303,7 +324,7 @@ mod tests {
                         [rotation_handle]   [Rotation];
                         [scale_handle]      [Scale];
                     ]
-                    let handle = |auto:&mut Automation<T>, adjusted_y: f32| {
+                    let handle = |auto: &mut Automation<T>, adjusted_y: f32| {
                         let index = auto.closest_to(ggez::input::mouse::position(ctx).into());
 
                         match button {
@@ -329,6 +350,55 @@ mod tests {
                 };
             }
         }
+
+        fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
+            let pos: Vec2 = ggez::input::mouse::position(ctx).into();
+            if pos.y < self.dimensions.y - self.dimensions.y * 2. * 0.15 { return }
+            duplicate_inline! {
+                [
+                    handle              T;
+                    [rotation_handle]   [Rotation];
+                    [scale_handle]      [Scale];
+                ]
+                let handle = |auto: &mut Automation<T>| {
+                    let index = auto.closest_to(pos);
+                    let _ = auto[index].weight.shift_curvature(
+                        if 0. < y { 0.05 } else { -0.05 }
+                    );
+                };
+            }
+            if pos.y < self.dimensions.y - self.dimensions.y * 1. * 0.15 {
+                rotation_handle(&mut self.rotation.automation);
+            } else {
+                scale_handle(&mut self.scale.automation);
+            }
+        }
+
+        fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
+            let pos: Vec2 = ggez::input::mouse::position(ctx).into();
+            if pos.y < self.dimensions.y - self.dimensions.y * 2. * 0.15 { return }
+            duplicate_inline! {
+                [
+                    handle              T;
+                    [rotation_handle]   [Rotation];
+                    [scale_handle]      [Scale];
+                ]
+                let handle = |auto: &mut Automation<T>| {
+                    let index = auto.closest_to(ggez::input::mouse::position(ctx).into());
+                    key_handle(
+                        &mut auto[index],
+                        key
+                    );
+                };
+            }
+            if pos.y < self.dimensions.y - self.dimensions.y * 1. * 0.15 {
+                rotation_handle(&mut self.rotation.automation);
+            } else {
+                scale_handle(&mut self.scale.automation);
+            }
+
+        }
+
     }
 
     #[test]
