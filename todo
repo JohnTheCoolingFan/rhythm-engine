@@ -52,7 +52,7 @@ None  Planned
 
 Version 0.2 {
   Misc {
-    Move to macroquad
+    Make custom engine with WGPU, Lyon etc.
   }
 }
 
@@ -63,6 +63,10 @@ Version 0.2 {
 Version 0.3 {
   Core {
     Replace local scale effect with striaght skeleton polygon offsetting  
+  }
+
+  Foundation {
+    Spatial Patterns
   }
 
   Editor {
