@@ -1,13 +1,14 @@
-use glam::Vec2;
-use crate::foundation::Automation;
+/*use glam::Vec2;
 
 trait PolygonExtensions {
+    type VecT;
     fn clockwise(&self) -> bool;
-
+    fn break_at_intersects(&self) -> Vec<Vec<Self::VecT>>;
 }
 
 
 impl PolygonExtensions for &[Vec2] {
+    type VecT = Vec2;
     fn clockwise(&self) -> bool {
         0.0_f32 < self.iter()
             .skip(1)
@@ -19,8 +20,13 @@ impl PolygonExtensions for &[Vec2] {
             .sum()
     }
 
-    
-}
+    fn triangulate(&self) -> {
+        
+    }
+}*/
+
+use crate::foundation::*;
+use ggez::graphics::Color;
 
 pub struct HitKeys {
     alphas: u8,
@@ -49,20 +55,30 @@ pub enum Beat {
     },
 }
 
+pub enum Reference<T> {
+    Relative(T),
+    Absolute(T)
+}
+
 pub struct CSplVertPairing {
     pub spline: usize,
     pub vertex: usize,
-    pub scale: f32,
-    pub rotation: f32,
+    pub scale: Reference<Scale>,
+    pub rotation: Reference<Rotation>,
     pub x_invert: bool,
     pub y_invert: bool,
 }
 
+pub enum Controller<T> {
+    Static(T),
+    Automated(usize)
+}
+
 pub struct Properties {
-    pub splines: Vec<CSplVertPairing>,
-    pub rotation: Vec<Option<usize>>,
-    pub scale: Vec<Option<usize>>,
-    pub color: usize,
+    pub point_shifts: Vec<CSplVertPairing>,
+    pub rotation: Vec<Controller<Rotation>>,
+    pub scale: Vec<Controller<Scale>>,
+    pub color: Controller<Color>,
     pub glow: usize,
     pub beats: Vec<Beat>,
 }

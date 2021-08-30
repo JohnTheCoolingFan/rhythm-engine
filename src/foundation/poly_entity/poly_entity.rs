@@ -2,10 +2,10 @@ use super::preliminary::*;
 use glam::{Mat3, Vec2};
 
 pub struct PolyEntity {
-    points: Vec<Vec2>, //contains position offset
+    pub points_raw: Vec<Vec2>, //contains position offset
+    pub points_processed: Vec<Vec2>,
     pub start: f32,
     pub duration: f32,
-    pub local_center: Vec2,
     pub properties: Properties,
 }
 
@@ -20,8 +20,15 @@ impl PolyEntity {
             Some(Self {
                 start,
                 duration,
-                local_center: initial.iter().sum::<Vec2>() / initial.len() as f32,
-                points: initial.to_vec(),
+                points_raw: {
+                    let mut controls = vec![
+                        initial.iter().sum::<Vec2>() / initial.len() as f32,    //local center
+                        Vec2::new(0., 0.)                                       //position
+                    ];
+                    controls.extend_from_slice(initial);
+                    controls
+                },
+                points_processed: vec![],
                 properties: Properties {
                     splines: vec![],
                     rotation: vec![],

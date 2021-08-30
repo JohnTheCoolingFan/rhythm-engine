@@ -1,10 +1,16 @@
 use crate::foundation::*;
-use crate::utils::*;
 
-pub struct Chart<'a> {
-    poly_entities: PolyEntity,
-    /*rotations: PlayList<'a, TransformPoint<Rotation>>,
-    scale: PlayList<'a, TransformPoint<Scale>>,*/
-    splines: PlayList<'a, ComplexSpline>,
-    audio: String,
+struct SongMetaData {
+    pub artists: String,
+    pub title: String,
+    pub audio: String
+}
+
+pub struct Chart {
+    song_meta: SongMetaData,
+    poly_entities: Vec<PolyEntity>,
+    rotations: PlayList<TransformPoint<Rotation>>,
+    scale: PlayList<TransformPoint<Scale>>,
+    splines: PlayList<ComplexSpline>,
+    colours: PlayList<DynColor>
 }

@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut, Add, Sub, Mul};
+use std::ops::{Deref, DerefMut};
 use duplicate::*;
 use glam::{Vec2, Mat3};
 use super::{automation::*, anchor::*};
@@ -55,6 +55,19 @@ where
     pub pivot: Vec2
 }
 
+impl<T> From<T> for Mat3
+where
+    Mat3: From<CrudeTransform<T>>
+{
+    fn from(t: T) -> Self {
+        CrudeTransform{factor: t, pivot: Vec2::new(0., 0.) }.into()
+    }
+}
+//
+//
+//
+//
+//
 pub enum Transform<T>
 where
     Mat3: From<CrudeTransform<T>>,
@@ -86,6 +99,9 @@ where
 //
 //
 //
+//  One could combine these but the benifit of having it like this
+//  is that you can have independent control points for 
+//  the scale and rotation components
 impl From<CrudeTransform<Rotation>> for Mat3 {
     #[rustfmt::skip]
     fn from(CrudeTransform{ factor, pivot }: CrudeTransform<Rotation>) -> Self {
@@ -184,7 +200,6 @@ mod tests {
         GameResult
     };
     use crate::foundation::automation::automation::tests::key_handle;
-    use glam::Vec3;
 
     struct Test {
         rotation: TransformPoint<Rotation>,

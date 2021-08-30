@@ -1,14 +1,48 @@
 use crate::utils::seeker::*;
-use std::marker::PhantomData;
 
-pub type Channel<'a, T> = Vec<SimpleAnchor<T>>;
-
-pub struct PlayList<'a, T> {
-    channels: Vec<Channel<'a, T>>,
-    _phantom: PhantomData<&'a T>,
+pub enum SignalResponse<T> {
+    Ignore(T),
+    Toggle(T, bool),
+    Commence(T, bool),
+    Halt(T, bool),
 }
 
-pub struct Statics<'a> {
-    sense_muls: Channel<'a, f32>,
-    _phantom: PhantomData<&'a ()>,
+impl<T> SignalResponse<T> {
+    pub fn respond(&mut self) {
+        match self {
+            Self::Toggle(_, ref mut b) => *b = !*b,
+            Self::Commence(_, ref mut b) => *b = true,
+            Self::Halt(_, ref mut b) => *b = false,
+            _ => {}
+        }
+    }
+
+    pub fn unwrap(&self) -> &T {
+        match self {
+            Self::Ignore(ref val) 
+            | Self::Toggle(ref val, _)
+            | Self::Commence(ref val, _)
+            | Self::Halt(ref val, _) => val
+        }
+    }
+
+    pub fn unwrap_mut(&mut self) -> &mut T {
+        match self {
+            Self::Ignore(ref mut val) 
+            | Self::Toggle(ref mut val, _)
+            | Self::Commence(ref mut val, _)
+            | Self::Halt(ref mut val, _) => val
+        }
+    }
+
+}
+
+type Channel<T> = Vec<Epoch<SignalResponse<T>>>;
+
+pub struct PlayList<T> {
+    channels: Vec<Channel<T>>,
+}
+
+pub struct Globals {
+    sense_muls: Channel<f32>,
 }

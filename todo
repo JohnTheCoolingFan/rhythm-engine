@@ -23,7 +23,7 @@ None  Planned
     -Poly Entity
     -Playlist
     -Chart
-    -On hit automations
+    -On hit automations (allow negation too)
     -Pad/Keystyle automation(???)
     
     Play + sync audio
@@ -82,3 +82,11 @@ Version 0.3 {
 Version 0.4 {
   ???
 }
+
+
+
+
+
+Notes:
+-For snapping behavior map the values out linearly reguardless of the value itself
+to create needed indifference to tightly spaced values
