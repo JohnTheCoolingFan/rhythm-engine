@@ -60,6 +60,11 @@ pub enum Reference<T> {
     Absolute(T)
 }
 
+pub enum Controller<T> {
+    Static(T),
+    Automated(usize)
+}
+
 pub struct CSplVertPairing {
     pub spline: usize,
     pub vertex: usize,
@@ -69,17 +74,12 @@ pub struct CSplVertPairing {
     pub y_invert: bool,
 }
 
-pub enum Controller<T> {
-    Static(T),
-    Automated(usize)
-}
-
 pub struct Properties {
     pub point_shifts: Vec<CSplVertPairing>,
     pub rotation: Vec<Controller<Rotation>>,
     pub scale: Vec<Controller<Scale>>,
     pub color: Controller<Color>,
-    pub glow: usize,
+    pub bloom: Controller<f32>,
     pub beats: Vec<Beat>,
 }
 

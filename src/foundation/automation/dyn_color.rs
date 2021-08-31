@@ -1,15 +1,20 @@
 use crate::{foundation::automation::*, utils::*};
 use duplicate::duplicate;
 
+pub enum Transition<T> {
+    Instant(T),
+    Lerp(T)
+}
+
 type Color = ggez::graphics::Color;
-type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Color>>;
+type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Transition<Color>>>;
 impl<'a> Exhibit for ColorVecSeeker<'a> {
     fn exhibit(&self, _: f32) -> Color {
-        self.previous().val
+        let prev = self.previous();
     }
 }
 
-pub type DynColor = Automation<Vec<Epoch<Color>>>;
+pub type DynColor = Automation<Vec<Epoch<Transition<Color>>>>;
 type DynColSeekerMeta<'a> = (BPSeeker<'a, Anchor>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
 pub type DynColorSeeker<'a> = Seeker<(), DynColSeekerMeta<'a>>;
 

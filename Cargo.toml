@@ -16,4 +16,3 @@ ggez = "0.6.0" #{ git = "https://github.com/ggez/ggez", branch = "devel" }
 lyon_geom = "0.17.0"
 duplicate = "0.3"
 undo = "0.46.2"
-
