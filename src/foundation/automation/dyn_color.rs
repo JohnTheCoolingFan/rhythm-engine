@@ -2,18 +2,63 @@ use crate::{foundation::automation::*, utils::*};
 use duplicate::duplicate;
 
 #[derive(Clone, Copy)]
-pub enum Transition<T> {
+pub enum Transition<T> 
+where
+    T: Copy
+{
     Instant(T),
     Lerp(T)
+}
+
+impl<T> Transition<T> 
+where
+    T: Copy
+{
+    pub fn get(&self) -> &T {
+        match self {
+            Self::Lerp(val) | Self::Instant(val) => val
+        }
+    }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        match self {
+            Self::Lerp(val) | Self::Instant(val) => val
+        }
+    }
+
+    pub fn cycle(&mut self) {
+        *self = match self {
+            Self::Lerp(val) => Self::Instant(*val),
+            Self::Instant(val) => Self::Lerp(*val)
+        }
+    }
 }
 
 type Color = ggez::graphics::Color;
 type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Transition<Color>>>;
 impl<'a> Exhibit for ColorVecSeeker<'a> {
-    fn exhibit(&self, _: f32) -> Color {
-        let prev = self.previous();
+    //must return Transition because of the way Epoch and Exhibit are implemented
+    fn exhibit(&self, offset: f32) -> Transition<Color> {
         let curr = self.current();
-        let t = (curr.time - prev.time)
+        let prev = self.previous();
+        match curr.val {
+            Transition::Instant(_) => prev.val,
+            Transition::Lerp(_) => {
+                if self.over_run() {
+                    curr.val
+                }
+                else {
+                    let t = (offset - prev.time) / (curr.time - prev.time);
+                    let (c1, c2) = (prev.val.get(), curr.val.get());
+                    Transition::Lerp(Color::new(
+                        (c2.r - c1.r) * t + c1.r,
+                        (c2.g - c1.g) * t + c1.g,
+                        (c2.b - c1.b) * t + c1.b,
+                        (c2.a - c1.a) * t + c1.a,
+                    ))
+                }
+            }
+        } 
     }
 }
 
@@ -31,9 +76,9 @@ impl<'a> Seek for DynColorSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> Color {
         let (anchors, lower, upper) = &mut self.meta;
-        let c1 = lower.method(offset);
+        let c1 = *lower.method(offset).get();
         let t = anchors.method(offset);
-        let c2 = upper.method(offset);
+        let c2 = *upper.method(offset).get();
         Color::new(
             (c2.r - c1.r) * t + c1.r,
             (c2.g - c1.g) * t + c1.g,
@@ -88,13 +133,13 @@ mod tests {
             Ok(Self {
                 color: DynColor::new(
                     vec![
-                        (0., Color::BLACK).into(),
-                        (x / 2., Color::new(1., 0., 0., 1.)).into()
+                        (0., Transition::Instant(Color::BLACK)).into(),
+                        (x / 2., Transition::Lerp(Color::new(1., 0., 0., 1.))).into()
                     ],
                     vec![
-                        (0., Color::WHITE).into(),
-                        (x / 2., Color::new(0., 1., 1., 1.)).into(),
-                        (x * (2. / 3.), Color::new(0., 1., 0., 1.)).into()
+                        (0., Transition::Instant(Color::WHITE)).into(),
+                        (x / 2., Transition::Lerp(Color::new(0., 1., 1., 1.))).into(),
+                        (x * (2. / 3.), Transition::Instant(Color::new(0., 1., 0., 1.))).into()
                     ],
                     x
                 ),
@@ -119,7 +164,7 @@ mod tests {
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    col.val,
+                    *col.val.get(),
                 )?;
 
                 draw(
@@ -134,7 +179,7 @@ mod tests {
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    col.val,
+                    *col.val.get(),
                 )?;
 
                 draw(ctx, &rect, (Vec2::new(col.time, 0.),))?;

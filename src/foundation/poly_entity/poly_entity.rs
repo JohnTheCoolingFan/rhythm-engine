@@ -30,11 +30,11 @@ impl PolyEntity {
                 },
                 points_processed: vec![],
                 properties: Properties {
-                    splines: vec![],
+                    point_shifts: vec![],
                     rotation: vec![],
                     scale: vec![],
-                    color: 0,
-                    glow: 0,
+                    color: Controller::Automated(0),
+                    bloom: Controller::Automated(0),
                     beats: vec![]
                 }
             })

@@ -1,7 +1,7 @@
 use crate::foundation::automation::anchor::*;
 use crate::utils::seeker::*;
 use glam::Vec2;
-use std::ops::{Index, IndexMut, Add, Sub, Mul};
+use std::ops::{Index, IndexMut};
 use duplicate::duplicate;
 
 pub struct Automation<T> {

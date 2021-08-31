@@ -98,7 +98,7 @@ where
     }
 
     pub fn vec(&self) -> &Vec<Item> {
-        &self.data
+        self.data
     }
  
     pub fn over_run(&self) -> bool {
@@ -168,7 +168,7 @@ where
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
             meta: 0,
-            data: &self
+            data: self
         }
     }
 }
