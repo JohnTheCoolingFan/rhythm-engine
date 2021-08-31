@@ -1,6 +1,7 @@
 use crate::{foundation::automation::*, utils::*};
 use duplicate::duplicate;
 
+#[derive(Clone, Copy)]
 pub enum Transition<T> {
     Instant(T),
     Lerp(T)
@@ -11,6 +12,8 @@ type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Transition<Color>>>;
 impl<'a> Exhibit for ColorVecSeeker<'a> {
     fn exhibit(&self, _: f32) -> Color {
         let prev = self.previous();
+        let curr = self.current();
+        let t = (curr.time - prev.time)
     }
 }
 

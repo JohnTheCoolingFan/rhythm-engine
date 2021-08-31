@@ -34,6 +34,15 @@ duplicate_inline! {
             Self(self.0 + (other.0 - self.0) * amount)
         }
     }
+
+    impl From<T> for Mat3
+    where
+        Mat3: From<CrudeTransform<T>>
+    {
+        fn from(t: T) -> Self {
+            CrudeTransform{factor: t, pivot: Vec2::new(0., 0.) }.into()
+        }
+    }
 }
 //
 //
@@ -53,15 +62,6 @@ where
 {
     pub factor: T,
     pub pivot: Vec2
-}
-
-impl<T> From<T> for Mat3
-where
-    Mat3: From<CrudeTransform<T>>
-{
-    fn from(t: T) -> Self {
-        CrudeTransform{factor: t, pivot: Vec2::new(0., 0.) }.into()
-    }
 }
 //
 //
