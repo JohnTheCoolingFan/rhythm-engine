@@ -199,7 +199,7 @@ mod tests {
         GameError,
         GameResult
     };
-    use crate::foundation::automation::automation::tests::key_handle;
+    use crate::automation::automation::tests::key_handle;
 
     struct Test {
         rotation: TransformPoint<Rotation>,

@@ -1,5 +1,5 @@
 mod editor;
-mod foundation;
+mod automation;
 mod utils;
 
 use ggez::event;

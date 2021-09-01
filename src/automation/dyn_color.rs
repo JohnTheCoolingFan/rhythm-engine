@@ -1,4 +1,4 @@
-use crate::{foundation::automation::*, utils::*};
+use crate::{automation::*, utils::*};
 use duplicate::duplicate;
 
 type Color = ggez::graphics::Color;

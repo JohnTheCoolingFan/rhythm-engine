@@ -1,4 +1,4 @@
-use crate::foundation::automation::anchor::*;
+use super::anchor::*;
 use crate::utils::seeker::*;
 use glam::Vec2;
 use std::ops::{Index, IndexMut};
