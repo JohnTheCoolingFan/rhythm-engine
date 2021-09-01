@@ -65,7 +65,8 @@ pub enum Controller<T> {
     Automated(usize)
 }
 
-pub struct CSplVertPairing {
+//Complex Spline Vertex Pairing
+pub struct CSVPairing {
     pub spline: usize,
     pub vertex: usize,
     pub scale: Reference<Scale>,
@@ -75,7 +76,7 @@ pub struct CSplVertPairing {
 }
 
 pub struct Properties {
-    pub point_shifts: Vec<CSplVertPairing>,
+    pub point_shifts: Vec<CSVPairing>,
     pub rotation: Vec<Controller<Rotation>>,
     pub scale: Vec<Controller<Scale>>,
     pub color: Controller<Color>,

@@ -37,12 +37,8 @@ impl<T> SignalResponse<T> {
 
 }
 
-type Channel<T> = Vec<Epoch<SignalResponse<T>>>;
+pub type Channel<T> = Vec<Epoch<T>>;
 
 pub struct PlayList<T> {
-    channels: Vec<Channel<T>>,
-}
-
-pub struct Globals {
-    sense_muls: Channel<f32>,
+    channels: Vec<Channel<SignalResponse<T>>>,
 }

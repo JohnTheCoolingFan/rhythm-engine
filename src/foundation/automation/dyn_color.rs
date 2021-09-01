@@ -1,56 +1,23 @@
 use crate::{foundation::automation::*, utils::*};
 use duplicate::duplicate;
 
-#[derive(Clone, Copy)]
-pub enum Transition<T> 
-where
-    T: Copy
-{
-    Instant(T),
-    Lerp(T)
-}
-
-impl<T> Transition<T> 
-where
-    T: Copy
-{
-    pub fn get(&self) -> &T {
-        match self {
-            Self::Lerp(val) | Self::Instant(val) => val
-        }
-    }
-
-    pub fn get_mut(&mut self) -> &mut T {
-        match self {
-            Self::Lerp(val) | Self::Instant(val) => val
-        }
-    }
-
-    pub fn cycle(&mut self) {
-        *self = match self {
-            Self::Lerp(val) => Self::Instant(*val),
-            Self::Instant(val) => Self::Lerp(*val)
-        }
-    }
-}
-
 type Color = ggez::graphics::Color;
-type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Transition<Color>>>;
+type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Interpret<Color>>>;
 impl<'a> Exhibit for ColorVecSeeker<'a> {
-    //must return Transition because of the way Epoch and Exhibit are implemented
-    fn exhibit(&self, offset: f32) -> Transition<Color> {
+    //must return Interpret because of the way Epoch and Exhibit are implemented
+    fn exhibit(&self, offset: f32) -> Interpret<Color> {
         let curr = self.current();
         let prev = self.previous();
-        match curr.val {
-            Transition::Instant(_) => prev.val,
-            Transition::Lerp(_) => {
+        match prev.val {
+            Interpret::Individual(_) => prev.val,
+            Interpret::Respective(_) => {
                 if self.over_run() {
                     curr.val
                 }
                 else {
                     let t = (offset - prev.time) / (curr.time - prev.time);
                     let (c1, c2) = (prev.val.get(), curr.val.get());
-                    Transition::Lerp(Color::new(
+                    Interpret::Respective(Color::new(
                         (c2.r - c1.r) * t + c1.r,
                         (c2.g - c1.g) * t + c1.g,
                         (c2.b - c1.b) * t + c1.b,
@@ -62,7 +29,7 @@ impl<'a> Exhibit for ColorVecSeeker<'a> {
     }
 }
 
-pub type DynColor = Automation<Vec<Epoch<Transition<Color>>>>;
+pub type DynColor = Automation<Vec<Epoch<Interpret<Color>>>>;
 type DynColSeekerMeta<'a> = (BPSeeker<'a, Anchor>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
 pub type DynColorSeeker<'a> = Seeker<(), DynColSeekerMeta<'a>>;
 
@@ -133,13 +100,13 @@ mod tests {
             Ok(Self {
                 color: DynColor::new(
                     vec![
-                        (0., Transition::Instant(Color::BLACK)).into(),
-                        (x / 2., Transition::Lerp(Color::new(1., 0., 0., 1.))).into()
+                        (0., Interpret::Respective(Color::BLACK)).into(),
+                        (x / 2., Interpret::Respective(Color::new(1., 0., 0., 1.))).into()
                     ],
                     vec![
-                        (0., Transition::Instant(Color::WHITE)).into(),
-                        (x / 2., Transition::Lerp(Color::new(0., 1., 1., 1.))).into(),
-                        (x * (2. / 3.), Transition::Instant(Color::new(0., 1., 0., 1.))).into()
+                        (0., Interpret::Individual(Color::WHITE)).into(),
+                        (x / 2., Interpret::Respective(Color::new(0., 1., 1., 1.))).into(),
+                        (x * (2. / 3.), Interpret::Individual(Color::new(0., 1., 0., 1.))).into()
                     ],
                     x
                 ),

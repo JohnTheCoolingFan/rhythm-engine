@@ -30,3 +30,37 @@ pub trait ShortHandDebug: Debug + Copy {
 }
 
 impl<T: Debug + Copy> ShortHandDebug for T {}
+
+#[derive(Clone, Copy)]
+pub enum Interpret<T> 
+where
+    T: Copy
+{
+    Individual(T),
+    Respective(T)
+}
+
+impl<T> Interpret<T> 
+where
+    T: Copy
+{
+    pub fn get(&self) -> &T {
+        match self {
+            Self::Respective(val) | Self::Individual(val) => val
+        }
+    }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        match self {
+            Self::Respective(val) | Self::Individual(val) => val
+        }
+    }
+
+    pub fn cycle(&mut self) {
+        *self = match self {
+            Self::Respective(val) => Self::Individual(*val),
+            Self::Individual(val) => Self::Respective(*val)
+        }
+    }
+}
+

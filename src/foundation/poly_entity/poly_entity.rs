@@ -1,5 +1,6 @@
 use super::preliminary::*;
 use glam::{Mat3, Vec2};
+use ggez::graphics::Color;
 
 pub struct PolyEntity {
     pub points_raw: Vec<Vec2>, //contains position offset
@@ -33,8 +34,8 @@ impl PolyEntity {
                     point_shifts: vec![],
                     rotation: vec![],
                     scale: vec![],
-                    color: Controller::Automated(0),
-                    bloom: Controller::Automated(0),
+                    color: Controller::Static(Color::WHITE),
+                    bloom: Controller::Static(0.),
                     beats: vec![]
                 }
             })
@@ -43,4 +44,5 @@ impl PolyEntity {
             None
         }
     }
+
 }
