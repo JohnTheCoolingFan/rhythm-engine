@@ -1,5 +1,5 @@
 use duplicate::duplicate;
-use glam::{Mat2, Vec2};
+use glam::Vec2;
 use lyon_geom::Point;
 
 pub trait IsLeft {

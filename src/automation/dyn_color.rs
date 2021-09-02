@@ -1,35 +1,64 @@
 use crate::{automation::*, utils::*};
 use duplicate::duplicate;
+use ggez::graphics::Color;
 
-type Color = ggez::graphics::Color;
-type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<Interpret<Color>>>;
+#[derive(Clone, Copy)]
+pub enum Transition {
+    Instant,
+    Weighted(f32)
+}
+
+impl Transition {
+    pub fn cycle(&mut self) {
+        *self = match self {
+            Self::Instant => Self::Weighted(0.),
+            Self::Weighted(_) => Self::Instant
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct ColorAnchor {
+    pub color: Color,
+    pub transition: Transition
+}
+
+type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<ColorAnchor>>;
 impl<'a> Exhibit for ColorVecSeeker<'a> {
-    //must return Interpret because of the way Epoch and Exhibit are implemented
-    fn exhibit(&self, offset: f32) -> Interpret<Color> {
+    //must return Anchor because of the way Epoch and Exhibit are implemented
+    fn exhibit(&self, offset: f32) -> ColorAnchor {
         let curr = self.current();
         let prev = self.previous();
-        match prev.val {
-            Interpret::Individual(_) => prev.val,
-            Interpret::Respective(_) => {
+        match prev.val.transition {
+            Transition::Instant => prev.val,
+            Transition::Weighted(weight) => {
                 if self.over_run() {
                     curr.val
                 }
                 else {
                     let t = (offset - prev.time) / (curr.time - prev.time);
-                    let (c1, c2) = (prev.val.get(), curr.val.get());
-                    Interpret::Respective(Color::new(
-                        (c2.r - c1.r) * t + c1.r,
-                        (c2.g - c1.g) * t + c1.g,
-                        (c2.b - c1.b) * t + c1.b,
-                        (c2.a - c1.a) * t + c1.a,
-                    ))
+                    let w = Weight::QuadLike{ 
+                        curvature: weight,
+                        x_flip: false,
+                        y_flip: false
+                    }.eval(t);
+                    let (c1, c2) = (prev.val.color, curr.val.color);
+                    ColorAnchor{
+                        color: Color::new(
+                            (c2.r - c1.r) * w + c1.r,
+                            (c2.g - c1.g) * w + c1.g,
+                            (c2.b - c1.b) * w + c1.b,
+                            (c2.a - c1.a) * w + c1.a,
+                        ),
+                        .. prev.val
+                    }
                 }
             }
         } 
     }
 }
 
-pub type DynColor = Automation<Vec<Epoch<Interpret<Color>>>>;
+pub type DynColor = Automation<Vec<Epoch<ColorAnchor>>>;
 type DynColSeekerMeta<'a> = (BPSeeker<'a, Anchor>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
 pub type DynColorSeeker<'a> = Seeker<(), DynColSeekerMeta<'a>>;
 
@@ -43,9 +72,9 @@ impl<'a> Seek for DynColorSeeker<'a> {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> Color {
         let (anchors, lower, upper) = &mut self.meta;
-        let c1 = *lower.method(offset).get();
+        let c1 = lower.method(offset).color;
         let t = anchors.method(offset);
-        let c2 = *upper.method(offset).get();
+        let c2 = upper.method(offset).color;
         Color::new(
             (c2.r - c1.r) * t + c1.r,
             (c2.g - c1.g) * t + c1.g,
@@ -76,18 +105,14 @@ impl<'a> Seekable<'a> for DynColor {
 //
 #[cfg(test)]
 mod tests {
-    mod graficks {
-        use ggez::graphics::Color;
-        pub use ggez::graphics::*; //to remove colision
-    }
     use super::*;
     use ggez::{
+        graphics::*,
         event::{self, EventHandler, MouseButton, KeyCode, KeyMods},
         timer::time_since_start,
         Context, GameResult, GameError,
     };
     use glam::Vec2;
-    use graficks::*;
 
     struct Test {
         color: DynColor,
@@ -100,13 +125,43 @@ mod tests {
             Ok(Self {
                 color: DynColor::new(
                     vec![
-                        (0., Interpret::Respective(Color::BLACK)).into(),
-                        (x / 2., Interpret::Respective(Color::new(1., 0., 0., 1.))).into()
+                        (
+                            0.,
+                            ColorAnchor{
+                                transition: Transition::Weighted(5.),
+                                color: Color::BLACK
+                            }
+                        ).into(),
+                        (
+                            x / 2.,
+                            ColorAnchor{
+                                transition: Transition::Weighted(0.),
+                                color: Color::new(1., 0., 0., 1.)
+                            }
+                        ).into()
                     ],
                     vec![
-                        (0., Interpret::Individual(Color::WHITE)).into(),
-                        (x / 2., Interpret::Respective(Color::new(0., 1., 1., 1.))).into(),
-                        (x * (2. / 3.), Interpret::Individual(Color::new(0., 1., 0., 1.))).into()
+                        (
+                            0.,
+                            ColorAnchor{
+                                transition: Transition::Instant,
+                                color: Color::WHITE,
+                            }
+                        ).into(),
+                        (
+                            x / 2.,
+                            ColorAnchor{
+                                transition: Transition::Weighted(0.),
+                                color: Color::new(0., 1., 1., 1.),
+                            }
+                        ).into(),
+                        (
+                            x * (2. / 3.),
+                            ColorAnchor{
+                                transition: Transition::Instant,
+                                color: Color::new(0., 1., 0., 1.)
+                            }
+                        ).into()
                     ],
                     x
                 ),
@@ -131,7 +186,7 @@ mod tests {
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    *col.val.get(),
+                    col.val.color,
                 )?;
 
                 draw(
@@ -146,7 +201,7 @@ mod tests {
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    *col.val.get(),
+                    col.val.color,
                 )?;
 
                 draw(ctx, &rect, (Vec2::new(col.time, 0.),))?;

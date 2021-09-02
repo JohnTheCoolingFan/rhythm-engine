@@ -1,5 +1,6 @@
-use crate::{foundation::*, utils::*};
+use crate::{automation::*, utils::*};
 use crate::utils::seeker::*;
+use super::*;
 
 pub enum SignalResponse<T> {
     Ignore(T),
@@ -43,6 +44,30 @@ pub type Channel<T> = Vec<Epoch<T>>;
 pub struct PlayList<T> {
     channels: Vec<Channel<SignalResponse<T>>>,
 }
+//
+//
+//
+//
+//
+enum BPM {
+    Static{ bpm: f32 },
+    Variable{ division_factor: i32 },
+}
+
+type BPMSeeker<'a> = BPSeeker<'a, BPM>;
+/*impl<'a> Exhibit for BPMSeeker<'a> {
+    fn exhibit(&self, offset: f32) -> () {
+        let (curr, prev) = (self.current(), self.previous());
+        match prev.val {
+            Interpret::Individual()
+        }
+    }
+}*/
+//
+//
+//
+//
+//
 struct SongMetaData {
     pub artists: String,
     pub title: String,
@@ -50,17 +75,9 @@ struct SongMetaData {
     //hash or song ID? 
 }
 
-type BPMMarker = Epoch<Interpret<(f32, f32)>>;
-type BPMSeeker<'a> = BPSeeker<'a, BPMMarker>;
-impl<'a> Exhibit for BPMSeeker<'a> {
-    fn exhibit(&self, offset: f32) -> {
-    }
-}
-
-
 pub struct Globals {
     sense_muls: Channel<f32>,
-    bpms: Vec<BPMMarker>,
+    bpms: Vec<Epoch<BPM>>,
     camera_pos: Channel<SignalResponse<ComplexSpline>>,
     camera_rot: Channel<SignalResponse<Rotation>>,
     camera_scale: Channel<SignalResponse<Scale>>

@@ -1,7 +1,5 @@
 use crate::utils::{math::*, seeker::*, misc::*};
 use glam::Vec2;
-use std::mem::swap;
-use duplicate::duplicate;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Weight {

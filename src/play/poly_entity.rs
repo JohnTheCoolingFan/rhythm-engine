@@ -1,6 +1,6 @@
-use super::preliminary::*;
 use glam::{Mat3, Vec2};
 use ggez::graphics::Color;
+use crate::automation::*;
 /*use glam::Vec2;
 
 trait PolygonExtensions {
@@ -28,8 +28,6 @@ impl PolygonExtensions for &[Vec2] {
     }
 }*/
 
-use crate::foundation::*;
-use ggez::graphics::Color;
 
 pub struct HitKeys {
     alphas: u8,
@@ -93,7 +91,11 @@ pub struct PolyEntity {
     pub duration: f32,
     pub properties: Properties,
 }
-
+//
+//
+//
+//
+//
 impl PolyEntity {
     #[rustfmt::skip]
     pub fn new(start: f32, duration: f32, initial: &[Vec2; 3]) -> Option<Self> {

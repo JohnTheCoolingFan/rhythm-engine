@@ -1,6 +1,7 @@
 mod editor;
 mod automation;
 mod utils;
+mod play;
 
 use ggez::event;
 use ggez::graphics::{self, Color};
