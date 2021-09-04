@@ -1,6 +1,6 @@
 use crate::utils::misc::*;
-use std::ops::{Index, IndexMut};
-
+use duplicate::*;
+use std::default::Default;
 //for values to seek over
 pub trait Quantify {
     type Quantifier: PartialOrd;
@@ -40,7 +40,7 @@ pub trait SeekExtensions
 //
 //
 //
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct Epoch<Value> {
     pub time: f32,
     pub val: Value,
@@ -68,9 +68,15 @@ where
     }
 }
 
-impl<T> SeekerTypes for Seeker<Epoch<T>, usize> 
+#[duplicate(
+    VecT                D;
+    [Vec<Epoch<T>>]     [];
+    [TVec<Epoch<T>>]   [Default]
+)]
+impl<'a, T> SeekerTypes for Seeker<&'a VecT, usize> 
 where
-    T: Copy
+    T: Copy,
+    Epoch<T>: D
 {
     type Source = Epoch<T>;
     type Output = T;
@@ -88,92 +94,104 @@ where
     pub meta: Meta, //changign
 }
 
-pub type DataItem<'a, T> = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output;
+pub type Output<'a, T> = <T as SeekerTypes>::Output;
+pub type Quantifier<'a, T> = <<T as SeekerTypes>::Source as Quantify>::Quantifier;
 
-impl<'a, Data> Seeker<&'a Data, usize>
-where
-    Data: Seekable<'a>+ Index<usize, Output = DataItem<'a, Data>> + 'a
-{
-    pub fn current(&self) -> Result<&DataItem<'a, Data>, &DataItem<'a, Data>> {
-        if self.meta < self.data.len() {
-            Ok(&self.data[self.meta])
-        }
-        else {
-            Err(&self.data[FromEnd(0)])
-        }
-    }
-
-    pub fn previous(&self) -> Option<&DataItem<'a, Data>> {
-        if 1 < self.data.len() && 0 < self.meta {
-            Some(&self.data[self.meta - 1])
-        }
-        else {
-            None
-        }
-    }
-
-    pub fn next(&self) -> Option<&DataItem<'a, Data>> {
-        if 1 < self.data.len() && self.meta - 1 < self.data.len() {
-            Some(&self.data[self.meta + 1])
-        }
-        else {
-            None
-        }
-    }
-}
-
-impl<'a, Item> Seek for BPSeeker<'a, Item>
-where
-    Item: Quantify,
-    Self: Exhibit<Source = Item>,
-{
-    fn seek(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output {
-        while self.meta < self.data.len() {
-            if offset < self.data[self.meta].quantify() {
-                break;
-            }
-            self.meta += 1;
-        }
-        self.exhibit(offset)
-    }
-
-    fn jump(&mut self, offset: <Self::Source as Quantify>::Quantifier) -> Self::Output {
-        self.meta = match self
-            .data
-            .binary_search_by(|elem| elem.quantify().partial_cmp(&offset).unwrap())
-        {
-            Ok(index) => index,
-            Err(index) => index 
-        };
-        self.exhibit(offset)
-    }
-}
-
-impl <'a, Item> Seekable<'a> for Vec<Item>
-where
-    Item: Quantify + 'a,
-    BPSeeker<'a, Item>: Exhibit<Source = Item>,
-{
-    type Seeker = Seeker<&'a Vec<Item>, usize>;
+//  T<U> is not possible so I have to do this
+duplicate_inline! {
+    [VecT       D;
+    [Vec<T>]    [];
+    [TVec<T>]  [Default]]
     
-    fn seeker(&'a self) -> Self::Seeker {
-        Self::Seeker {
-            meta: 0,
-            data: self
+    impl<'a, T> Seeker<&'a VecT, usize>
+    where
+        T: Quantify + D
+    {
+        pub fn current(&self) -> Result<&T, &T> {
+            if self.meta < self.data.len() {
+                Ok(&self.data[self.meta])
+            }
+            else {
+                Err(&self.data[FromEnd(0)])
+            }
+        }
+
+        pub fn previous(&self) -> Option<&T> {
+            if 1 < self.data.len() && 0 < self.meta {
+                Some(&self.data[self.meta - 1])
+            }
+            else {
+                None
+            }
+        }
+
+        pub fn next(&self) -> Option<&T> {
+            if 1 < self.data.len() && self.meta - 1 < self.data.len() {
+                Some(&self.data[self.meta + 1])
+            }
+            else {
+                None
+            }
         }
     }
-}
 
-impl<T> SeekExtensions for Vec<T>
-where
-    T: Quantify + Copy,
-{
-    type Item = T;
-    fn quantified_insert(&mut self, item: T) -> usize {
-        let index = match self.binary_search_by(|a| a.quantify().partial_cmp(&item.quantify()).unwrap()) {
-            Ok(index) | Err(index) => index,
-        };
-        self.insert(index, item);
-        index
+    impl<'a, T> Seek for Seeker<&'a VecT, usize>
+    where
+        T: Quantify + D,
+        Self: Exhibit<Source = T>
+    {
+        fn seek(&mut self, offset: Quantifier<'a, Self>) -> Output<'a, Self>
+        {
+            while self.meta < self.data.len() {
+                if offset < self.data[self.meta].quantify() {
+                    break;
+                }
+                self.meta += 1;
+            }
+            self.exhibit(offset)
+        }
+
+        fn jump(&mut self, offset: Quantifier<'a, Self>) -> Output<'a, Self> {
+            self.meta = match self
+                .data
+                .binary_search_by(|elem| elem.quantify().partial_cmp(&offset).unwrap())
+            {
+                Ok(index) => index,
+                Err(index) => index 
+            };
+            self.exhibit(offset)
+        }
+    }
+
+    impl <'a, T> Seekable<'a> for VecT
+    where
+        T: Quantify + 'a + D,
+        Seeker<&'a VecT, usize>: Exhibit<Source = T>,
+    {
+        type Seeker = Seeker<&'a VecT, usize>;
+        
+        fn seeker(&'a self) -> Self::Seeker {
+            Self::Seeker {
+                meta: 0,
+                data: self
+            }
+        }
+    }
+
+
+    impl<T> SeekExtensions for VecT
+    where
+        T: Quantify + Copy + D,
+    {
+        type Item = T;
+        fn quantified_insert(&mut self, item: T) -> usize {
+            let index = match self
+                .as_slice()
+                .binary_search_by(|a| a.quantify().partial_cmp(&item.quantify()).unwrap()) {
+                    Ok(index) | Err(index) => index,
+            };
+            self.insert(index, item);
+            index
+        }
     }
 }

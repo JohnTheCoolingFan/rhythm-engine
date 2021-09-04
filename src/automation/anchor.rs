@@ -1,4 +1,5 @@
 use crate::utils::{math::*, seeker::*, misc::*};
+use std::default::Default;
 use glam::Vec2;
 
 #[derive(Debug, Copy, Clone)]
@@ -302,6 +303,21 @@ impl Anchor {
     }
 
 }
+
+impl Default for Anchor {
+    fn default() -> Self {
+        Self {
+            point: Vec2::new(0., 0.),
+            weight: Weight::Constant{ y_flip: false },
+            subwave: SubWave {
+                mode: SubWaveMode::Off,
+                offset: 0.,
+                weight: Weight::Constant{ y_flip: false },
+                period: 0.
+            }
+        }
+    }
+}
 //
 //
 //
@@ -315,12 +331,12 @@ impl Quantify for Anchor {
     }
 }
 
-impl<'a> SeekerTypes for BPSeeker<'a, Anchor> {
+impl<'a> SeekerTypes for Seeker<&'a TVec<Anchor>, usize> {
     type Source = Anchor;
     type Output = f32;
 }
 
-impl<'a> Exhibit for BPSeeker<'a, Anchor> { 
+impl<'a> Exhibit for Seeker<&'a TVec<Anchor>, usize> { 
     fn exhibit(&self, offset: f32) -> Self::Output {
         match (self.previous(), self.current()) {
             (Some(prev), Ok(curr)) => curr.eval(prev, offset),

@@ -1,6 +1,8 @@
 use crate::{automation::*, utils::*};
 use duplicate::duplicate;
 use ggez::graphics::Color;
+use tinyvec::TinyVec;
+use std::default::Default;
 
 #[derive(Clone, Copy)]
 pub enum Transition {
@@ -23,7 +25,16 @@ pub struct ColorAnchor {
     pub transition: Transition
 }
 
-type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<ColorAnchor>>;
+impl Default for ColorAnchor {
+    fn default() -> Self {
+        Self {
+            color: Color::new(0., 0., 0., 0.),
+            transition: Transition::Instant
+        }
+    }
+}
+
+type ColorVecSeeker<'a> = Seeker<&'a TinyVec<[Epoch<ColorAnchor>; 3]>, usize>;
 impl<'a> Exhibit for ColorVecSeeker<'a> {
     //must return Anchor because of the way Epoch and Exhibit are implemented
     fn exhibit(&self, offset: f32) -> ColorAnchor {
@@ -57,11 +68,11 @@ impl<'a> Exhibit for ColorVecSeeker<'a> {
 }
 
 pub type DynColor = Automation<Vec<Epoch<ColorAnchor>>>;
-type DynColSeekerMeta<'a> = (BPSeeker<'a, Anchor>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
+type DynColSeekerMeta<'a> = (Seeker<&'a TinyVec<[Anchor; 3]>, usize>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
 pub type DynColorSeeker<'a> = Seeker<(), DynColSeekerMeta<'a>>;
 
 impl<'a> SeekerTypes for DynColorSeeker<'a> {
-    type Source = <BPSeeker<'a, Anchor> as SeekerTypes>::Source;
+    type Source = <Seeker<&'a TinyVec<[Anchor; 3]>, usize> as SeekerTypes>::Source;
     type Output = Color;
 }
 

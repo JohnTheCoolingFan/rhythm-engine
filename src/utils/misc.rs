@@ -1,31 +1,41 @@
-pub struct FromEnd(pub usize);
-use duplicate::duplicate;
+use duplicate::duplicate_inline;
 use std::fmt::Debug;
 use tinyvec::TinyVec;
 use std::default::Default;
 
 pub const SHORT_ARR_SIZE: usize = 3;
+pub type TVec<T> = TinyVec<[T; SHORT_ARR_SIZE]>;
 
-#[duplicate(itterable; [Vec<T>]; [[T]]; [TinyVec<[T; SHORT_ARR_SIZE]>])]
-impl<T> std::ops::Index<FromEnd> for itterable 
-where
-    T: Default
-{
-    type Output = T;
+pub struct FromEnd(pub usize);
 
-    fn index(&self, FromEnd(n): FromEnd) -> &T {
-        &self[self
-            .len()
-            .checked_sub(1 + n)
-            .expect(format!("From End out of range. Item len: {}", self.len()).as_str())]
+//  T<U> is not possible so I have to do this
+duplicate_inline! {
+    [VecT       D;
+    [Vec<T>]    [];
+    [TVec<T>]  [Default]]
+
+    impl<T> std::ops::Index<FromEnd> for VecT
+    where
+        T: D
+    {
+        type Output = T;
+
+        fn index(&self, FromEnd(n): FromEnd) -> &T {
+            &self[self
+                .len()
+                .checked_sub(1 + n)
+                .expect(format!("From End out of range. Item len: {}", self.len()).as_str())]
+        }
     }
-}
 
-#[duplicate(itterable; [Vec<T>]; [[T]])]
-impl<T> std::ops::IndexMut<FromEnd> for itterable {
-    fn index_mut(&mut self, FromEnd(n): FromEnd) -> &mut T {
-        let len = self.len();
-        &mut self[len.checked_sub(1 + n).expect("out of range from end")]
+    impl<T> std::ops::IndexMut<FromEnd> for VecT
+    where
+        T: D
+    {
+        fn index_mut(&mut self, FromEnd(n): FromEnd) -> &mut T {
+            let len = self.len();
+            &mut self[len.checked_sub(1 + n).expect("out of range from end")]
+        }
     }
 }
 

@@ -1,13 +1,14 @@
 use super::anchor::*;
-use crate::utils::seeker::*;
+use crate::utils::*;
 use glam::Vec2;
 use std::ops::{Index, IndexMut};
 use duplicate::duplicate;
+use tinyvec::tiny_vec;
 
 pub struct Automation<T> {
     pub upper: T,
     pub lower: T,
-    pub(super) anchors: Vec<Anchor>,
+    pub(super) anchors: TVec<Anchor>,
 }
 
 impl<T> Index<usize> for Automation<T> {
@@ -29,10 +30,10 @@ impl<T> Automation<T> {
         Self {
             upper,
             lower,
-            anchors: vec![
+            anchors: tiny_vec!([Anchor; 3] =>
                 Anchor::new(Vec2::new(0., 0.0)),
-                Anchor::new(Vec2::new(len, 0.0)),
-            ],
+                Anchor::new(Vec2::new(len, 0.0))
+            ),
         }
     }
 
@@ -92,7 +93,7 @@ impl BoundLerp for f32 {
     }
 }
 
-pub type AutomationSeeker<'a, T> = Seeker<(T, T), BPSeeker<'a, Anchor>>;
+pub type AutomationSeeker<'a, T> = Seeker<(T, T), Seeker<&'a TVec<Anchor>, usize>>;
 
 impl<'a, T> SeekerTypes for AutomationSeeker<'a, T> 
 where
