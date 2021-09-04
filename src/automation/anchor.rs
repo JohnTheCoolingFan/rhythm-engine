@@ -322,14 +322,10 @@ impl<'a> SeekerTypes for BPSeeker<'a, Anchor> {
 
 impl<'a> Exhibit for BPSeeker<'a, Anchor> { 
     fn exhibit(&self, offset: f32) -> Self::Output {
-        if self.over_run() {
-            self.vec()[FromEnd(0)].point.y
-        }
-        else if self.under_run() {
-            self.vec()[0].point.y
-        }
-        else {
-            self.current().eval(self.previous(), offset)
+        match (self.previous(), self.current()) {
+            (Some(prev), Ok(curr)) => curr.eval(prev, offset),
+            (None, Ok(curr) | Err(curr))
+            | (_, Err(curr)) => curr.point.y,
         }
     }
 }

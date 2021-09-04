@@ -1,4 +1,5 @@
 use crate::utils::misc::*;
+use std::ops::{Index, IndexMut};
 
 //for values to seek over
 pub trait Quantify {
@@ -67,7 +68,7 @@ where
     }
 }
 
-impl<'a, T> SeekerTypes for BPSeeker<'a, Epoch<T>> 
+impl<T> SeekerTypes for Seeker<Epoch<T>, usize> 
 where
     T: Copy
 {
@@ -87,46 +88,36 @@ where
     pub meta: Meta, //changign
 }
 
-//BP prefix means "boiler plate"
-pub type BPSeeker<'a, Item> = Seeker<&'a Vec<Item>, usize>;
+pub type DataItem<'a, T> = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output;
 
-impl<'a, Item> BPSeeker<'a, Item>
+impl<'a, Data> Seeker<&'a Data, usize>
 where
+    Data: Seekable<'a>+ Index<usize, Output = DataItem<'a, Data>> + 'a
 {
-    pub fn index(&self) -> usize {
-        self.meta
-    }
-
-    pub fn vec(&self) -> &Vec<Item> {
-        self.data
-    }
- 
-    pub fn over_run(&self) -> bool {
-        self.data.len() <= self.meta
-    }
-    
-    pub fn under_run(&self) -> bool {
-        self.meta == 0
-    }
-
-    pub fn current(&self) -> &Item {
+    pub fn current(&self) -> Result<&DataItem<'a, Data>, &DataItem<'a, Data>> {
         if self.meta < self.data.len() {
-            &self.data[self.meta]
+            Ok(&self.data[self.meta])
         }
         else {
-            &self.data[FromEnd(0)]
+            Err(&self.data[FromEnd(0)])
         }
     }
 
-    pub fn previous(&self) -> &Item {
-        if 0 == self.meta {
-            &self.data[0]
-        }
-        else if self.data.len() <= self.meta {
-            &self.data[FromEnd(0)]
+    pub fn previous(&self) -> Option<&DataItem<'a, Data>> {
+        if 1 < self.data.len() && 0 < self.meta {
+            Some(&self.data[self.meta - 1])
         }
         else {
-            &self.data[self.meta - 1]
+            None
+        }
+    }
+
+    pub fn next(&self) -> Option<&DataItem<'a, Data>> {
+        if 1 < self.data.len() && self.meta - 1 < self.data.len() {
+            Some(&self.data[self.meta + 1])
+        }
+        else {
+            None
         }
     }
 }

@@ -1,5 +1,5 @@
 mod editor;
-mod automation;
+//mod automation;
 mod utils;
 mod play;
 

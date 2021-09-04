@@ -27,34 +27,32 @@ type ColorVecSeeker<'a> = BPSeeker<'a, Epoch<ColorAnchor>>;
 impl<'a> Exhibit for ColorVecSeeker<'a> {
     //must return Anchor because of the way Epoch and Exhibit are implemented
     fn exhibit(&self, offset: f32) -> ColorAnchor {
-        let curr = self.current();
-        let prev = self.previous();
-        match prev.val.transition {
-            Transition::Instant => prev.val,
-            Transition::Weighted(weight) => {
-                if self.over_run() {
-                    curr.val
-                }
-                else {
-                    let t = (offset - prev.time) / (curr.time - prev.time);
-                    let w = Weight::QuadLike{ 
-                        curvature: weight,
-                        x_flip: false,
-                        y_flip: false
-                    }.eval(t);
-                    let (c1, c2) = (prev.val.color, curr.val.color);
-                    ColorAnchor{
-                        color: Color::new(
-                            (c2.r - c1.r) * w + c1.r,
-                            (c2.g - c1.g) * w + c1.g,
-                            (c2.b - c1.b) * w + c1.b,
-                            (c2.a - c1.a) * w + c1.a,
-                        ),
-                        .. prev.val
+        match (self.previous(), self.current()) {
+            (_, Err(curr)) | (None, Ok(curr) | Err(curr)) => curr.val,
+            (Some(prev), Ok(curr)) => {
+                match prev.val.transition {
+                    Transition::Instant => prev.val,
+                    Transition::Weighted(weight) => {
+                        let t = (offset - prev.time) / (curr.time - prev.time);
+                        let w = Weight::QuadLike{ 
+                            curvature: weight,
+                            x_flip: false,
+                            y_flip: false
+                        }.eval(t);
+                        let (c1, c2) = (prev.val.color, curr.val.color);
+                        ColorAnchor{
+                            color: Color::new(
+                                (c2.r - c1.r) * w + c1.r,
+                                (c2.g - c1.g) * w + c1.g,
+                                (c2.b - c1.b) * w + c1.b,
+                                (c2.a - c1.a) * w + c1.a,
+                            ),
+                            .. prev.val
+                        }
                     }
                 }
             }
-        } 
+        }
     }
 }
 

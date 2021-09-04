@@ -3,68 +3,13 @@ use crate::utils::*;
 use glam::Vec2;
 use lyon_geom::Point;
 use std::ops::{Deref, DerefMut};
-
-
-#[derive(Debug, Clone, Copy)]
-pub struct CmpSplAnchor(pub Anchor);
-
-impl From<Anchor> for CmpSplAnchor {
-    fn from(anchor: Anchor) -> Self {
-        Self(anchor)
-    }
-}
-
-impl Deref for CmpSplAnchor {
-    type Target = Anchor;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for CmpSplAnchor {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-
-impl Quantify for CmpSplAnchor {
-    type Quantifier = f32;
-    
-    fn quantify(&self) -> f32 {
-        self.0.quantify()
-    }
-}
-
-impl<'a> SeekerTypes for BPSeeker<'a, CmpSplAnchor> {
-    type Source = CmpSplAnchor;
-    type Output = f32;
-}
-
-impl<'a> Exhibit for BPSeeker<'a, CmpSplAnchor> { 
-    fn exhibit(&self, t: f32) -> Self::Output {
-        if self.over_run() {
-            self.vec()[FromEnd(0)].point.y
-        }
-        else if self.under_run() {
-            self.vec()[0].point.y
-        }
-        else {
-            let mut start = self.vec()[self.index() - 1];
-            let mut end = self.vec()[self.index()];
-            start.point.y = 0.;
-            end.point.y = 1.;
-            end.eval(&start, t)
-        }
-    }
-}
 //
 //
 //
 //
 //
 pub struct ComplexSpline {
-    anchors: Vec<CmpSplAnchor>,
+    anchors: Vec<>,
     segments: Vec<Segment>,
 }
 

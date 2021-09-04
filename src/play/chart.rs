@@ -49,17 +49,35 @@ pub struct PlayList<T> {
 //
 //
 //
-enum BPM {
-    Static{ bpm: f32 },
-    Variable{ division_factor: i32 },
+#[derive(Clone, Copy)]
+pub enum BPM {
+    Defined {
+        bpm: f32,
+        signature: i32
+    },
+    Undefined {
+        division_factor: f32,
+        signature: i32
+    },
 }
 
-type BPMSeeker<'a> = BPSeeker<'a, BPM>;
-/*impl<'a> Exhibit for BPMSeeker<'a> {
-    fn exhibit(&self, offset: f32) -> () {
-        let (curr, prev) = (self.current(), self.previous());
-        match prev.val {
-            Interpret::Individual()
+/*type BPMSeeker<'a> = BPSeeker<'a, Epoch<BPM>>;
+impl<'a> Exhibit for BPMSeeker<'a> {
+    fn exhibit(&self, offset: f32) -> BPM {
+        match (self.previous(), self.current()) {
+            match prev.val {
+                BPM::Defined{ .. } => prev.val,
+                BPM::Undefined{ division_factor, signature } => {
+                    let interval = curr.time - prev.time;
+                    BPM::Defined{
+                        bpm: (60. * 1000.) / (interval / division_factor),
+                        signature
+                    }
+                }
+            }
+        }
+        else {
+            curr.val
         }
     }
 }*/

@@ -1,9 +1,16 @@
 pub struct FromEnd(pub usize);
 use duplicate::duplicate;
 use std::fmt::Debug;
+use tinyvec::TinyVec;
+use std::default::Default;
 
-#[duplicate(itterable; [Vec<T>]; [[T]])]
-impl<T> std::ops::Index<FromEnd> for itterable {
+pub const SHORT_ARR_SIZE: usize = 3;
+
+#[duplicate(itterable; [Vec<T>]; [[T]]; [TinyVec<[T; SHORT_ARR_SIZE]>])]
+impl<T> std::ops::Index<FromEnd> for itterable 
+where
+    T: Default
+{
     type Output = T;
 
     fn index(&self, FromEnd(n): FromEnd) -> &T {
