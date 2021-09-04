@@ -144,7 +144,10 @@ impl Weight {
             x
         };
 
-        starting + delta * if y_flip ^ (1.5 < k && curvature < 0.) { 1. - y } else { y }
+        {
+            let out = starting + delta * if 1.5 < k && curvature < 0. { 1. - y } else { y };
+            if y_flip { 1. - out } else { out }
+        }
     }
 }
 //
