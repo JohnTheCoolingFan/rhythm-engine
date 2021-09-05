@@ -343,8 +343,7 @@ impl<'a> Exhibit for Seeker<&'a TVec<Anchor>, usize> {
     fn exhibit(&self, offset: f32) -> Self::Output {
         match (self.previous(), self.current()) {
             (Some(prev), Ok(curr)) => curr.eval(prev, offset),
-            (None, Ok(curr) | Err(curr))
-            | (_, Err(curr)) => curr.point.y,
+            (None, Ok(curr) | Err(curr)) | (_, Err(curr)) => curr.point.y,
         }
     }
 }

@@ -3,19 +3,15 @@ use crate::utils::*;
 use glam::Vec2;
 use lyon_geom::Point;
 use std::ops::{Deref, DerefMut};
+use tinyvec::tiny_vec;
 //
 //
 //
 //
 //
 pub struct ComplexSpline {
-    anchors: Vec<>,
+    anchors: TVec<TVec<Anchor>>,
     segments: Vec<Segment>,
-}
-
-pub struct Critical {
-    pub anchor: CmpSplAnchor,
-    pub segment: Segment
 }
 
 impl ComplexSpline {
@@ -35,7 +31,7 @@ impl ComplexSpline {
         new.segments[1].recompute(p);
         new
     }
-
+/*
     fn resample(&mut self, index: usize) {
         assert!(index != 0);
         let (p0, p1) = (
@@ -165,14 +161,14 @@ impl ComplexSpline {
 
         if index == 0 { 1 } else { index }
     }
-
+*/
 }
 //
 //
 //
 //
 // 
-type CompSplSeeker<'a> = Seeker<&'a Vec<Segment>, (BPSeeker<'a, CmpSplAnchor>, SegmentSeeker<'a>)>;
+/*type CompSplSeeker<'a> = Seeker<&'a Vec<Segment>, (BPSeeker<'a, CmpSplAnchor>, SegmentSeeker<'a>)>;
 
 impl<'a> SeekerTypes for CompSplSeeker<'a> {
     type Source = <BPSeeker<'a, CmpSplAnchor> as SeekerTypes>::Source;
@@ -224,13 +220,13 @@ impl<'a> Seekable<'a> for ComplexSpline {
             meta: (self.anchors.seeker(), self.segments[0].seeker())
         }
     }
-}
+}*/
 //
 //
 //
 //
 //
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use super::*;
     use super::super::automation;
@@ -498,4 +494,4 @@ mod tests {
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
     }
-}
+}*/

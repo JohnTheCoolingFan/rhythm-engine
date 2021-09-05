@@ -2,6 +2,7 @@ use std::f32::consts::PI;
 use duplicate::duplicate;
 use crate::utils::*;
 use glam::{f32::Mat3, Vec2};
+use tinyvec::tiny_vec;
 use lyon_geom::{CubicBezierSegment, Point, QuadraticBezierSegment};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -42,7 +43,7 @@ impl Ctrl {
 pub struct Segment {
     pub ctrls: Ctrl,
     pub tolerence: f32,
-    pub(super) lut: Vec<Epoch<Vec2>>,
+    pub(super) lut: TVec<Epoch<Vec2>>,
 }
 
 impl Segment {
@@ -50,7 +51,7 @@ impl Segment {
         Self {
             ctrls: ctrl_type,
             tolerence: segment_tolerence,
-            lut: vec![(0., Vec2::new(0., 0.)).into()],
+            lut: tiny_vec!([Epoch<Vec2>; 3] => (0., Vec2::new(0., 0.)).into()),
         }
     }
 
@@ -58,7 +59,7 @@ impl Segment {
         Self {
             ctrls: self.ctrls,
             tolerence: self.tolerence,
-            lut: vec![]
+            lut: tiny_vec!()
         }
     }
 
@@ -179,20 +180,22 @@ impl Segment {
     }
 }
 
-impl<'a> Exhibit for BPSeeker<'a, Epoch<Vec2>> {
+impl<'a> Exhibit for Seeker<&'a TVec<Epoch<Vec2>>, usize> {
     fn exhibit(&self, offset: f32) -> Vec2 {
-        let curr = self.current();
-        let prev = self.previous();
-        let t = (offset - prev.time) / (curr.time - prev.time);
-        prev.val.lerp(curr.val, t)
-
+        match (self.previous(), self.current()) {
+            (Some(prev), Ok(curr)) => {
+                let t = (offset - prev.time) / (curr.time - prev.time);
+                prev.val.lerp(curr.val, t)
+            }
+            (None, Ok(curr) | Err(curr)) | (_, Err(curr)) => curr.val,
+        }
     }
 }
 
-pub type SegmentSeeker<'a> = Seeker<&'a Segment, BPSeeker<'a, Epoch<Vec2>>>;
+pub type SegmentSeeker<'a> = Seeker<&'a Segment, Seeker<&'a TVec<Epoch<Vec2>>, usize>>;
 
 impl<'a> SeekerTypes for SegmentSeeker<'a> {
-    type Source = <BPSeeker<'a, Epoch<Vec2>> as SeekerTypes>::Source;
+    type Source = <Seeker<&'a TVec<Epoch<Vec2>>, usize> as SeekerTypes>::Source;
     type Output = Vec2;
 }
 

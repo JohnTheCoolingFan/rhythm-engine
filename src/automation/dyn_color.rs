@@ -1,7 +1,7 @@
 use crate::{automation::*, utils::*};
 use duplicate::duplicate;
 use ggez::graphics::Color;
-use tinyvec::TinyVec;
+use tinyvec::tiny_vec;
 use std::default::Default;
 
 #[derive(Clone, Copy)]
@@ -34,12 +34,12 @@ impl Default for ColorAnchor {
     }
 }
 
-type ColorVecSeeker<'a> = Seeker<&'a TinyVec<[Epoch<ColorAnchor>; 3]>, usize>;
+type ColorVecSeeker<'a> = Seeker<&'a TVec<Epoch<ColorAnchor>>, usize>;
 impl<'a> Exhibit for ColorVecSeeker<'a> {
     //must return Anchor because of the way Epoch and Exhibit are implemented
     fn exhibit(&self, offset: f32) -> ColorAnchor {
         match (self.previous(), self.current()) {
-            (_, Err(curr)) | (None, Ok(curr) | Err(curr)) => curr.val,
+            (None, Ok(curr) | Err(curr)) | (_, Err(curr)) => curr.val,
             (Some(prev), Ok(curr)) => {
                 match prev.val.transition {
                     Transition::Instant => prev.val,
@@ -51,7 +51,7 @@ impl<'a> Exhibit for ColorVecSeeker<'a> {
                             y_flip: false
                         }.eval(t);
                         let (c1, c2) = (prev.val.color, curr.val.color);
-                        ColorAnchor{
+                        ColorAnchor {
                             color: Color::new(
                                 (c2.r - c1.r) * w + c1.r,
                                 (c2.g - c1.g) * w + c1.g,
@@ -67,12 +67,12 @@ impl<'a> Exhibit for ColorVecSeeker<'a> {
     }
 }
 
-pub type DynColor = Automation<Vec<Epoch<ColorAnchor>>>;
-type DynColSeekerMeta<'a> = (Seeker<&'a TinyVec<[Anchor; 3]>, usize>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
+pub type DynColor = Automation<TVec<Epoch<ColorAnchor>>>;
+type DynColSeekerMeta<'a> = (Seeker<&'a TVec<Anchor>, usize>, ColorVecSeeker<'a>, ColorVecSeeker<'a>);
 pub type DynColorSeeker<'a> = Seeker<(), DynColSeekerMeta<'a>>;
 
 impl<'a> SeekerTypes for DynColorSeeker<'a> {
-    type Source = <Seeker<&'a TinyVec<[Anchor; 3]>, usize> as SeekerTypes>::Source;
+    type Source = <Seeker<&'a TVec<Anchor>, usize> as SeekerTypes>::Source;
     type Output = Color;
 }
 
@@ -133,7 +133,7 @@ mod tests {
             let x: f32 = 2800.;
             Ok(Self {
                 color: DynColor::new(
-                    vec![
+                    tiny_vec!([Epoch<ColorAnchor>; 3] =>
                         (
                             0.,
                             ColorAnchor{
@@ -148,8 +148,8 @@ mod tests {
                                 color: Color::new(1., 0., 0., 1.)
                             }
                         ).into()
-                    ],
-                    vec![
+                    ),
+                    tiny_vec!([Epoch<ColorAnchor>; 3] =>
                         (
                             0.,
                             ColorAnchor{
@@ -171,7 +171,7 @@ mod tests {
                                 color: Color::new(0., 1., 0., 1.)
                             }
                         ).into()
-                    ],
+                    ),
                     x
                 ),
                 dimensions: Vec2::new(x, 1100.),

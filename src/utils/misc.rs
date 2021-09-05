@@ -2,6 +2,7 @@ use duplicate::duplicate_inline;
 use std::fmt::Debug;
 use tinyvec::TinyVec;
 use std::default::Default;
+use glam::Vec2;
 
 pub const SHORT_ARR_SIZE: usize = 3;
 pub type TVec<T> = TinyVec<[T; SHORT_ARR_SIZE]>;
