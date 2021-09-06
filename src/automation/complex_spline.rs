@@ -1,111 +1,46 @@
-use super::{anchor::*, segment::*};
+use super::{automation::*, segment::*};
 use crate::utils::*;
 use glam::Vec2;
 use lyon_geom::Point;
-use std::ops::{Deref, DerefMut};
 use tinyvec::tiny_vec;
 //
 //
 //
 //
 //
+pub struct SplineBound {
+    bound: f32,
+    pub transition: Transition
+}
+
 pub struct ComplexSpline {
-    anchors: TVec<TVec<Anchor>>,
-    segments: Vec<Segment>,
+    pub automation: Automation<SplineBound>,
+    segments: TVec<Segment>
 }
 
 impl ComplexSpline {
-    fn new(len: f32, initial: Segment) -> Self {
-        let mut new = Self {
-            anchors: vec![
-                Anchor::new(Vec2::new(0., 0.)).into(),
-                Anchor::new(Vec2::new(len, 1.)).into()
-            ],
-            segments: vec![
-                Segment::new(Ctrl::Linear(Point::new(0., 0.)), 0.),
-                initial
-            ]
-        };
-
-        let p = &new.segments[0].ctrls.get_end();
-        new.segments[1].recompute(p);
-        new
-    }
-/*
     fn resample(&mut self, index: usize) {
         assert!(index != 0);
         let (p0, p1) = (
-            &self.segments[index - 1].ctrls.get_end(),
-            &self.segments[index].ctrls.get_end()
+            *self.segments[index - 1].ctrls.end(),
+            *self.segments[index].ctrls.end()
         );
-        self.segments[index].recompute(p0);
+        self.segments[index].recompute(&p0);
         if index + 1 < self.segments.len() {
-            self.segments[index + 1].recompute(p1);
+            self.segments[index + 1].recompute(&p1);
         }
     }
 
-    fn correct_anchor(&mut self, index: usize) {
-        assert!((1..self.anchors.len()).contains(&index));
-
-        self.anchors[index].point.x = self.anchors[index].point.x.clamp(
-            self.anchors[index - 1].point.x,
-            if index + 1 < self.anchors.len() {
-                self.anchors[index + 1].point.x
-            }
-            else {
-                f32::MAX
-            }
-        );
-    }
- 
-    pub fn anchors(&self) -> &Vec<CmpSplAnchor> {
-        &self.anchors
-    }
-    
-    pub fn segments(&self) -> &Vec<Segment> {
-        &self.segments
-    }
-
-    pub fn insert(&mut self, Critical{anchor, segment}: Critical) -> usize {
-        let index = self.anchors.quantified_insert(anchor);
-        self.segments.insert(index, segment);
-        self.correct_anchor(index);
-        self.resample(index);
-        index
-    }
- 
-    pub fn remove(&mut self, index: usize) -> Critical {
-        self.segments[index].lut.clear();
-        let removed = Critical{
-            anchor: self.anchors.remove(index),
-            segment: self.segments.remove(index)
-        };
-        self.resample(index);
-        removed
-    }
-
-    pub fn modify<Func>(&mut self, index: usize, mut func: Func)
-        -> Result<Critical, ()>
+    pub fn modify<Func>(&mut self, range: std::ops::Range<usize>, mut func: Func)
     where
-        Func: FnMut(&mut Anchor, &mut Segment)
+        Func: FnMut(&mut Segment)
     {
-        if (1..self.segments.len()).contains(&index) {
-            let old = Critical{
-                anchor: self.anchors[index],
-                segment: self.segments[index].yoink()
-            };
-
-            func(&mut self.anchors[index], &mut self.segments[index]);
-
-            self.correct_anchor(index);
-            if old.segment.ctrls != self.segments[index].ctrls {
-                self.resample(index);
-            }
-
-            Ok(old)
+        for index in range {
+            func(&mut self.segments[index]);
         }
-        else {
-            Err(())
+
+        for index in range {
+            self.resample(index);
         }
     }
 
@@ -161,7 +96,6 @@ impl ComplexSpline {
 
         if index == 0 { 1 } else { index }
     }
-*/
 }
 //
 //

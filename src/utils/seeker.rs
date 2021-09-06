@@ -42,7 +42,7 @@ pub trait SeekExtensions
 //
 #[derive(Clone, Copy, Default)]
 pub struct Epoch<Value> {
-    pub time: f32,
+    pub offset: f32,
     pub val: Value,
 }
 
@@ -52,7 +52,7 @@ where
 {
     type Quantifier = f32;
     fn quantify(&self) -> Self::Quantifier {
-        self.time
+        self.offset
     }
 }
 
@@ -62,7 +62,7 @@ where
 {
     fn from(tup: (f32, Value)) -> Epoch<Value> {
         Epoch::<Value> {
-            time: tup.0,
+            offset: tup.0,
             val: tup.1,
         }
     }
@@ -195,3 +195,23 @@ duplicate_inline! {
         }
     }
 }
+//
+//
+//
+//
+//
+#[derive(Clone, Copy)]
+pub enum Transition {
+    Instant,
+    Weighted(f32)
+}
+
+impl Transition {
+    pub fn cycle(&mut self) {
+        *self = match self {
+            Self::Instant => Self::Weighted(0.),
+            Self::Weighted(_) => Self::Instant
+        }
+    }
+}
+

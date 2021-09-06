@@ -14,25 +14,21 @@ pub enum Ctrl {
 }
 
 impl Ctrl {
-    pub fn get_end(&self) -> Point<f32> {
+    pub fn end(&self) -> &Point<f32> {
         match self {
-            Self::Linear(p) => *p,
-            Self::Quadratic(_, p) => *p,
-            Self::ThreePointCircle(_, p) => *p,
-            Self::Cubic(_, _, p) => *p,
+            Self::Linear(p) => p,
+            Self::Quadratic(_, p) => p,
+            Self::ThreePointCircle(_, p) => p,
+            Self::Cubic(_, _, p) => p,
         }
     }
-
-    pub fn set_end(&mut self, point: Point<f32>) -> Point<f32> {
-        let p = match self {
-            Self::Linear(ref mut p) => p,
-            Self::Quadratic(_, ref mut p) => p,
-            Self::ThreePointCircle(_, ref mut p) => p,
-            Self::Cubic(_, _, ref mut p) => p,
-        };
-        let old = *p;
-        *p = point;
-        old
+    pub fn end_mut(&mut self) -> &mut Point<f32> {
+        match self {
+            Self::Linear(p) => p,
+            Self::Quadratic(_, p) => p,
+            Self::ThreePointCircle(_, p) => p,
+            Self::Cubic(_, _, p) => p,
+        }
     }
 }
 //
@@ -51,7 +47,7 @@ impl Segment {
         Self {
             ctrls: ctrl_type,
             tolerence: segment_tolerence,
-            lut: tiny_vec!([Epoch<Vec2>; 3] => (0., Vec2::new(0., 0.)).into()),
+            lut: tiny_vec!([Epoch<Vec2>; SHORT_ARR_SIZE] => (0., Vec2::new(0., 0.)).into()),
         }
     }
 
@@ -65,7 +61,7 @@ impl Segment {
 
     #[rustfmt::skip]
     pub(super) fn recompute(&mut self, start: &Point<f32>) {
-        let end = self.ctrls.get_end();
+        let end = *self.ctrls.end();
 
         self.lut.clear();
         self.lut.push((0., Vec2::new(start.x, start.y)).into());
@@ -77,7 +73,7 @@ impl Segment {
         let mut callback = |p: Point<f32>| {
             let last = self.lut[FromEnd(0)].val;
             let s = 
-                self.lut[FromEnd(0)].time
+                self.lut[FromEnd(0)].offset
                 + (
                     p.to_vector() - Point::new(last.x, last.y).to_vector()
                 ).length();
@@ -165,17 +161,19 @@ impl Segment {
                 }
             }
         };
-
-        match ctrls {
-            Ctrl::ThreePointCircle(_, _) => {}
-            _ => {
-                let max_displ = self.lut[FromEnd(0)].time;
-                for elem in &mut self.lut {
-                    elem.time /= max_displ;
-                }
-                let p = ctrls.get_end();
-                self.lut.push((1., Vec2::new(p.x, p.y)).into());
-            }
+    }
+}
+//
+//
+//
+//
+//
+impl Default for Segment {
+    fn default() -> Self {
+        Self {
+            ctrls: Ctrl::Linear(Point::new(0., 0.)),
+            tolerence: 0.,
+            lut: tiny_vec!()
         }
     }
 }
@@ -184,7 +182,7 @@ impl<'a> Exhibit for Seeker<&'a TVec<Epoch<Vec2>>, usize> {
     fn exhibit(&self, offset: f32) -> Vec2 {
         match (self.previous(), self.current()) {
             (Some(prev), Ok(curr)) => {
-                let t = (offset - prev.time) / (curr.time - prev.time);
+                let t = (offset - prev.offset) / (curr.offset - prev.offset);
                 prev.val.lerp(curr.val, t)
             }
             (None, Ok(curr) | Err(curr)) | (_, Err(curr)) => curr.val,
@@ -206,7 +204,7 @@ impl<'a> Seek for SegmentSeeker<'a> {
             if self.data.lut.len() == 3 {
                 self.data.lut[0]
                     .val
-                    .rotate_about(&self.data.lut[1].val, self.data.lut[2].time * t)
+                    .rotate_about(&self.data.lut[1].val, self.data.lut[2].offset * t)
             } else {
                 self.data.lut[0].val.lerp(self.data.lut[1].val, t)
             }

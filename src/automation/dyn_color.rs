@@ -1,23 +1,7 @@
 use crate::{automation::*, utils::*};
 use duplicate::duplicate;
 use ggez::graphics::Color;
-use tinyvec::tiny_vec;
 use std::default::Default;
-
-#[derive(Clone, Copy)]
-pub enum Transition {
-    Instant,
-    Weighted(f32)
-}
-
-impl Transition {
-    pub fn cycle(&mut self) {
-        *self = match self {
-            Self::Instant => Self::Weighted(0.),
-            Self::Weighted(_) => Self::Instant
-        }
-    }
-}
 
 #[derive(Clone, Copy)]
 pub struct ColorAnchor {
@@ -44,7 +28,7 @@ impl<'a> Exhibit for ColorVecSeeker<'a> {
                 match prev.val.transition {
                     Transition::Instant => prev.val,
                     Transition::Weighted(weight) => {
-                        let t = (offset - prev.time) / (curr.time - prev.time);
+                        let t = (offset - prev.offset) / (curr.offset - prev.offset);
                         let w = Weight::QuadLike{ 
                             curvature: weight,
                             x_flip: false,
@@ -122,6 +106,7 @@ mod tests {
         Context, GameResult, GameError,
     };
     use glam::Vec2;
+    use tinyvec::tiny_vec;
 
     struct Test {
         color: DynColor,
@@ -133,7 +118,7 @@ mod tests {
             let x: f32 = 2800.;
             Ok(Self {
                 color: DynColor::new(
-                    tiny_vec!([Epoch<ColorAnchor>; 3] =>
+                    tiny_vec!([Epoch<ColorAnchor>; SHORT_ARR_SIZE] =>
                         (
                             0.,
                             ColorAnchor{
@@ -149,7 +134,7 @@ mod tests {
                             }
                         ).into()
                     ),
-                    tiny_vec!([Epoch<ColorAnchor>; 3] =>
+                    tiny_vec!([Epoch<ColorAnchor>; SHORT_ARR_SIZE] =>
                         (
                             0.,
                             ColorAnchor{
@@ -201,7 +186,7 @@ mod tests {
                 draw(
                     ctx,
                     &rect,
-                    (Vec2::new(col.time, self.dimensions.y - 20.),),
+                    (Vec2::new(col.offset, self.dimensions.y - 20.),),
                 )?;
             }
 
@@ -213,7 +198,7 @@ mod tests {
                     col.val.color,
                 )?;
 
-                draw(ctx, &rect, (Vec2::new(col.time, 0.),))?;
+                draw(ctx, &rect, (Vec2::new(col.offset, 0.),))?;
             }
 
             let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();

@@ -30,7 +30,7 @@ impl<T> Automation<T> {
         Self {
             upper,
             lower,
-            anchors: tiny_vec!([Anchor; 3] =>
+            anchors: tiny_vec!([Anchor; SHORT_ARR_SIZE] =>
                 Anchor::new(Vec2::new(0., 0.0)),
                 Anchor::new(Vec2::new(len, 0.0))
             ),

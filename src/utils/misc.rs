@@ -4,7 +4,7 @@ use tinyvec::TinyVec;
 use std::default::Default;
 use glam::Vec2;
 
-pub const SHORT_ARR_SIZE: usize = 3;
+pub const SHORT_ARR_SIZE: usize = 4;
 pub type TVec<T> = TinyVec<[T; SHORT_ARR_SIZE]>;
 
 pub struct FromEnd(pub usize);
