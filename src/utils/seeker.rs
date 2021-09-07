@@ -195,23 +195,3 @@ duplicate_inline! {
         }
     }
 }
-//
-//
-//
-//
-//
-#[derive(Clone, Copy)]
-pub enum Transition {
-    Instant,
-    Weighted(f32)
-}
-
-impl Transition {
-    pub fn cycle(&mut self) {
-        *self = match self {
-            Self::Instant => Self::Weighted(0.),
-            Self::Weighted(_) => Self::Instant
-        }
-    }
-}
-

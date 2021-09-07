@@ -5,13 +5,19 @@ use std::ops::{Index, IndexMut};
 use duplicate::duplicate;
 use tinyvec::tiny_vec;
 
-pub struct Automation<T> {
-    pub upper: T,
-    pub lower: T,
+pub struct Automation<T>
+where
+    T: Default + BoundLerp
+{
+    pub upper: TVec<Epoch<TransitionedBound<T>>>,
+    pub lower: TVec<Epoch<TransitionedBound<T>>>,
     pub(super) anchors: TVec<Anchor>,
 }
 
-impl<T> Index<usize> for Automation<T> {
+impl<T> Index<usize> for Automation<T>
+where
+    T: Default + BoundLerp
+{
     type Output = Anchor;
 
     fn index(&self, n: usize) -> &Self::Output {
@@ -19,14 +25,20 @@ impl<T> Index<usize> for Automation<T> {
     }
 }
 
-impl<T> IndexMut<usize> for Automation<T> {
+impl<T> IndexMut<usize> for Automation<T> 
+where
+    T: Default + BoundLerp
+{
     fn index_mut(&mut self, n: usize) -> &mut Anchor {
         &mut self.anchors[n]
     }
 }
 
-impl<T> Automation<T> {
-    pub fn new(lower: T, upper: T, len: f32) -> Self {
+impl<T> Automation<T>
+where
+    T: Default + BoundLerp
+{
+    /*pub fn new(lower: T, upper: T, len: f32) -> Self {
         Self {
             upper,
             lower,
@@ -35,7 +47,7 @@ impl<T> Automation<T> {
                 Anchor::new(Vec2::new(len, 0.0))
             ),
         }
-    }
+    }*/
 
     fn correct_anchor(&mut self, index: usize) {
         assert!((1..self.anchors.len()).contains(&index));
@@ -83,21 +95,86 @@ impl<T> Automation<T> {
 //
 //
 //
-pub trait BoundLerp {
-    fn blerp(self, other: Self, amount: f32) -> Self;
+#[derive(Clone, Copy)]
+pub enum Transition {
+    Instant,
+    Weighted(f32)
 }
 
-impl BoundLerp for f32 {
-    fn blerp(self, other: Self, amount: f32) -> Self {
-        self + (other - self) * amount
+impl Transition {
+    pub fn cycle(&mut self) {
+        *self = match self {
+            Self::Instant => Self::Weighted(0.),
+            Self::Weighted(_) => Self::Instant
+        }
     }
 }
 
-pub type AutomationSeeker<'a, T> = Seeker<(T, T), Seeker<&'a TVec<Anchor>, usize>>;
+impl Default for Transition {
+    fn default() -> Self {
+        Self::Instant
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct TransitionedBound<T>
+where
+    T: BoundLerp + Default
+{
+    transition: Transition,
+    val: T
+}
+
+pub trait BoundLerp {
+    fn blerp(self, other: &Self, amount: f32) -> Self;
+}
+
+//Transitionable Bounds Vector
+pub type TBVSeeker<'a, T> = Seeker<&'a TVec<Epoch<TransitionedBound<T>>>, usize>;
+impl<'a, T> Exhibit for TBVSeeker<'a, T>
+where
+    T: BoundLerp + Default + Copy
+{
+    fn exhibit(&self, offset: f32) -> TransitionedBound<T> {
+        match (self.previous(), self.current()) {
+            (None, Ok(curr) | Err(curr)) | (_, Err(curr)) => curr.val,
+            (Some(prev), Ok(curr)) => {
+                match prev.val.transition {
+                    Transition::Instant => prev.val,
+                    Transition::Weighted(weight) => {
+                        TransitionedBound::<T> {
+                            //mmm yes naming
+                            val: prev.val.val.blerp(&curr.val.val,
+                                Weight::QuadLike{ 
+                                    curvature: weight,
+                                    x_flip: false,
+                                    y_flip: false
+                                }.eval(
+                                    (offset - prev.offset) / (curr.offset - prev.offset)
+                                )
+                            ),
+                            .. prev.val
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+//
+//
+//
+//
+//
+pub type AutomationSeeker<'a, T> = Seeker<
+    (),
+    (TBVSeeker<'a, T>, Seeker<&'a TVec<Anchor>, usize>, TBVSeeker<'a, T>)
+>;
 
 impl<'a, T> SeekerTypes for AutomationSeeker<'a, T> 
 where
-    T: BoundLerp + Copy
+    T: BoundLerp + Copy + Default
 {
     type Source = Anchor;
     type Output = T;
@@ -105,26 +182,36 @@ where
 
 impl<'a, T> Seek for AutomationSeeker<'a, T>
 where
-    T: BoundLerp + Copy
+    T: BoundLerp + Copy + Default
 {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> T {
-        let (lb, ub) = self.data;
-        lb.blerp(ub, self.meta.method(offset))
+        let (ref mut lower_seeker, ref mut anchor_seeker, ref mut upper_seeker) = self.meta;
+        lower_seeker.method(offset).val.blerp(
+            &upper_seeker.method(offset).val,
+            anchor_seeker.method(offset)
+        )
     }
 }
 
 impl<'a, T> Seekable<'a> for Automation<T>
 where
-    T: BoundLerp + Copy
+    T: BoundLerp + Copy + Default + 'a
+
 {
     type Seeker = AutomationSeeker<'a, T>;
 
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
-            meta: self.anchors.seeker(),
-            data: (self.upper, self.lower)
+            meta: (self.lower.seeker(), self.anchors.seeker(),self.upper.seeker()),
+            data: ()
         }
+    }
+}
+
+impl BoundLerp for f32 {
+    fn blerp(self, other: &Self, amount: f32) -> Self {
+        self + (other - self) * amount
     }
 }
 //
@@ -132,7 +219,7 @@ where
 //
 //
 //
-#[cfg(test)]
+/*#[cfg(test)]
 pub mod tests {
     use super::*;
     use ggez::{
@@ -299,4 +386,4 @@ pub mod tests {
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
     }
-}
+}*/
