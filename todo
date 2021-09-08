@@ -23,7 +23,11 @@ None  Planned
     -Poly Entity
     -Playlist
     -Chart
-    -On hit automations (allow negation too)
+    -Signal response
+        - Off -> On
+        - Negate
+        - Toggle
+        - Resetting
     -Pad/Keystyle automation(???)
     
     Play + sync audio

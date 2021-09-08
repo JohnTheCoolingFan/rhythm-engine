@@ -38,16 +38,28 @@ impl<T> Automation<T>
 where
     T: Default + BoundLerp
 {
-    /*pub fn new(lower: T, upper: T, len: f32) -> Self {
+    pub fn new(initial_lower: T, initial_upper: T, len: f32) -> Self {
         Self {
-            upper,
-            lower,
+            upper: tiny_vec!([Epoch<TransitionedBound<T>>; SHORT_ARR_SIZE] =>
+                Epoch::<TransitionedBound<T>>{ offset: 0., val: TransitionedBound::<T>{
+                        transition: Transition::Instant,
+                        val: initial_upper
+                    }
+                }
+            ),
+            lower: tiny_vec!([Epoch<TransitionedBound<T>>; SHORT_ARR_SIZE] =>
+                Epoch::<TransitionedBound<T>>{ offset: 0., val: TransitionedBound::<T>{
+                        transition: Transition::Instant,
+                        val: initial_lower
+                    }
+                }
+            ),
             anchors: tiny_vec!([Anchor; SHORT_ARR_SIZE] =>
                 Anchor::new(Vec2::new(0., 0.0)),
                 Anchor::new(Vec2::new(len, 0.0))
             ),
         }
-    }*/
+    }
 
     fn correct_anchor(&mut self, index: usize) {
         assert!((1..self.anchors.len()).contains(&index));
@@ -219,7 +231,7 @@ impl BoundLerp for f32 {
 //
 //
 //
-/*#[cfg(test)]
+#[cfg(test)]
 pub mod tests {
     use super::*;
     use ggez::{
@@ -314,8 +326,8 @@ pub mod tests {
                 .map(|x| {
                     Vec2::new(
                         (x as f32 / res as f32) * self.dimensions.x,
-                        self.dimensions.y 
-                            - seeker.seek((x as f32 / res as f32) * self.dimensions.x)
+                        /*self.dimensions.y 
+                            -*/ seeker.seek((x as f32 / res as f32) * self.dimensions.x)
                             * self.dimensions.y,
                     )
                 })
@@ -386,4 +398,4 @@ pub mod tests {
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
     }
-}*/
+}
