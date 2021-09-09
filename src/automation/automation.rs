@@ -133,8 +133,8 @@ pub struct TransitionedBound<T>
 where
     T: BoundLerp + Default
 {
-    transition: Transition,
-    val: T
+    pub transition: Transition,
+    pub val: T
 }
 
 pub trait BoundLerp {
@@ -173,7 +173,6 @@ where
         }
     }
 }
-
 //
 //
 //

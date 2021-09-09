@@ -1,37 +1,38 @@
 use crate::{automation::*, utils::*};
 use std::ops::Deref;
-use ggez::graphics::Color as GColor;
+use ggez::graphics::Color;
 use std::default::Default;
 
+//  orphan rules
 #[derive(Clone, Copy)]
-struct Color(GColor);
+pub struct Color_(Color);
 
-impl Color {
+impl Color_ {
     fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self(GColor {
+        Self(Color {
             r, g, b, a
         })
     }
 }
 
-impl Deref for Color {
-    type Target = GColor;
+impl Deref for Color_ {
+    type Target = Color;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl Default for Color {
+impl Default for Color_ {
     fn default() -> Self {
         Self(
-            GColor::new(0., 0., 0., 0.)
+            Color::new(0., 0., 0., 0.)
         )
     }
 }
 
-impl BoundLerp for Color {
+impl BoundLerp for Color_ {
     fn blerp(self, other: &Self, amount: f32) -> Self {
-        Color::new(
+        Color_::new(
             (other.r - self.r) * amount + self.r,
             (other.g - self.g) * amount + self.g,
             (other.b - self.b) * amount + self.b,
@@ -40,8 +41,8 @@ impl BoundLerp for Color {
     }
 }
 
-pub type DynColor = Automation<Color>;
-pub type DynColorSeeker<'a> = AutomationSeeker<'a, Color>;
+pub type DynColor = Automation<Color_>;
+pub type DynColorSeeker<'a> = AutomationSeeker<'a, Color_>;
 //
 //
 //
@@ -68,48 +69,56 @@ mod tests {
         fn new() -> GameResult<Test> {
             let x: f32 = 2800.;
             Ok(Self {
-                color: DynColor::new(
-                    tiny_vec!([Epoch<ColorAnchor>; SHORT_ARR_SIZE] =>
-                        (
-                            0.,
-                            ColorAnchor{
-                                transition: Transition::Weighted(5.),
-                                color: Color::BLACK
-                            }
-                        ).into(),
-                        (
-                            x / 2.,
-                            ColorAnchor{
+                color: {
+                    let mut dcolor = DynColor::new(
+                        Color_::new(0., 0., 0., 1.),
+                        Color_::new(1., 1., 1., 1.),
+                        x
+                    );
+
+                    dcolor.lower.push(
+                        Epoch::<TransitionedBound<Color_>> {
+                            offset: x * (1. / 3.),
+                            val: TransitionedBound::<Color_> {
                                 transition: Transition::Weighted(0.),
-                                color: Color::new(1., 0., 0., 1.)
+                                val: Color_::new(1., 0., 0., 1.)
                             }
-                        ).into()
-                    ),
-                    tiny_vec!([Epoch<ColorAnchor>; SHORT_ARR_SIZE] =>
-                        (
-                            0.,
-                            ColorAnchor{
-                                transition: Transition::Instant,
-                                color: Color::WHITE,
-                            }
-                        ).into(),
-                        (
-                            x / 2.,
-                            ColorAnchor{
+                        }
+                    );
+
+                    dcolor.lower.push(
+                        Epoch::<TransitionedBound<Color_>> {
+                            offset: x / 2.,
+                            val: TransitionedBound::<Color_> {
                                 transition: Transition::Weighted(0.),
-                                color: Color::new(0., 1., 1., 1.),
+                                val: Color_::new(0., 1., 0., 1.)
                             }
-                        ).into(),
-                        (
-                            x * (2. / 3.),
-                            ColorAnchor{
+                        }
+                    );
+
+
+                    dcolor.upper.push(
+                        Epoch::<TransitionedBound<Color_>> {
+                            offset: x / 2.,
+                            val: TransitionedBound::<Color_> {
+                                transition: Transition::Weighted(0.),
+                                val: Color_::new(0., 1., 1., 1.)
+                            }
+                        }
+                    );
+                    
+                    dcolor.upper.push(
+                        Epoch::<TransitionedBound<Color_>> {
+                            offset: x * (2. / 3.),
+                            val: TransitionedBound::<Color_> {
                                 transition: Transition::Instant,
-                                color: Color::new(0., 1., 0., 1.)
+                                val: Color_::new(0., 1., 1., 1.)
                             }
-                        ).into()
-                    ),
-                    x
-                ),
+                        }
+                    ); 
+
+                    dcolor
+                },
                 dimensions: Vec2::new(x, 1100.),
             })
         }
@@ -124,14 +133,14 @@ mod tests {
             let t =
                 ((time_since_start(ctx).as_millis() as f32 % 5000.) / 5000.) * self.dimensions.x;
             let mut seeker = self.color.seeker();
-            clear(ctx, seeker.seek(t));
+            clear(ctx, *seeker.seek(t));
 
             for col in &self.color.lower {
                 let rect = Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    col.val.color,
+                    *col.val.val.deref(),
                 )?;
 
                 draw(
@@ -146,7 +155,7 @@ mod tests {
                     ctx,
                     DrawMode::fill(),
                     Rect::new(0., 0., self.dimensions.x, 20.),
-                    col.val.color,
+                    *col.val.val.deref(),
                 )?;
 
                 draw(ctx, &rect, (Vec2::new(col.offset, 0.),))?;
