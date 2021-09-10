@@ -5,108 +5,6 @@ use std::ops::{Index, IndexMut};
 use duplicate::duplicate;
 use tinyvec::tiny_vec;
 
-pub struct Automation<T>
-where
-    T: Default + BoundLerp
-{
-    pub upper: TVec<Epoch<TransitionedBound<T>>>,
-    pub lower: TVec<Epoch<TransitionedBound<T>>>,
-    pub(super) anchors: TVec<Anchor>,
-}
-
-impl<T> Index<usize> for Automation<T>
-where
-    T: Default + BoundLerp
-{
-    type Output = Anchor;
-
-    fn index(&self, n: usize) -> &Self::Output {
-        &self.anchors[n]
-    }
-}
-
-impl<T> IndexMut<usize> for Automation<T> 
-where
-    T: Default + BoundLerp
-{
-    fn index_mut(&mut self, n: usize) -> &mut Anchor {
-        &mut self.anchors[n]
-    }
-}
-
-impl<T> Automation<T>
-where
-    T: Default + BoundLerp
-{
-    pub fn new(initial_lower: T, initial_upper: T, len: f32) -> Self {
-        Self {
-            upper: tiny_vec!([Epoch<TransitionedBound<T>>; SHORT_ARR_SIZE] =>
-                Epoch::<TransitionedBound<T>>{ offset: 0., val: TransitionedBound::<T>{
-                        transition: Transition::Instant,
-                        val: initial_upper
-                    }
-                }
-            ),
-            lower: tiny_vec!([Epoch<TransitionedBound<T>>; SHORT_ARR_SIZE] =>
-                Epoch::<TransitionedBound<T>>{ offset: 0., val: TransitionedBound::<T>{
-                        transition: Transition::Instant,
-                        val: initial_lower
-                    }
-                }
-            ),
-            anchors: tiny_vec!([Anchor; SHORT_ARR_SIZE] =>
-                Anchor::new(Vec2::new(0., 0.0)),
-                Anchor::new(Vec2::new(len, 0.0))
-            ),
-        }
-    }
-
-    fn correct_anchor(&mut self, index: usize) {
-        assert!((1..self.anchors.len()).contains(&index));
-        self.anchors[index].point.x = self.anchors[index].point.x.clamp(
-            self.anchors[index - 1].point.x,
-            if index + 1 < self.anchors.len() {
-                self.anchors[index + 1].point.x
-            }
-            else {
-                f32::MAX
-            }
-        );
-    }
-
-
-    pub fn len(&self) -> usize {
-        self.anchors.len()
-    }
-
-    pub fn insert(&mut self, anch: Anchor) -> usize {
-        let index = self.anchors.quantified_insert(anch);
-        self.correct_anchor(index);
-        index
-    }
-
-    pub fn remove(&mut self, index: usize) -> Anchor {
-        self.anchors.remove(index)
-    }
-
-    pub fn closest_to(&self, point: Vec2) -> usize {
-        self.anchors
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                (a.point - point)
-                    .length()
-                    .partial_cmp(&(b.point - point).length())
-                    .unwrap()
-            })
-            .unwrap().0
-    }
-}
-//
-//
-//
-//
-//
 #[derive(Clone, Copy)]
 pub enum Transition {
     Instant,
@@ -131,7 +29,7 @@ impl Default for Transition {
 #[derive(Default, Clone, Copy)]
 pub struct TransitionedBound<T>
 where
-    T: BoundLerp + Default
+    T: BoundLerp + Default + Copy
 {
     pub transition: Transition,
     pub val: T
@@ -171,6 +69,150 @@ where
                 }
             }
         }
+    }
+}
+//
+//
+//
+//
+//
+pub struct Automation<T>
+where
+    T: Default + BoundLerp + Copy
+{
+    pub upper: TVec<Epoch<TransitionedBound<T>>>,
+    pub lower: TVec<Epoch<TransitionedBound<T>>>,
+    pub(super) anchors: TVec<Anchor>,
+}
+
+impl<T> Index<usize> for Automation<T>
+where
+    T: Default + BoundLerp + Copy
+{
+    type Output = Anchor;
+
+    fn index(&self, n: usize) -> &Self::Output {
+        &self.anchors[n]
+    }
+}
+
+impl<T> IndexMut<usize> for Automation<T> 
+where
+    T: Default + BoundLerp + Copy
+{
+    fn index_mut(&mut self, n: usize) -> &mut Anchor {
+        &mut self.anchors[n]
+    }
+}
+
+impl<T> Automation<T>
+where
+    T: Default + BoundLerp + Copy
+{
+    pub fn new(initial_lower: T, initial_upper: T, len: f32) -> Self {
+        Self {
+            upper: tiny_vec!([Epoch<_>; SHORT_ARR_SIZE] =>
+                Epoch { offset: 0., val: TransitionedBound {
+                        transition: Transition::Instant,
+                        val: initial_upper
+                    }
+                }
+            ),
+            lower: tiny_vec!([Epoch<_>; SHORT_ARR_SIZE] =>
+                Epoch { offset: 0., val: TransitionedBound {
+                        transition: Transition::Instant,
+                        val: initial_lower
+                    }
+                }
+            ),
+            anchors: tiny_vec!([Anchor; SHORT_ARR_SIZE] =>
+                Anchor::new(Vec2::new(0., 0.0)),
+                Anchor::new(Vec2::new(len, 0.0))
+            ),
+        }
+    }
+
+    fn correct_anchor(&mut self, index: usize) {
+        assert!((1..self.anchors.len()).contains(&index));
+        self.anchors[index].point.x = self.anchors[index].point.x.clamp(
+            self.anchors[index - 1].point.x,
+            if index + 1 < self.anchors.len() {
+                self.anchors[index + 1].point.x
+            }
+            else {
+                f32::MAX
+            }
+        );
+    }
+
+
+    pub fn len(&self) -> usize {
+        self.anchors.len()
+    }
+
+    pub fn insert_anchor(&mut self, anch: Anchor) -> usize {
+        let index = self.anchors.quantified_insert(anch);
+        self.correct_anchor(index);
+        index
+    }
+
+
+    #[duplicate(bound insert_bound; [lower] [insert_lower]; [upper] [insert_upper])]
+    pub fn insert_bound(&mut self, offset: f32, transition: Transition, val: T) {
+        self.bound.quantified_insert(
+            Epoch {
+                offset,
+                val: TransitionedBound {
+                    val,
+                    transition
+                }
+            }
+        );
+    }
+
+    pub fn remove_anchor(&mut self, index: usize) -> Anchor {
+        self.anchors.remove(index)
+    }
+
+    #[duplicate(bound remove_bound; [lower] [remove_lower]; [upper] [remove_upper])]
+    pub fn remove_bound(&mut self, index: usize) -> Epoch<TransitionedBound<T>> {
+        self.bound.remove(index)
+    }
+
+    pub fn closest_anchor(&self, point: Vec2) -> usize {
+        self.anchors
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                (a.point - point)
+                    .length()
+                    .partial_cmp(&(b.point - point).length())
+                    .unwrap()
+            })
+            .unwrap().0
+    }
+
+    #[duplicate(bound closest_bound; [lower] [closest_lower]; [upper] [closest_upper])]
+    pub fn closest_bound(&mut self, x: f32) -> usize {
+        self.bound
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                (a.offset - x)
+                    .partial_cmp(&(b.offset - x))
+                    .unwrap()
+            })
+            .unwrap().0
+    }
+
+    #[duplicate(bound modify_bound; [lower] [modify_lower]; [upper] [modify_upper])]
+    pub fn modify_bound<T>(&mut self, apply_list: Vec<usize>)
+        -> Result<(), Vec<usize>>
+    where
+        T: FnMut(&mut Epoch<TransitionedBound<T>>)
+    {
+        let mut err: Vec<usize>;
+
     }
 }
 //
@@ -354,17 +396,17 @@ pub mod tests {
         ) {
             let index = self
                 .automation
-                .closest_to(ggez::input::mouse::position(ctx).into());
+                .closest_anchor(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
                     self.automation
-                        .insert(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
+                        .insert_anchor(Anchor::new(Vec2::new(x, y / self.dimensions.y)));
                 }
                 MouseButton::Middle => {
                     self.automation[index].weight.cycle();
                 }
                 MouseButton::Right => {
-                    self.automation.remove(index);
+                    self.automation.remove_anchor(index);
                 }
                 _ => {}
             }
@@ -373,14 +415,14 @@ pub mod tests {
         fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
             let index = self
                 .automation
-                .closest_to(ggez::input::mouse::position(ctx).into());
+                .closest_anchor(ggez::input::mouse::position(ctx).into());
             let _ = self.automation[index].weight.shift_curvature(
                 if 0. < y { 0.05 } else { -0.05 }
             );
         }
 
         fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
-            let index = self.automation.closest_to(ggez::input::mouse::position(ctx).into());
+            let index = self.automation.closest_anchor(ggez::input::mouse::position(ctx).into());
             key_handle(
                 &mut self.automation[index],
                 key

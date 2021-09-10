@@ -71,7 +71,7 @@ where
 #[duplicate(
     VecT                D;
     [Vec<Epoch<T>>]     [];
-    [TVec<Epoch<T>>]   [Default]
+    [TVec<Epoch<T>>]    [Default]
 )]
 impl<'a, T> SeekerTypes for Seeker<&'a VecT, usize> 
 where

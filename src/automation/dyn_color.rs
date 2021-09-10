@@ -214,16 +214,16 @@ mod tests {
             x: f32,
             y: f32,
         ) {
-            let index = self.color.closest_to(ggez::input::mouse::position(ctx).into());
+            let index = self.color.closest_anchor(ggez::input::mouse::position(ctx).into());
             match button {
                 MouseButton::Left => {
-                    self.color.insert(Anchor::new(Vec2::new(x, (self.dimensions.y - y) / self.dimensions.y)));
+                    self.color.insert_anchor(Anchor::new(Vec2::new(x, (self.dimensions.y - y) / self.dimensions.y)));
                 }
                 MouseButton::Middle => {
                     self.color[index].weight.cycle();
                 }
                 MouseButton::Right => {
-                    self.color.remove(index);
+                    self.color.remove_anchor(index);
                 }
                 _ => {}
             }
@@ -232,7 +232,7 @@ mod tests {
         fn mouse_wheel_event(&mut self, ctx: &mut Context, _x: f32, y: f32) {
             let index = self
                 .color
-                .closest_to(ggez::input::mouse::position(ctx).into());
+                .closest_anchor(ggez::input::mouse::position(ctx).into());
             let _ = self.color[index].weight.shift_curvature(
                 if 0. < y { 0.05 } else { -0.05 }
             );
@@ -240,7 +240,7 @@ mod tests {
 
         fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
             let index = self.color
-                .closest_to(ggez::input::mouse::position(ctx).into());
+                .closest_anchor(ggez::input::mouse::position(ctx).into());
             automation::tests::key_handle(&mut self.color[index], key);
         }
 
