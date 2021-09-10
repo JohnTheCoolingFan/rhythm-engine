@@ -76,45 +76,28 @@ mod tests {
                         x
                     );
 
-                    dcolor.lower.push(
-                        Epoch::<TransitionedBound<Color_>> {
-                            offset: x * (1. / 3.),
-                            val: TransitionedBound::<Color_> {
-                                transition: Transition::Weighted(0.),
-                                val: Color_::new(1., 0., 0., 1.)
-                            }
-                        }
+                    dcolor.insert_lower(
+                        x * (1. / 3.),
+                        Transition::Weighted(0.),
+                        Color_::new(1., 0., 0., 1.)
                     );
 
-                    dcolor.lower.push(
-                        Epoch::<TransitionedBound<Color_>> {
-                            offset: x / 2.,
-                            val: TransitionedBound::<Color_> {
-                                transition: Transition::Weighted(0.),
-                                val: Color_::new(0., 1., 0., 1.)
-                            }
-                        }
+                    dcolor.insert_lower(
+                        x / 2.,
+                        Transition::Weighted(0.),
+                        Color_::new(0., 1., 0., 1.)
                     );
 
-
-                    dcolor.upper.push(
-                        Epoch::<TransitionedBound<Color_>> {
-                            offset: x / 2.,
-                            val: TransitionedBound::<Color_> {
-                                transition: Transition::Weighted(0.),
-                                val: Color_::new(0., 1., 1., 1.)
-                            }
-                        }
+                    dcolor.insert_upper(
+                        x / 2.,
+                        Transition::Weighted(0.),
+                        Color_::new(0., 1., 1., 1.)
                     );
                     
-                    dcolor.upper.push(
-                        Epoch::<TransitionedBound<Color_>> {
-                            offset: x * (2. / 3.),
-                            val: TransitionedBound::<Color_> {
-                                transition: Transition::Instant,
-                                val: Color_::new(0., 1., 1., 1.)
-                            }
-                        }
+                    dcolor.insert_upper(
+                        x * (2. / 3.),
+                        Transition::Instant,
+                        Color_::new(0., 1., 1., 1.)
                     ); 
 
                     dcolor

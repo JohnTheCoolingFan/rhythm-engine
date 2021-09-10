@@ -132,19 +132,29 @@ where
         }
     }
 
-    fn correct_anchor(&mut self, index: usize) {
-        assert!((1..self.anchors.len()).contains(&index));
-        self.anchors[index].point.x = self.anchors[index].point.x.clamp(
-            self.anchors[index - 1].point.x,
-            if index + 1 < self.anchors.len() {
-                self.anchors[index + 1].point.x
-            }
-            else {
-                f32::MAX
-            }
-        );
+    #[duplicate(
+        value       correct_value       field;
+        [anchors]   [correct_anchor]    [point.x];
+        [lower]     [correct_lower]     [offset];
+        [upper]     [correct_upper]     [offset]
+    )]
+    fn correct_value(&mut self, index: usize) {
+        assert!(index < self.value.len());
+        if index == 0 {
+            self.value[index].field = 0.;
+        }
+        else {
+            self.value[index].field = self.value[index].field.clamp(
+                self.value[index - 1].field,
+                if index + 1 < self.value.len() {
+                    self.value[index + 1].field
+                }
+                else {
+                    f32::MAX
+                }
+            );
+        }
     }
-
 
     pub fn len(&self) -> usize {
         self.anchors.len()
@@ -158,7 +168,7 @@ where
 
 
     #[duplicate(bound insert_bound; [lower] [insert_lower]; [upper] [insert_upper])]
-    pub fn insert_bound(&mut self, offset: f32, transition: Transition, val: T) {
+    pub fn insert_bound(&mut self, offset: f32, transition: Transition, val: T) -> usize {
         self.bound.quantified_insert(
             Epoch {
                 offset,
@@ -167,7 +177,7 @@ where
                     transition
                 }
             }
-        );
+        )
     }
 
     pub fn remove_anchor(&mut self, index: usize) -> Anchor {
@@ -179,40 +189,52 @@ where
         self.bound.remove(index)
     }
 
-    pub fn closest_anchor(&self, point: Vec2) -> usize {
-        self.anchors
+    #[duplicate(
+        value       closest_value       expr1                       expr2                           val_type;
+        [anchors]   [closest_anchor]    [(a.point - val).length()]  [&(b.point - val).length()]     [Vec2];
+        [lower]     [closest_lower]     [(a.offset - val)]          [&(b.offset - val)]             [f32];
+        [upper]     [closest_upper]     [(a.offset - val)]          [&(b.offset - val)]             [f32]
+    )]
+    pub fn closest_value(&mut self, val: val_type) -> usize {
+        self.value
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                (a.point - point)
-                    .length()
-                    .partial_cmp(&(b.point - point).length())
+                expr1
+                    .partial_cmp(expr2)
                     .unwrap()
             })
             .unwrap().0
     }
 
-    #[duplicate(bound closest_bound; [lower] [closest_lower]; [upper] [closest_upper])]
-    pub fn closest_bound(&mut self, x: f32) -> usize {
-        self.bound
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                (a.offset - x)
-                    .partial_cmp(&(b.offset - x))
-                    .unwrap()
-            })
-            .unwrap().0
-    }
-
-    #[duplicate(bound modify_bound; [lower] [modify_lower]; [upper] [modify_upper])]
-    pub fn modify_bound<T>(&mut self, apply_list: Vec<usize>)
+    #[duplicate(
+        value       modify_value        FnInput                         correct_value;
+        [anchors]   [modify_anchors]    [Anchor]                        [correct_anchor];
+        [lower]     [modify_lower]      [Epoch<TransitionedBound<T>>]    [correct_lower];
+        [upper]     [modify_upper]      [Epoch<TransitionedBound<T>>]    [correct_upper];
+    )]
+    pub fn modify_value<F>(&mut self, selection: &[usize], mut modifier: F)
         -> Result<(), Vec<usize>>
     where
-        T: FnMut(&mut Epoch<TransitionedBound<T>>)
+        F: FnMut(&mut FnInput)
     {
-        let mut err: Vec<usize>;
+        let mut err: Vec<usize> = vec![];
+        for index in selection {
+            if self.value.len() < *index {
+                modifier(&mut self.value[*index]);
+            }
+            else {
+                err.push(*index);
+            }
+        }
 
+        for index in selection {
+            if self.value.len() < *index {
+                self.correct_value(*index);
+            }
+        }
+
+        if err.len() == 0 { Ok(()) } else { Err(err) }
     }
 }
 //

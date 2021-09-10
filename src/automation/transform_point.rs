@@ -3,6 +3,7 @@ use duplicate::*;
 use glam::{Vec2, Mat3};
 use super::{automation::*, anchor::*};
 use crate::utils::*;
+use std::default::Default;
 
 duplicate_inline! {
     [T; [Rotation]; [Scale]] //more stuff like shear, pinch, explode later
@@ -23,6 +24,12 @@ duplicate_inline! {
         }
     }
 
+    impl Default for T {
+        fn default() -> Self {
+            Self(0.)
+        }
+    }
+
     impl From<f32> for T {
         fn from(v: f32) -> Self {
             Self(v)
@@ -30,7 +37,7 @@ duplicate_inline! {
     }
 
     impl BoundLerp for T {
-        fn blerp(self, other: Self, amount: f32) -> Self {
+        fn blerp(self, other: &Self, amount: f32) -> Self {
             Self(self.0 + (other.0 - self.0) * amount)
         }
     }
@@ -49,10 +56,10 @@ duplicate_inline! {
 //
 //
 //
-pub trait TransformDictator: Copy + Deref<Target = f32> + From<f32> {}
+pub trait TransformDictator: Copy + Deref<Target = f32> + From<f32> + Default + BoundLerp {}
 impl<T> TransformDictator for T 
 where
-    T: Copy + Deref<Target = f32> + From<f32>
+    T: Copy + Deref<Target = f32> + From<f32> + Default + BoundLerp
 {}
 
 pub struct CrudeTransform<T>
@@ -172,7 +179,7 @@ where
 impl <'a, T> Seekable<'a> for TransformPoint<T>
 where
     Mat3: From<CrudeTransform<T>>,
-    T: TransformDictator + BoundLerp
+    T: TransformDictator + BoundLerp + 'a
 {
     type Seeker = TransformPointSeeker<'a, T>;
     fn seeker(&'a self) -> Self::Seeker {
@@ -400,12 +407,12 @@ mod tests {
                         [scale_handle]      [Scale];
                     ]
                     let handle = |auto: &mut Automation<T>, adjusted_y: f32| {
-                        let index = auto.closest_to(ggez::input::mouse::position(ctx).into());
+                        let index = auto.closest_anchor(ggez::input::mouse::position(ctx).into());
 
                         match button {
-                            MouseButton::Left => { auto.insert(Anchor::new(Vec2::new(x, adjusted_y))); },
+                            MouseButton::Left => { auto.insert_anchor(Anchor::new(Vec2::new(x, adjusted_y))); },
                             MouseButton::Middle => { auto[index].weight.cycle(); },
-                            MouseButton::Right => { auto.remove(index); },
+                            MouseButton::Right => { auto.remove_anchor(index); },
                             _ => {}
                         }
                     };
@@ -434,7 +441,7 @@ mod tests {
                     [scale_handle]      [Scale];
                 ]
                 let handle = |auto: &mut Automation<T>| {
-                    let index = auto.closest_to(pos);
+                    let index = auto.closest_anchor(pos);
                     let _ = auto[index].weight.shift_curvature(
                         if 0. < y { 0.05 } else { -0.05 }
                     );
@@ -457,7 +464,7 @@ mod tests {
                     [scale_handle]      [Scale];
                 ]
                 let handle = |auto: &mut Automation<T>| {
-                    let index = auto.closest_to(ggez::input::mouse::position(ctx).into());
+                    let index = auto.closest_anchor(ggez::input::mouse::position(ctx).into());
                     key_handle(
                         &mut auto[index],
                         key
