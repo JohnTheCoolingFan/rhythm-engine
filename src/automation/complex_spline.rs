@@ -2,71 +2,70 @@ use super::{automation::*, segment::*};
 use crate::utils::*;
 use glam::Vec2;
 use lyon_geom::Point;
-use tinyvec::tiny_vec;
-//
-//
-//
-//
-//
-pub struct SplineBound {
-    bound: f32,
-    pub transition: Transition
-}
 
 pub struct ComplexSpline {
-    pub automation: Automation<SplineBound>,
-    segments: TVec<Segment>
+    pub automation: Automation<f32>,
+    segments: TVec<Epoch<Segment>>
 }
 
 impl ComplexSpline {
     fn resample(&mut self, index: usize) {
         assert!(index != 0);
         let (p0, p1) = (
-            *self.segments[index - 1].ctrls.end(),
-            *self.segments[index].ctrls.end()
+            *self.segments[index - 1].val.ctrls.end(),
+            *self.segments[index].val.ctrls.end()
         );
-        self.segments[index].recompute(&p0);
+        self.segments[index].val.recompute(&p0);
         if index + 1 < self.segments.len() {
-            self.segments[index + 1].recompute(&p1);
+            self.segments[index + 1].val.recompute(&p1);
         }
     }
 
-    pub fn modify<Func>(&mut self, range: std::ops::Range<usize>, mut func: Func)
+    fn remeasure(&mut self, from: usize) {
+        self.segments[from].offset = self.segments[from].val.length();
+        if 0 < from { self.segments[from].offset += self.segments[from - 1].offset }
+
+        if from < self.segments.len() - 1 {
+            self.segments.iter_mut()
+                .enumerate()
+                .skip(from + 1)
+                .map(|(index, item)|
+                     item.offset = self.segments[index - 1].offset + item.val.length()
+                )
+                .collect()
+        }
+    }
+
+    pub fn modify_segments<Func>(&mut self, selection: &[usize], mut func: Func)
+        -> Result<(), Vec<usize>>
     where
         Func: FnMut(&mut Segment)
     {
-        for index in range {
-            func(&mut self.segments[index]);
+        let mut err: Vec<usize> = vec![];
+        
+        for index in selection {
+            if self.segments.len() < *index {
+                func(&mut self.segments[*index].val);
+            }
+            else {
+                err.push(*index)
+            }
         }
 
-        for index in range {
-            self.resample(index);
+        for index in selection {
+            if self.segments.len() < *index {
+                self.resample(*index);
+            }
         }
+
+        self.remeasure(*selection.iter().min().unwrap());
+
+        if err.is_empty() { Ok(()) } else { Err(err) }
     }
 
-    pub fn insert_anchor(&mut self, anch: Anchor) {
-        let index = self.anchors.quantified_insert(anch.into());            
-        let start = self.segments[index - 1].ctrls.get_end();
-        let end = self.segments[index].ctrls.get_end();
-        self.segments[index].ctrls = Ctrl::Linear(
-            start 
-            + (end.to_vector() - start.to_vector()) * 0.5
-        );
-        self.segments.insert(
-            index + 1,
-            Segment::new(Ctrl::Linear(end), 0.5)
-        );
-        self.correct_anchor(index);
+    pub fn insert_segment(&mut self, index: usize, seg: Segment) {
+        self.segments.insert(index, Epoch{ offset: 0., val: seg});
         self.resample(index);
-    }
-
-    pub fn insert_segment(&mut self, anch_pos: f32, seg: Segment) -> usize {
-        assert!(0. < anch_pos);
-        let index = self.anchors.quantified_insert(Anchor::new(Vec2::new(anch_pos, 0.)).into());
-        self.segments.insert(index, seg);
-        self.correct_anchor(index);
-        self.resample(index);
-        index
     }
  
     pub fn closest_segment(&self, point: Point<f32>) -> usize {
@@ -74,22 +73,8 @@ impl ComplexSpline {
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                (a.ctrls.get_end() - point).length()
-                    .partial_cmp(&(b.ctrls.get_end() - point).length())
-                    .unwrap()
-            })
-            .unwrap().0;
-
-        if index == 0 { 1 } else { index }
-    }
-
-    pub fn closest_anchor(&self, x: f32) -> usize {
-        let index = self.anchors
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                (a.point.x - x).abs()
-                    .partial_cmp(&(b.point.x - x).abs())
+                (a.val.ctrls.end().to_vector() - point.to_vector()).length()
+                    .partial_cmp(&(b.val.ctrls.end().to_vector() - point.to_vector()).length())
                     .unwrap()
             })
             .unwrap().0;
@@ -102,7 +87,7 @@ impl ComplexSpline {
 //
 //
 // 
-/*type CompSplSeeker<'a> = Seeker<&'a Vec<Segment>, (BPSeeker<'a, CmpSplAnchor>, SegmentSeeker<'a>)>;
+type CompSplSeeker<'a> = Seeker<&'a Vec<Segment>, (BPSeeker<'a, CmpSplAnchor>, SegmentSeeker<'a>)>;
 
 impl<'a> SeekerTypes for CompSplSeeker<'a> {
     type Source = <BPSeeker<'a, CmpSplAnchor> as SeekerTypes>::Source;
@@ -110,7 +95,7 @@ impl<'a> SeekerTypes for CompSplSeeker<'a> {
 }
 
 
-impl<'a> Seek for CompSplSeeker<'a> { 
+/*impl<'a> Seek for CompSplSeeker<'a> { 
     fn jump(&mut self, x: f32) -> Vec2 {
         let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
         let old = anchorseeker.index();

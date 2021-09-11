@@ -162,6 +162,20 @@ impl Segment {
             }
         };
     }
+
+    pub fn length(&self) -> f32 {
+        match self.ctrls {
+            Ctrl::ThreePointCircle(_, _) => {
+                if self.lut.len() == 3 {
+                    self.lut[2].offset.abs().to_radians() * std::f32::consts::PI
+                }
+                else {
+                    (self.lut[0].val - self.lut[1].val).length()
+                }
+            }
+            _ => self.lut[FromEnd(0)].offset
+        }
+    }
 }
 //
 //

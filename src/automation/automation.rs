@@ -4,6 +4,7 @@ use glam::Vec2;
 use std::ops::{Index, IndexMut};
 use duplicate::duplicate;
 use tinyvec::tiny_vec;
+use std::convert::identity;
 
 #[derive(Clone, Copy)]
 pub enum Transition {
@@ -166,7 +167,6 @@ where
         index
     }
 
-
     #[duplicate(bound insert_bound; [lower] [insert_lower]; [upper] [insert_upper])]
     pub fn insert_bound(&mut self, offset: f32, transition: Transition, val: T) -> usize {
         self.bound.quantified_insert(
@@ -190,18 +190,18 @@ where
     }
 
     #[duplicate(
-        value       closest_value       expr1                       expr2                           val_type;
-        [anchors]   [closest_anchor]    [(a.point - val).length()]  [&(b.point - val).length()]     [Vec2];
-        [lower]     [closest_lower]     [(a.offset - val)]          [&(b.offset - val)]             [f32];
-        [upper]     [closest_upper]     [(a.offset - val)]          [&(b.offset - val)]             [f32]
+        value       closest_value       field       magnitude       /*lol*/     val_type;
+        [anchors]   [closest_anchor]    [point]     [(|a: Vec2| a.length())]    [Vec2];
+        [lower]     [closest_lower]     [offset]    [identity]                  [f32];
+        [upper]     [closest_upper]     [offset]    [identity]                  [f32]
     )]
     pub fn closest_value(&mut self, val: val_type) -> usize {
         self.value
             .iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                expr1
-                    .partial_cmp(expr2)
+                magnitude(a.field - val)
+                    .partial_cmp(&magnitude(b.field - val))
                     .unwrap()
             })
             .unwrap().0
@@ -210,8 +210,8 @@ where
     #[duplicate(
         value       modify_value        FnInput                         correct_value;
         [anchors]   [modify_anchors]    [Anchor]                        [correct_anchor];
-        [lower]     [modify_lower]      [Epoch<TransitionedBound<T>>]    [correct_lower];
-        [upper]     [modify_upper]      [Epoch<TransitionedBound<T>>]    [correct_upper];
+        [lower]     [modify_lower]      [Epoch<TransitionedBound<T>>]   [correct_lower];
+        [upper]     [modify_upper]      [Epoch<TransitionedBound<T>>]   [correct_upper];
     )]
     pub fn modify_value<F>(&mut self, selection: &[usize], mut modifier: F)
         -> Result<(), Vec<usize>>
@@ -234,7 +234,7 @@ where
             }
         }
 
-        if err.len() == 0 { Ok(()) } else { Err(err) }
+        if err.is_empty() { Ok(()) } else { Err(err) }
     }
 }
 //
