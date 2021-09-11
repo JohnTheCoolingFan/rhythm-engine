@@ -47,8 +47,6 @@ pub struct Epoch<Value> {
 }
 
 impl<Value> Quantify for Epoch<Value>
-where
-    Value: Copy,
 {
     type Quantifier = f32;
     fn quantify(&self) -> Self::Quantifier {
@@ -81,7 +79,6 @@ where
     type Source = Epoch<T>;
     type Output = T;
 }
-
 //
 //
 //

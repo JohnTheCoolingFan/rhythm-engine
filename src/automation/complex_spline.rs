@@ -3,6 +3,9 @@ use crate::utils::*;
 use glam::Vec2;
 use lyon_geom::Point;
 
+/*impl SeekerTypes for Epoch<Segment> {
+}*/
+
 pub struct ComplexSpline {
     pub automation: Automation<f32>,
     segments: TVec<Epoch<Segment>>
@@ -25,14 +28,8 @@ impl ComplexSpline {
         self.segments[from].offset = self.segments[from].val.length();
         if 0 < from { self.segments[from].offset += self.segments[from - 1].offset }
 
-        if from < self.segments.len() - 1 {
-            self.segments.iter_mut()
-                .enumerate()
-                .skip(from + 1)
-                .map(|(index, item)|
-                     item.offset = self.segments[index - 1].offset + item.val.length()
-                )
-                .collect()
+        for i in (from + 1)..self.segments.len() {
+            self.segments[i].offset = self.segments[i - 1].offset + self.segments[i].val.length()
         }
     }
 
@@ -87,47 +84,36 @@ impl ComplexSpline {
 //
 //
 // 
-type CompSplSeeker<'a> = Seeker<&'a Vec<Segment>, (BPSeeker<'a, CmpSplAnchor>, SegmentSeeker<'a>)>;
+type CompSplSeeker<'a> = Seeker<&'a TVec<Epoch<Segment>>, AutomationSeeker<'a, f32>>;
 
 impl<'a> SeekerTypes for CompSplSeeker<'a> {
-    type Source = <BPSeeker<'a, CmpSplAnchor> as SeekerTypes>::Source;
+    type Source = <AutomationSeeker<'a, f32> as SeekerTypes>::Source;
     type Output = Vec2;
 }
 
+impl<'a> SeekerTypes for Seeker<&'a TVec<Epoch<Segment>>, usize>
+{
+    type Source = Epoch<Segment>;
+    type Output = &'a Segment;
+}
+
+impl<'a> Exhibit for Seeker<&'a TVec<Epoch<Segment>>, usize> {
+    fn exhibit(&self, _: f32) -> Self::Output {
+        match self.current(){
+            Ok(curr) | Err(curr) => &curr.val
+        }
+    }
+}
 
 /*impl<'a> Seek for CompSplSeeker<'a> { 
-    fn jump(&mut self, x: f32) -> Vec2 {
-        let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
-        let old = anchorseeker.index();
-        let t = anchorseeker.jump(x);
-        let new = anchorseeker.index();
+    fn jump(&mut self, t: f32) -> Vec2 {
+        let s = self.meta.seek(t);
+        let segment = self.data.seeker().jump(s);
 
-        if old != new && !anchorseeker.over_run() {
-            *lutseeker = self.data[new].seeker();
-        }
-
-        lutseeker.jump(t)
     }
 
-    fn seek(&mut self, x: f32) -> Vec2 {
-        let (ref mut anchorseeker, ref mut lutseeker) = self.meta;
-        let old = anchorseeker.index();
-        let t = anchorseeker.seek(x);
-        let new = anchorseeker.index();
-
-        if old != new && !anchorseeker.over_run() {
-            *lutseeker = self.data[new].seeker();
-        }
-
-        let subwave = &anchorseeker.current().subwave;
-
-        if let SubWaveMode::Hop{ .. } | SubWaveMode::Oscilate{ .. } = subwave.mode {
-            if subwave.period != 0. {
-                return lutseeker.jump(t)
-            }
-        }
-
-        lutseeker.seek(t)
+    fn seek(&mut self, t: f32) -> Vec2 {
+        self.jump(t)
     }
 }
 
@@ -136,7 +122,7 @@ impl<'a> Seekable<'a> for ComplexSpline {
     fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
             data: &self.segments,
-            meta: (self.anchors.seeker(), self.segments[0].seeker())
+            meta: self.automation.seeker()
         }
     }
 }*/
