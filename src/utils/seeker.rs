@@ -14,7 +14,7 @@ pub trait SeekerTypes {
     type Output;
 }
 pub trait Exhibit: SeekerTypes {
-    fn exhibit(&self, t: <Self::Source as Quantify>::Quantifier) -> Self::Output;
+    fn exhibit(& self, t: <Self::Source as Quantify>::Quantifier) -> Self::Output;
 }
 
 pub trait Seek: SeekerTypes {

@@ -2,16 +2,50 @@ use super::{automation::*, segment::*};
 use crate::utils::*;
 use glam::Vec2;
 use lyon_geom::Point;
+use tinyvec::tiny_vec;
 
-/*impl SeekerTypes for Epoch<Segment> {
-}*/
+impl<'a> SeekerTypes for Seeker<&'a TVec<Epoch<Segment>>, usize>
+{
+    type Source = Epoch<Segment>;
+    type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
+}
 
+impl<'a> Exhibit for Seeker<&'a TVec<Epoch<Segment>>, usize> {
+    fn exhibit(&self, _: f32) -> Self::Output {
+        self.meta
+    }
+}
+//
+//
+//
+//
+//
 pub struct ComplexSpline {
     pub automation: Automation<f32>,
     segments: TVec<Epoch<Segment>>
 }
 
 impl ComplexSpline {
+    pub fn new(auto_len: f32, initial: Point<f32>) -> Self {
+        let mut cmpspl =  Self {
+            automation: Automation::new(0., initial.to_vector().length(), auto_len),
+            segments: tiny_vec!([Epoch<_>; SHORT_ARR_SIZE] =>
+                Epoch {
+                    offset: 0.,
+                    val: Segment::new(Ctrl::Linear(Point::new(0., 0.)), 0.5)
+                },
+                Epoch {
+                    offset: 0.,
+                    val: Segment::new(Ctrl::Linear(initial), 0.5)
+                }
+            )
+        };
+
+        cmpspl.resample(1);
+        cmpspl.remeasure(1);
+        cmpspl
+    }
+
     fn resample(&mut self, index: usize) {
         assert!(index != 0);
         let (p0, p1) = (
@@ -25,8 +59,9 @@ impl ComplexSpline {
     }
 
     fn remeasure(&mut self, from: usize) {
+        assert!(from != 0);
         self.segments[from].offset = self.segments[from].val.length();
-        if 0 < from { self.segments[from].offset += self.segments[from - 1].offset }
+        if 1 < from { self.segments[from].offset += self.segments[from - 1].offset }
 
         for i in (from + 1)..self.segments.len() {
             self.segments[i].offset = self.segments[i - 1].offset + self.segments[i].val.length()
@@ -60,9 +95,24 @@ impl ComplexSpline {
         if err.is_empty() { Ok(()) } else { Err(err) }
     }
 
-    pub fn insert_segment(&mut self, index: usize, seg: Segment) {
-        self.segments.insert(index, Epoch{ offset: 0., val: seg});
+    pub fn split_segment(&mut self, index: usize) {
+        assert!(index != 0);
+
+        self.segments.insert(index,
+            Epoch {
+                offset: 0.,
+                val: Segment::new(
+                        Ctrl::Linear(self.segments[index - 1].val.ctrls.end().lerp(
+                            *self.segments[index].val.ctrls.end(), 0.5
+                        )),
+                    0.5
+                )
+            }
+        );
+
         self.resample(index);
+        self.resample(index + 1);
+        self.remeasure(index);
     }
  
     pub fn closest_segment(&self, point: Point<f32>) -> usize {
@@ -91,25 +141,17 @@ impl<'a> SeekerTypes for CompSplSeeker<'a> {
     type Output = Vec2;
 }
 
-impl<'a> SeekerTypes for Seeker<&'a TVec<Epoch<Segment>>, usize>
-{
-    type Source = Epoch<Segment>;
-    type Output = &'a Segment;
-}
-
-impl<'a> Exhibit for Seeker<&'a TVec<Epoch<Segment>>, usize> {
-    fn exhibit(&self, _: f32) -> Self::Output {
-        match self.current(){
-            Ok(curr) | Err(curr) => &curr.val
-        }
-    }
-}
-
-/*impl<'a> Seek for CompSplSeeker<'a> { 
+impl<'a> Seek for CompSplSeeker<'a> { 
     fn jump(&mut self, t: f32) -> Vec2 {
         let s = self.meta.seek(t);
-        let segment = self.data.seeker().jump(s);
-
+        match self.data.seeker().jump(s) {
+            0 => self.data[0].val.seeker().seek(0.),
+            index => {
+                let segment = &self.data[index - 1];
+                segment.val.seeker().jump(s - segment.offset)
+            }
+        }
+        
     }
 
     fn seek(&mut self, t: f32) -> Vec2 {
@@ -125,13 +167,13 @@ impl<'a> Seekable<'a> for ComplexSpline {
             meta: self.automation.seeker()
         }
     }
-}*/
+}
 //
 //
 //
 //
 //
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use super::super::automation;
@@ -162,7 +204,7 @@ mod tests {
             let x = 2000.;
             let y = 1000.;
             Ok(Self {
-                cmpspl: ComplexSpline::new(x, Segment::new(Ctrl::Linear(Point::new(x, 0.)), 1.)),
+                cmpspl: ComplexSpline::new(x, Point::new(x,y)),
                 point_buff: vec![],
                 dimensions: Vec2::new(x, y),
                 selection: Selection::None,
@@ -224,7 +266,7 @@ mod tests {
             //
             //  automation
             //
-            let mut anch_seeker = self.cmpspl.anchors().seeker();
+            let mut anch_seeker = self.cmpspl.automation.anchors.seeker();
             let res = self.dimensions.x as i32;
             let auto_points: Vec<Vec2> = (0..res)
                 .map(|x| {
@@ -251,9 +293,9 @@ mod tests {
             //
             //  spline
             //
-            for i in 0..self.cmpspl.segments().len() {
-                let segment = &self.cmpspl.segments()[i];
-                match segment.ctrls {
+            for i in 0..self.cmpspl.segments.len() {
+                let segment = &self.cmpspl.segments[i];
+                match segment.val.ctrls {
                     Ctrl::Linear(p) => {
                         draw(ctx, &circle, (Vec2::new(p.x, p.y),))?;
                     }
@@ -273,10 +315,11 @@ mod tests {
                 }
             }
 
-            for i in 1..self.cmpspl.segments().len() {
+            for i in 1..self.cmpspl.segments.len() {
                 let points: Vec<Vec2> = self
                     .cmpspl
-                    .segments()[i]
+                    .segments[i]
+                    .val
                     .lut
                     .iter()
                     .map(|e| e.val)
@@ -306,13 +349,13 @@ mod tests {
             match button {
                 MouseButton::Left => {
                     if self.dimensions.y * 0.75 < y {
-                        let index = self.cmpspl.closest_anchor(x);
-                        if (self.cmpspl.anchors()[index].point.x - x).abs() < 10. {
+                        let index = self.cmpspl.automation.closest_anchor(x);
+                        if (self.cmpspl.automation.anchors[index].point.x - x).abs() < 10. {
                             self.selection = Selection::Anchor(index);
                         } else {
                             match self.selection {
                                 Selection::Anchor(n) | Selection::Segment(n) => {
-                                    self.cmpspl.modify(n, |anch, _| {
+                                    self.cmpspl.automation.modify_anchors(&[n], |anch| {
                                         anch.point.x = x
                                     }).unwrap();
                                 },
@@ -399,4 +442,4 @@ mod tests {
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
     }
-}*/
+}
