@@ -36,6 +36,7 @@ impl Ctrl {
 //
 //
 //
+#[derive(Debug)]
 pub struct Segment {
     pub ctrls: Ctrl,
     pub tolerence: f32,

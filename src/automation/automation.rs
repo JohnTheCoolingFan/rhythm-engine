@@ -220,7 +220,7 @@ where
     {
         let mut err: Vec<usize> = vec![];
         for index in selection {
-            if self.value.len() < *index {
+            if *index < self.value.len() {
                 modifier(&mut self.value[*index]);
             }
             else {
@@ -229,7 +229,7 @@ where
         }
 
         for index in selection {
-            if self.value.len() < *index {
+            if *index < self.value.len() {
                 self.correct_value(*index);
             }
         }
@@ -310,10 +310,16 @@ pub mod tests {
 
     impl Test {
         fn new() -> GameResult<Self> {
-            Ok(Self {
+            let dimensions = Vec2::new(2800., 1100.);
+            let mut test = Self {
                 automation: Automation::new(0., 1., 2800.),
-                dimensions: Vec2::new(2800., 1100.),
-            })
+                dimensions
+            };
+
+            //test.automation.insert_lower(dimensions.x * 0.5, Transition::Instant, 0.25);
+            //test.automation.insert_upper(dimensions.x * 0.5, Transition::Instant, 0.75);
+
+            Ok(test)
         }
     }
 

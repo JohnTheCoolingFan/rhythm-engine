@@ -40,7 +40,7 @@ pub trait SeekExtensions
 //
 //
 //
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct Epoch<Value> {
     pub offset: f32,
     pub val: Value,
