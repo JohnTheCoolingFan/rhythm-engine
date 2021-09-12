@@ -5,13 +5,35 @@ use lyon_geom::Point;
 use tinyvec::tiny_vec;
 use duplicate::duplicate;
 
-impl<'a> SeekerTypes for Seeker<&'a TVec<Epoch<Segment>>, usize>
+type MetaSegmentSeeker<'a> = Seeker<&'a TVec<Epoch<Segment>>, usize>;
+
+impl<'a> MetaSegmentSeeker<'a> {
+    pub fn point_from_s(&self, virtual_s: f32) -> Vec2 {
+        match self.data.seeker().jump(virtual_s) {
+            0 => self.data[1].val.seeker().seek(0.),
+            oob if self.data.len() <= oob => {
+                let p = self.data[FromEnd(0)].val.ctrls.end();
+                Vec2::new(p.x, p.y)
+            },
+            index => {
+                let segment = &self.data[index];
+                let mut real_s = virtual_s - self.data[index- 1].offset;
+                if let Ctrl::ThreePointCircle(_, _) = segment.val.ctrls {
+                    real_s /= segment.val.length();
+                }
+                segment.val.seeker().jump(real_s)
+            }
+        }
+    }
+}
+
+impl<'a> SeekerTypes for MetaSegmentSeeker<'a>
 {
     type Source = Epoch<Segment>;
     type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
 }
 
-impl<'a> Exhibit for Seeker<&'a TVec<Epoch<Segment>>, usize> {
+impl<'a> Exhibit for MetaSegmentSeeker<'a> {
     fn exhibit(&self, _: f32) -> Self::Output {
         self.meta
     }
@@ -67,10 +89,6 @@ impl ComplexSpline {
         for i in (from + 1)..self.segments.len() {
             self.segments[i].offset = self.segments[i - 1].offset + self.segments[i].val.length()
         }
-
-        for segment in &self.segments {
-            println!("offset {}", segment.offset);
-        }
     }
 
     pub fn modify_segments<Func>(&mut self, selection: &[usize], mut func: Func)
@@ -81,25 +99,18 @@ impl ComplexSpline {
         let mut err: Vec<usize> = vec![];
         
         for index in selection {
-            if *index < self.segments.len() {
-                func(&mut self.segments[*index].val);
-            }
-            else {
-                err.push(*index)
-            }
+            if *index < self.segments.len() { func(&mut self.segments[*index].val); }
+            else { err.push(*index) }
         }
 
         for index in selection {
-            if *index < self.segments.len() {
-                self.resample(*index);
-            }
+            if *index < self.segments.len() { self.resample(*index); }
         }
 
-        /*let min = *selection.iter().min().unwrap();
-        if min < self.segments.len() {
-            self.remeasure(min);
-        }*/
-        self.remeasure(1);
+        let min = *selection.iter().min().unwrap();
+        
+        if min < self.segments.len() { self.remeasure(min); }
+        else { self.remeasure(1); }
 
         if err.is_empty() { Ok(()) } else { Err(err) }
     }
@@ -145,17 +156,7 @@ impl ComplexSpline {
     )]
     pub fn bound_limit_at(&self, t: f32) -> Vec2 {
         let s = self.automation.bound.seeker().jump(t).val;
-        match self.segments.seeker().jump(s) {
-            0 => self.segments[0].val.seeker().seek(0.),
-            oob if self.segments.len() <= oob => {
-                let p = self.segments[FromEnd(0)].val.ctrls.end();
-                Vec2::new(p.x, p.y)
-            },
-            index => {
-                let segment = &self.segments[index - 1];
-                segment.val.seeker().jump(s - segment.offset)
-            }
-        }
+        self.segments.seeker().point_from_s(s)
     }
 }
 //
@@ -173,17 +174,7 @@ impl<'a> SeekerTypes for CompSplSeeker<'a> {
 impl<'a> Seek for CompSplSeeker<'a> { 
     fn jump(&mut self, t: f32) -> Vec2 {
         let s = self.meta.jump(t);
-        match self.data.seeker().jump(s) {
-            0 => self.data[0].val.seeker().seek(0.),
-            oob if self.data.len() <= oob => {
-                let p = self.data[FromEnd(0)].val.ctrls.end();
-                Vec2::new(p.x, p.y)
-            },
-            index => {
-                let segment = &self.data[index - 1];
-                segment.val.seeker().jump(s - segment.offset)
-            }
-        }
+        self.data.seeker().point_from_s(s)
     }
 
     fn seek(&mut self, t: f32) -> Vec2 {
@@ -294,22 +285,6 @@ mod tests {
                 / 5000.
             );
 
-            let t_line = MeshBuilder::new()
-                .polyline(
-                    DrawMode::Stroke(StrokeOptions::DEFAULT),
-                    &[
-                        Vec2::new(0., self.dimensions.y * 0.75),
-                        Vec2::new(0., self.dimensions.y),
-                    ],
-                    Color::WHITE,
-                )?
-                .build(ctx)?;
-
-            draw(ctx, &t_line, (Vec2::new(t, 0.),))?;
-            draw(ctx, &blue_circle, (self.cmpspl.lower_limit_at(t).debug("limL"),))?;
-            draw(ctx, &red_circle, (self.cmpspl.seeker().jump(t),))?;
-            draw(ctx, &blue_circle, (self.cmpspl.upper_limit_at(t).debug("limU"),))?;
-
             //
             //  automation
             //
@@ -363,15 +338,19 @@ mod tests {
             }
 
             for i in 1..self.cmpspl.segments.len() {
-                let points: Vec<Vec2> = self
-                    .cmpspl
-                    .segments[i]
-                    .val
-                    .lut
-                    .iter()
-                    .map(|e| e.val)
-                    .collect();
-
+                let points: Vec<Vec2> = match self.cmpspl.segments[i].val.ctrls {
+                    Ctrl::ThreePointCircle(_, _) => {
+                        (0..=20)
+                            .map(|n|
+                                 self.cmpspl.segments[i].val.seeker().seek(n as f32 / 20.)
+                            ).collect()
+                    }
+                    _ => self.cmpspl.segments[i].val.lut
+                        .iter()
+                        .map(|e| e.val)
+                        .collect()
+                };
+                    
                 let lines = MeshBuilder::new()
                     .polyline(
                         DrawMode::Stroke(StrokeOptions::DEFAULT),
@@ -381,6 +360,22 @@ mod tests {
                     .build(ctx)?;
                 draw(ctx, &lines, (Vec2::new(0.0, 0.0),))?;
             }
+
+            let t_line = MeshBuilder::new()
+                .polyline(
+                    DrawMode::Stroke(StrokeOptions::DEFAULT),
+                    &[
+                        Vec2::new(0., self.dimensions.y * 0.75),
+                        Vec2::new(0., self.dimensions.y),
+                    ],
+                    Color::WHITE,
+                )?
+                .build(ctx)?;
+
+            draw(ctx, &t_line, (Vec2::new(t, 0.),))?;
+            draw(ctx, &blue_circle, (self.cmpspl.lower_limit_at(t),))?;
+            draw(ctx, &red_circle, (self.cmpspl.seeker().jump(t),))?;
+            draw(ctx, &blue_circle, (self.cmpspl.upper_limit_at(t),))?;
 
             present(ctx)?;
             Ok(())

@@ -168,7 +168,7 @@ impl Segment {
         match self.ctrls {
             Ctrl::ThreePointCircle(_, _) => {
                 if self.lut.len() == 3 {
-                    self.lut[2].offset.abs().to_radians() * std::f32::consts::PI
+                    (self.lut[0].val - self.lut[1].val).length() * self.lut[2].offset.abs().to_radians() 
                 }
                 else {
                     (self.lut[0].val - self.lut[1].val).length()

@@ -316,8 +316,10 @@ pub mod tests {
                 dimensions
             };
 
-            //test.automation.insert_lower(dimensions.x * 0.5, Transition::Instant, 0.25);
-            //test.automation.insert_upper(dimensions.x * 0.5, Transition::Instant, 0.75);
+            //test.automation.insert_lower(dimensions.x * 0.3, Transition::Weighted(5.), 0.2);
+            //test.automation.insert_upper(dimensions.x * 0.3, Transition::Instant, 0.8);
+            //test.automation.insert_lower(dimensions.x * 0.6, Transition::Instant, 0.5);
+            //test.automation.insert_upper(dimensions.x * 0.6, Transition::Instant, 0.8);
 
             Ok(test)
         }
