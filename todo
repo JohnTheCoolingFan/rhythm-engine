@@ -24,11 +24,20 @@ None  Planned
     -Playlist
     -Chart
     -Signal response
-        - Off -> On
-        - Negate
+        - Ignore
+        - Commence
+        - Halt
         - Toggle
-        - Resetting
-        - Following
+            - Weight
+        - Jump Away
+            - Lead
+            - Weight
+        - Jump To
+            - Lead 
+            - Weight
+        - Follow
+            - Lead
+            - Curve
     -Pad/Keystyle automation(???)
     
     Play + sync audio

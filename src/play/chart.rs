@@ -2,11 +2,30 @@ use crate::{automation::*, utils::*};
 use crate::utils::seeker::*;
 use super::*;
 
-pub enum SignalResponse<T> {
-    Ignore(T),
-    Toggle(T, bool),
-    Commence(T, bool),
-    Halt(T, bool),
+pub enum Lead {
+    Into,
+    OutOf,
+}
+
+struct ResponseConfig {
+    delay: f32,
+
+}
+
+pub enum Response {
+    Ignore,
+    Toggle(bool),
+    Commence(bool),
+    Halt(bool),
+    Jump{
+        offset: f32
+    },
+    InverseReset{
+        offset: f32
+    },
+    Follow{
+        halt_delay: f32
+    }
 }
 
 impl<T> SignalResponse<T> {
