@@ -6,58 +6,50 @@ None  Planned
 
 
 
--Version 0.1 {
-  -Core {
-    ===Automation
-    ===Dyn Color
-    ===Complex spline
-    ===Transform Point
-    
-    -Beat
-      Hold:
-        States:
-          Strike time: S0
-          Rlease time: S1
-          S0.contains(S1) || S1.contains(S0) == true
-          S0.contains(mouse) || S1.contains(mouse) == true
-    -Poly Entity
-    -Playlist
-    -Chart
-    -Signal response
-        - Ignore
-        - Commence
-        - Halt
-        - Toggle
-            - Weight
-        - Jump Away
-            - Lead
-            - Weight
-        - Jump To
-            - Lead 
-            - Weight
-        - Follow
-            - Lead
-            - Curve
-    -Pad/Keystyle automation(???)
-    
-    Play + sync audio
-    BPM(static, variable)
-    Local center scale based preattack effects
-  }
-  
-  Play {
-    Simple score
-  }
-  
-  Editor {
-    Simple widgets
-    Simple timeline
-    Snapping
-    Repeating
-    Stretching
+Version 0.1 {
+    -Foundation {
+        ===Automation
+        ===Dyn Color
+        ===Complex spline
+        ===Transform Point
 
-    Song timer
-  }
+        -Beat
+            Hold:
+                Notes:
+                Strike State: S0
+                Rlease State: S1
+                S0.contains(S1) || S1.contains(S0) == true
+                S0.contains(mouse) || S1.contains(mouse) == true
+        -Poly Entity
+        -Playlist
+        -Chart
+        -Signal response (automation switch)
+            Switch
+            Hold
+            Halt
+            Toggle
+            Follow
+                Lead
+                Curve
+
+        Play + sync audio
+        BPM(static, variable)
+        Local center scale based preattack effects
+    }
+  
+    Play {
+        Simple score
+    }
+
+    Editor {
+        Simple widgets
+        Simple timeline
+        Snapping
+        Repeating
+        Stretching
+
+        Song timer
+    }
 }
 
 
@@ -65,9 +57,9 @@ None  Planned
 
 
 Version 0.2 {
-  Misc {
-    Make custom engine with WGPU, Lyon etc.
-  }
+    Misc {
+        Make custom engine with WGPU, Lyon etc.
+    }
 }
 
 
@@ -75,18 +67,14 @@ Version 0.2 {
 
 
 Version 0.3 {
-  Core {
-    Replace local scale effect with striaght skeleton polygon offsetting  
-  }
+    Foundation {
+        Replace local scale effect with striaght skeleton polygon offsetting  
+    }
 
-  Foundation {
-    Spatial Patterns
-  }
-
-  Editor {
-    Map validator
-    Audio visualizer
-  }
+    Editor {
+        Map validator
+        Audio visualizer
+    }
 }
 
 
@@ -94,7 +82,20 @@ Version 0.3 {
 
 
 Version 0.4 {
-  ???
+    -Remove the use of audio files and use audio-playback from system
+    using the users spotify/youtube/soundcloud via browser
+
+    -Git-Like modding system {
+        Mods will be made in the same way pull requests are made.
+        They are submutted either as comments or a comment + a change to the map file
+        After viewing a mod mappers can either reject them or accept them.
+        They can be tuned before the mapper accpetes them if they feel it's slightly off.
+        
+        -Possibly hosted on Steam
+        -Render diffs in editor
+        -Rendered diff views of
+        -Set up git system
+    }
 }
 
 
