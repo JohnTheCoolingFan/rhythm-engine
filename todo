@@ -23,10 +23,9 @@ Version 0.1 {
         -Poly Entity
         -Playlist
         -Chart
-        -Signal response (automation switch)
+        -Signal Response
             Switch
             Hold
-            Halt
             Toggle
             Follow
                 Lead

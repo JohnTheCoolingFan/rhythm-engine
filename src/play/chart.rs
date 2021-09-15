@@ -2,60 +2,41 @@ use crate::{automation::*, utils::*};
 use crate::utils::seeker::*;
 use super::*;
 
-pub enum Lead {
-    Into,
-    OutOf,
-}
-
-struct ResponseConfig {
-    delay: f32,
-
-}
-
 pub enum Response {
     Ignore,
-    Toggle(bool),
-    Commence(bool),
-    Halt(bool),
-    Jump{
-        offset: f32
+    Commence{
+        started: bool
     },
-    InverseReset{
-        offset: f32
+    Switch {
+        delegate: usize,
+        switched: bool
     },
-    Follow{
-        halt_delay: f32
+    Toggle {
+        delegate: usize,
+        switched: bool
+    },
+
+    Follow {
+        excess: f32,
+        last_hit: Option<f32>,
     }
+}
+
+struct SignalResponse<T> {
+    response: Response,
+    target: T
 }
 
 impl<T> SignalResponse<T> {
-    pub fn respond(&mut self) {
-        match self {
-            Self::Toggle(_, ref mut b) => *b = !*b,
-            Self::Commence(_, ref mut b) => *b = true,
-            Self::Halt(_, ref mut b) => *b = false,
+    pub fn respond(&mut self, hit_time: f32) {
+        match self.response {
+            Response::Commence{ ref mut started } => *started = true,
+            Response::Switch{ ref mut switched, .. } => *switched = true,
+            Response::Toggle{ ref mut switched, .. } => *switched = !*switched,
+            Response::Follow{ ref mut last_hit, .. } => *last_hit = Some(hit_time),
             _ => {}
         }
     }
-
-    pub fn unwrap(&self) -> &T {
-        match self {
-            Self::Ignore(ref val) 
-            | Self::Toggle(ref val, _)
-            | Self::Commence(ref val, _)
-            | Self::Halt(ref val, _) => val
-        }
-    }
-
-    pub fn unwrap_mut(&mut self) -> &mut T {
-        match self {
-            Self::Ignore(ref mut val) 
-            | Self::Toggle(ref mut val, _)
-            | Self::Commence(ref mut val, _)
-            | Self::Halt(ref mut val, _) => val
-        }
-    }
-
 }
 
 pub type Channel<T> = Vec<Epoch<T>>;
