@@ -43,11 +43,13 @@ pub enum Beat {
         pre: f32,
         attack: f32,
         keys: Option<HitKeys>,
+        layer: u8
     },
     Hold {
         pre: f32,
         follow: Automation<f32>, //attack: start.x, post: end.x
         keys: Option<HitKeys>,
+        layer: u8
     },
     Avoid {
         pre: f32,

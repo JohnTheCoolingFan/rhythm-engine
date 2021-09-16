@@ -15,35 +15,61 @@ pub enum Response {
         delegate: usize,
         switched: bool
     },
-
     Follow {
         excess: f32,
         last_hit: Option<f32>,
     }
 }
 
+struct HitInfo {
+    //  the time the object is supposed to be hit instead of when it actually is hit
+    //  this way animations will always be in sync with the music
+    //  reguardless of how accurate the hit was
+    obj_time: f32,
+    layer: u8
+}
+
 struct SignalResponse<T> {
     response: Response,
+    layer: u8,
     target: T
 }
 
 impl<T> SignalResponse<T> {
-    pub fn respond(&mut self, hit_time: f32) {
-        match self.response {
-            Response::Commence{ ref mut started } => *started = true,
-            Response::Switch{ ref mut switched, .. } => *switched = true,
-            Response::Toggle{ ref mut switched, .. } => *switched = !*switched,
-            Response::Follow{ ref mut last_hit, .. } => *last_hit = Some(hit_time),
-            _ => {}
+    //  Holds will behave like hits for implementation simplicity
+    //  And because I can't think of scenarios where Hold behavior
+    //  would be useful. Might change in future tho.
+    pub fn respond(&mut self, hits: &[Option<HitInfo>; 4]) {
+        for hit in hits.iter().flatten() {
+            match self.response {
+                Response::Commence{ ref mut started } => *started = true,
+                Response::Switch{ ref mut switched, .. } => *switched = true,
+                Response::Toggle{ ref mut switched, .. } => *switched = !*switched,
+                Response::Follow{ ref mut last_hit, .. } => *last_hit = Some(hit.obj_time),
+                _ => {}
+            }
         }
     }
 }
-
+//
+//
+//
+//
+//
 pub type Channel<T> = Vec<Epoch<T>>;
 
 pub struct PlayList<T> {
     channels: Vec<Channel<SignalResponse<T>>>,
 }
+
+impl<'a, T> PlayList<T>
+where
+    T: Seekable<'a>
+{
+    fn make_table(&self, t: f32, hits: &[Option<HitInfo>; 4]) {
+    }
+}
+
 //
 //
 //
@@ -61,7 +87,17 @@ pub enum BPM {
     },
 }
 
-/*type BPMSeeker<'a> = BPSeeker<'a, Epoch<BPM>>;
+impl Default for BPM {
+    fn default() -> Self {
+        Self::Undefined {
+            division_factor: 1.,
+            signature: 1
+        }
+    }
+}
+
+type BPMSeeker<'a> = Seeker<&'a TVec<Epoch<BPM>>, usize>;
+
 impl<'a> Exhibit for BPMSeeker<'a> {
     fn exhibit(&self, offset: f32) -> BPM {
         match (self.previous(), self.current()) {
@@ -76,16 +112,22 @@ impl<'a> Exhibit for BPMSeeker<'a> {
                 }
             }
         }
-        else {
-            curr.val
-        }
     }
-}*/
+}
 //
 //
 //
 //
 //
+enum AudioSourceType {
+    File(String),
+    //For later
+    Stream {
+        url: String,
+        service: String
+    }
+}
+
 struct SongMetaData {
     pub artists: String,
     pub title: String,

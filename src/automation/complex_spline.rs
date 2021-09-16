@@ -27,8 +27,7 @@ impl<'a> MetaSegmentSeeker<'a> {
     }
 }
 
-impl<'a> SeekerTypes for MetaSegmentSeeker<'a>
-{
+impl<'a> SeekerTypes for MetaSegmentSeeker<'a> {
     type Source = Epoch<Segment>;
     type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
 }
