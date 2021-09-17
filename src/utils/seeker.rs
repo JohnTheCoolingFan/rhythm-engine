@@ -24,10 +24,10 @@ pub trait Exhibit: SeekerTypes {
 }
 
 //for collection of seekable values
-pub trait Seekable {
+pub trait Seekable<'a> {
     type Seeker: Seek;
     
-    fn seeker(self) -> Self::Seeker;
+    fn seeker(&'a self) -> Self::Seeker;
 }
 
 pub trait SeekExtensions
@@ -67,7 +67,6 @@ where
     }
 }
 
-
 impl<'a, T> SeekerTypes for Seeker<&'a [Epoch<T>], usize> 
 where
     T: Copy,
@@ -76,14 +75,12 @@ where
     type Output = T;
 }
 
-
-impl<'a, T> SeekerTypes for Seeker<&'a [Epoch<T>], <T as Seekable>::Seeker>
+impl<'a, T, U, V> SeekerTypes for Seeker<&'a [Epoch<T>], Seeker<U, V>>
 where
-    T: Seekable,
-    &'a [Epoch<T>]: Seekable
+    T: Seekable<'a, Seeker = Seeker<U, V>>
 {
     type Source = Epoch<T>;
-    type Output = <T as Seekable>::Seeker;
+    type Output = Seeker<U, V>;
 }
 //
 //
@@ -161,14 +158,14 @@ where
     }
 }
 
-impl<'a, T> Seekable for &'a [T]
+impl<'a, T> Seekable<'a> for &'a [T]
 where
     T: Quantify,
-    Seeker<&'a [T], usize>: Exhibit<Source = T>,
+    Seeker<&'a [T], usize>: Exhibit<Source = T>
 {
     type Seeker = Seeker<&'a [T], usize>;
     
-    fn seeker(self) -> Self::Seeker {
+    fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
             meta: 0,
             data: self
@@ -176,7 +173,22 @@ where
     }
 }
 
-#[duplicate(
+impl<'a, T, U, V> Seekable<'a> for &'a [Epoch<T>]
+where
+    T: Seekable<'a, Seeker = Seeker<U, V>>,
+    Seeker<(), (Seeker<&'a [Epoch<T>], usize>, Seeker<U, V>)>: Seek
+{
+    type Seeker = Seeker<(), (Seeker<&'a [Epoch<T>], usize>, Seeker<U, V>)>;
+
+    fn seeker(&'a self) -> Self::Seeker {
+        Seeker {
+            data: (),
+            meta: (self.seeker(), self[0].val.seeker())
+        }
+    }
+}
+
+/*#[duplicate(
     VecT        D;
     [Vec<T>]    [];
     [TVec<T>]   [Default]
@@ -195,4 +207,4 @@ where
         self.insert(index, item);
         index
     }
-}
+}*/

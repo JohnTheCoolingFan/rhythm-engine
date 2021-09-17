@@ -269,13 +269,13 @@ where
     }
 }
 
-impl<'a, T> Seekable for Automation<T>
+impl<'a, T> Seekable<'a> for Automation<T>
 where
     T: BoundLerp + Copy + Default,
 {
     type Seeker = AutomationSeeker<'a, T>;
 
-    fn seeker(self) -> Self::Seeker {
+    fn seeker(&'a self) -> Self::Seeker {
         Self::Seeker {
             meta: (
                 self.lower.as_slice().seeker(),
