@@ -1,5 +1,6 @@
 use crate::{automation::*, utils::*};
-use crate::utils::seeker::*;
+use duplicate::duplicate;
+use std::ptr::eq;
 use super::*;
 
 pub enum Response {
@@ -29,13 +30,19 @@ struct HitInfo {
     layer: u8
 }
 
-struct SignalResponse<T> {
+struct SignalResponse<'a, T>
+where
+    T: Seekable<'a>
+{
     response: Response,
     layer: u8,
     target: T
 }
 
-impl<T> SignalResponse<T> {
+impl<'a, T> SignalResponse<'a, T>
+where
+    T: Seekable<'a>
+{
     //  Holds will behave like hits for implementation simplicity
     //  And because I can't think of scenarios where Hold behavior
     //  would be useful. Might change in future tho.
@@ -57,19 +64,39 @@ impl<T> SignalResponse<T> {
 //
 //
 pub type Channel<T> = Vec<Epoch<T>>;
+pub type PlayList<'a, T> = Vec<Channel<SignalResponse<'a, T>>>;
+pub type PlayListSeeker<'a, T> = Seeker<
+    (), 
+    Vec<(
+        Seeker<&'a Channel<SignalResponse<'a, T>>, usize>,
+        <T as Seekable<'a>>::Seeker
+    )>
+>;
 
-pub struct PlayList<T> {
-    channels: Vec<Channel<SignalResponse<T>>>,
-}
-
-impl<'a, T> PlayList<T>
+impl<'a, T> SeekerTypes for PlayListSeeker<'a, T>
 where
     T: Seekable<'a>
 {
-    fn make_table(&self, t: f32, hits: &[Option<HitInfo>; 4]) {
-    }
+    type Source = Epoch<SignalResponse<'a, T>>;
+    type Output = Vec<<<T as Seekable<'a>>::Seeker as SeekerTypes>::Output>;
 }
 
+impl<'a, T> Seek for PlayListSeeker<'a, T>
+where
+    T: Seekable<'a>
+{
+    #[duplicate(method; [jump]; [seek])]
+    fn method(&mut self, offset: f32) -> Self::Output {
+        /*let initial_pass: Self::Output = */
+        self.meta
+            .iter_mut()
+            .map(|(channel_seeker, item_seeker)| {
+                item_seeker = if !eq(&channel_seeker.method(offset).val, item_seeker.data) {
+                }
+            })
+            .collect()
+    }
+}
 //
 //
 //
@@ -98,7 +125,7 @@ impl Default for BPM {
 
 type BPMSeeker<'a> = Seeker<&'a TVec<Epoch<BPM>>, usize>;
 
-impl<'a> Exhibit for BPMSeeker<'a> {
+/*impl<'a> Exhibit for BPMSeeker<'a> {
     fn exhibit(&self, offset: f32) -> BPM {
         match (self.previous(), self.current()) {
             match prev.val {
@@ -113,13 +140,13 @@ impl<'a> Exhibit for BPMSeeker<'a> {
             }
         }
     }
-}
+}*/
 //
 //
 //
 //
 //
-enum AudioSourceType {
+enum AudioSource {
     File(String),
     //For later
     Stream {
@@ -131,22 +158,22 @@ enum AudioSourceType {
 struct SongMetaData {
     pub artists: String,
     pub title: String,
-    pub audio: String,
+    pub audio: AudioSource,
     //hash or song ID? 
 }
 
-pub struct Globals {
+pub struct Globals<'a> {
     sense_muls: Channel<f32>,
     bpms: Vec<Epoch<BPM>>,
-    camera_pos: Channel<SignalResponse<ComplexSpline>>,
-    camera_rot: Channel<SignalResponse<Rotation>>,
-    camera_scale: Channel<SignalResponse<Scale>>
+    camera_pos: Channel<SignalResponse<'a, ComplexSpline>>,
+    camera_rot: Channel<SignalResponse<'a, TransformPoint<Rotation>>>,
+    camera_scale: Channel<SignalResponse<'a, TransformPoint<Scale>>>
 }
 
-pub struct LiveChart {
+pub struct LiveChart<'a> {
     poly_entities: Vec<PolyEntity>,
-    rotations: PlayList<TransformPoint<Rotation>>,
-    scale: PlayList<TransformPoint<Scale>>,
-    splines: PlayList<ComplexSpline>,
-    colours: PlayList<DynColor>
+    rotations: PlayList<'a, TransformPoint<Rotation>>,
+    scale: PlayList<'a, TransformPoint<Scale>>,
+    splines: PlayList<'a, ComplexSpline>,
+    colours: PlayList<'a, DynColor>
 }

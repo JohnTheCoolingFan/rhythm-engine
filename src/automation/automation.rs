@@ -41,7 +41,7 @@ pub trait BoundLerp {
 }
 
 //Transitionable Bounds Vector
-pub type TBVSeeker<'a, T> = Seeker<&'a TVec<Epoch<TransitionedBound<T>>>, usize>;
+pub type TBVSeeker<'a, T> = Seeker<&'a [Epoch<TransitionedBound<T>>], usize>;
 impl<'a, T> Exhibit for TBVSeeker<'a, T>
 where
     T: BoundLerp + Default + Copy
@@ -244,7 +244,7 @@ where
 //
 pub type AutomationSeeker<'a, T> = Seeker<
     (),
-    (TBVSeeker<'a, T>, Seeker<&'a TVec<Anchor>, usize>, TBVSeeker<'a, T>)
+    (TBVSeeker<'a, T>, Seeker<&'a [Anchor], usize>, TBVSeeker<'a, T>)
 >;
 
 impl<'a, T> SeekerTypes for AutomationSeeker<'a, T> 
@@ -269,16 +269,19 @@ where
     }
 }
 
-impl<'a, T> Seekable<'a> for Automation<T>
+impl<'a, T> Seekable for Automation<T>
 where
-    T: BoundLerp + Copy + Default + 'a
-
+    T: BoundLerp + Copy + Default,
 {
     type Seeker = AutomationSeeker<'a, T>;
 
-    fn seeker(&'a self) -> Self::Seeker {
+    fn seeker(self) -> Self::Seeker {
         Self::Seeker {
-            meta: (self.lower.seeker(), self.anchors.seeker(),self.upper.seeker()),
+            meta: (
+                self.lower.as_slice().seeker(),
+                self.anchors.as_slice().seeker(),
+                self.upper.as_slice().seeker()
+            ),
             data: ()
         }
     }

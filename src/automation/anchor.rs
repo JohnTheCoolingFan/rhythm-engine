@@ -1,4 +1,4 @@
-use crate::utils::{math::*, seeker::*, misc::*};
+use crate::utils::{math::*, seeker::*};
 use std::default::Default;
 use glam::Vec2;
 
@@ -334,12 +334,12 @@ impl Quantify for Anchor {
     }
 }
 
-impl<'a> SeekerTypes for Seeker<&'a TVec<Anchor>, usize> {
+impl<'a> SeekerTypes for Seeker<&'a [Anchor], usize> {
     type Source = Anchor;
     type Output = f32;
 }
 
-impl<'a> Exhibit for Seeker<&'a TVec<Anchor>, usize> { 
+impl<'a> Exhibit for Seeker<&'a [Anchor], usize> { 
     fn exhibit(&self, offset: f32) -> Self::Output {
         match (self.previous(), self.current()) {
             (Some(prev), Ok(curr)) => curr.eval(prev, offset),

@@ -13,6 +13,7 @@ pub struct FromEnd(pub usize);
 duplicate_inline! {
     [VecT       D;
     [Vec<T>]    [];
+    [[T]]       [];
     [TVec<T>]  [Default]]
 
     impl<T> std::ops::Index<FromEnd> for VecT
