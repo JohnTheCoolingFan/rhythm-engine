@@ -47,18 +47,27 @@ pub struct Epoch<Value> {
     pub val: Value,
 }
 
-impl<Value> Quantify for Epoch<Value>
+pub struct Seeker<Data, Meta>
 {
+    pub data: Data, //unchanging
+    pub meta: Meta, //changing
+}
+
+pub type Output<'a, T> = <T as SeekerTypes>::Output;
+pub type Quantifier<'a, T> = <<T as SeekerTypes>::Source as Quantify>::Quantifier;
+//
+//
+//
+//
+//
+impl<Value> Quantify for Epoch<Value> {
     type Quantifier = f32;
     fn quantify(&self) -> Self::Quantifier {
         self.offset
     }
 }
 
-impl<Value> From<(f32, Value)> for Epoch<Value>
-where
-    Value: Copy,
-{
+impl<Value> From<(f32, Value)> for Epoch<Value> {
     fn from(tup: (f32, Value)) -> Epoch<Value> {
         Epoch::<Value> {
             offset: tup.0,
@@ -74,30 +83,26 @@ where
     type Source = Epoch<T>;
     type Output = T;
 }
-
-impl<'a, T, U, V> SeekerTypes for Seeker<&'a [Epoch<T>], Seeker<U, V>>
+//
+//
+//
+//
+//
+impl<'a, T> Seekable<'a> for [T]
 where
-    T: Seekable<'a, Seeker = Seeker<U, V>>
+    T: Quantify + 'a,
+    Seeker<&'a [T], usize>: Exhibit<Source = T>
 {
-    type Source = Epoch<T>;
-    type Output = Seeker<U, V>;
-}
-//
-//
-//
-//
-//
-pub struct Seeker<Data, Meta>
-{
-    pub data: Data, //unchanging
-    pub meta: Meta, //changing
-}
-
-pub type Output<'a, T> = <T as SeekerTypes>::Output;
-pub type Quantifier<'a, T> = <<T as SeekerTypes>::Source as Quantify>::Quantifier;
-
-
+    type Seeker = Seeker<&'a [T], usize>;
     
+    fn seeker(&'a self) -> Self::Seeker {
+        Self::Seeker {
+            meta: 0,
+            data: self
+        }
+    }
+}
+
 impl<'a, T> Seeker<&'a [T], usize>
 where
     T: Quantify
@@ -157,38 +162,12 @@ where
         self.exhibit(offset)
     }
 }
-
-impl<'a, T> Seekable<'a> for &'a [T]
-where
-    T: Quantify,
-    Seeker<&'a [T], usize>: Exhibit<Source = T>
-{
-    type Seeker = Seeker<&'a [T], usize>;
-    
-    fn seeker(&'a self) -> Self::Seeker {
-        Self::Seeker {
-            meta: 0,
-            data: self
-        }
-    }
-}
-
-impl<'a, T, U, V> Seekable<'a> for &'a [Epoch<T>]
-where
-    T: Seekable<'a, Seeker = Seeker<U, V>>,
-    Seeker<(), (Seeker<&'a [Epoch<T>], usize>, Seeker<U, V>)>: Seek
-{
-    type Seeker = Seeker<(), (Seeker<&'a [Epoch<T>], usize>, Seeker<U, V>)>;
-
-    fn seeker(&'a self) -> Self::Seeker {
-        Seeker {
-            data: (),
-            meta: (self.seeker(), self[0].val.seeker())
-        }
-    }
-}
-
-/*#[duplicate(
+//
+//
+//
+//
+//
+#[duplicate(
     VecT        D;
     [Vec<T>]    [];
     [TVec<T>]   [Default]
@@ -207,4 +186,4 @@ where
         self.insert(index, item);
         index
     }
-}*/
+}

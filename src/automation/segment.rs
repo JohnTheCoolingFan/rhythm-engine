@@ -193,7 +193,7 @@ impl Default for Segment {
     }
 }
 
-impl<'a> Exhibit for Seeker<&'a TVec<Epoch<Vec2>>, usize> {
+impl<'a> Exhibit for Seeker<&'a [Epoch<Vec2>], usize> {
     fn exhibit(&self, offset: f32) -> Vec2 {
         match (self.previous(), self.current()) {
             (Some(prev), Ok(curr)) => {
@@ -205,10 +205,10 @@ impl<'a> Exhibit for Seeker<&'a TVec<Epoch<Vec2>>, usize> {
     }
 }
 
-pub type SegmentSeeker<'a> = Seeker<&'a Segment, Seeker<&'a TVec<Epoch<Vec2>>, usize>>;
+pub type SegmentSeeker<'a> = Seeker<&'a Segment, Seeker<&'a [Epoch<Vec2>], usize>>;
 
 impl<'a> SeekerTypes for SegmentSeeker<'a> {
-    type Source = <Seeker<&'a TVec<Epoch<Vec2>>, usize> as SeekerTypes>::Source;
+    type Source = <Seeker<&'a [Epoch<Vec2>], usize> as SeekerTypes>::Source;
     type Output = Vec2;
 }
 

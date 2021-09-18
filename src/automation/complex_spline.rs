@@ -5,7 +5,7 @@ use lyon_geom::Point;
 use tinyvec::tiny_vec;
 use duplicate::duplicate;
 
-type MetaSegmentSeeker<'a> = Seeker<&'a TVec<Epoch<Segment>>, usize>;
+type MetaSegmentSeeker<'a> = Seeker<&'a [Epoch<Segment>], usize>;
 
 impl<'a> MetaSegmentSeeker<'a> {
     pub fn point_from_s(&self, virtual_s: f32) -> Vec2 {
@@ -163,7 +163,7 @@ impl ComplexSpline {
 //
 //
 // 
-type CompSplSeeker<'a> = Seeker<&'a TVec<Epoch<Segment>>, AutomationSeeker<'a, f32>>;
+type CompSplSeeker<'a> = Seeker<&'a [Epoch<Segment>], AutomationSeeker<'a, f32>>;
 
 impl<'a> SeekerTypes for CompSplSeeker<'a> {
     type Source = <AutomationSeeker<'a, f32> as SeekerTypes>::Source;

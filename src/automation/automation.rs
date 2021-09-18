@@ -271,7 +271,7 @@ where
 
 impl<'a, T> Seekable<'a> for Automation<T>
 where
-    T: BoundLerp + Copy + Default,
+    T: BoundLerp + Copy + Default + 'a,
 {
     type Seeker = AutomationSeeker<'a, T>;
 

@@ -1,5 +1,5 @@
 mod editor;
-//mod automation;
+mod automation;
 mod utils;
 //mod play;
 
@@ -41,7 +41,7 @@ impl event::EventHandler<GameError> for MainState {
 }
 
 pub fn main() -> GameResult {
-    let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese")
+   let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese")
         .window_mode(ggez::conf::WindowMode::default().dimensions(1920., 1080.));
     let (ctx, event_loop) = cb.build()?;
     let state = MainState::new();
