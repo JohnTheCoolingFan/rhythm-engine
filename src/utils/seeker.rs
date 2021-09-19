@@ -24,16 +24,15 @@ pub trait Exhibit: SeekerTypes {
 }
 
 //for collection of seekable values
+//lifetime is needed because some impls will have uncoinstrained lifetime otherwise
 pub trait Seekable<'a> {
     type Seeker: Seek;
     
     fn seeker(&'a self) -> Self::Seeker;
 }
 
-pub trait SeekExtensions
-{
+pub trait SeekExtensions{
     type Item: Quantify;
-
     fn quantified_insert(&mut self, item: Self::Item) -> usize;
 }
 //

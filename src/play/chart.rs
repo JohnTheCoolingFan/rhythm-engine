@@ -1,6 +1,5 @@
 use crate::{automation::*, utils::*};
 use duplicate::duplicate;
-use std::ptr::eq;
 use super::*;
 
 pub enum Response {
@@ -22,7 +21,7 @@ pub enum Response {
     }
 }
 
-struct HitInfo {
+pub struct HitInfo {
     //  the time the object is supposed to be hit instead of when it actually is hit
     //  this way animations will always be in sync with the music
     //  reguardless of how accurate the hit was
@@ -30,16 +29,14 @@ struct HitInfo {
     layer: u8
 }
 
-struct SignalResponse<'a, T>
-where
-    T: Seekable<'a>
+pub struct SignalResponse<T>
 {
     response: Response,
     layer: u8,
     target: T
 }
 
-impl<'a, T> SignalResponse<'a, T>
+impl<'a, T> SignalResponse<T>
 where
     T: Seekable<'a>
 {
@@ -48,36 +45,78 @@ where
     //  would be useful. Might change in future tho.
     pub fn respond(&mut self, hits: &[Option<HitInfo>; 4]) {
         for hit in hits.iter().flatten() {
-            match self.response {
-                Response::Commence{ ref mut started } => *started = true,
-                Response::Switch{ ref mut switched, .. } => *switched = true,
-                Response::Toggle{ ref mut switched, .. } => *switched = !*switched,
-                Response::Follow{ ref mut last_hit, .. } => *last_hit = Some(hit.obj_time),
-                _ => {}
+            if hit.layer == self.layer {
+                match self.response {
+                    Response::Commence{ ref mut started } => *started = true,
+                    Response::Switch{ ref mut switched, .. } => *switched = true,
+                    Response::Toggle{ ref mut switched, .. } => *switched = !*switched,
+                    Response::Follow{ ref mut last_hit, .. } => *last_hit = Some(hit.obj_time),
+                    _ => {}
+                }
             }
         }
     }
+
+    //pub fn translate(&self, t: f32) -> f32 {
+    //}
 }
 //
 //
 //
 //
 //
-pub type Channel<T> = Vec<Epoch<T>>;
-pub type PlayList<'a, T> = Vec<Channel<SignalResponse<'a, T>>>;
-pub type PlayListSeeker<'a, T> = Seeker<
-    (), 
-    Vec<(
-        Seeker<&'a Channel<SignalResponse<'a, T>>, usize>,
-        <T as Seekable<'a>>::Seeker
-    )>
->;
+pub type Channel<T> = Vec<Epoch<SignalResponse<T>>>;
+pub type ChannelSeeker<'a, T> = Seeker<(), (
+    Seeker<&'a [Epoch<SignalResponse<T>>], usize>, 
+    <T as Seekable<'a>>::Seeker
+)>;
+
+impl<'a, T> SeekerTypes for ChannelSeeker<'a, T>
+where
+    T: Seekable<'a>
+{
+    type Source = Epoch<SignalResponse<T>>;
+    type Output = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output;
+}
+
+impl<'a, T> Seek for ChannelSeeker<'a, T> 
+where
+    T: Seekable<'a>,
+    <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Self::Source>,
+    Seeker<&'a [Epoch<SignalResponse<T>>], usize>: SeekerTypes<Source = Self::Source> + Exhibit + Seek
+{
+    #[duplicate(method; [seek]; [jump])]
+    fn method(&mut self, offset: f32) -> Self::Output {
+        let Seeker{ meta: (outer, inner), ..} = self;
+        let old = outer.meta;
+        outer.method(offset); 
+        match outer.meta { //need to manually index cause lifetimes
+            oob if outer.data.len() <= oob => {
+                outer.data[FromEnd(0)].val.target.seeker().jump(
+                    offset - outer.data[FromEnd(0)].offset
+                )
+            },
+            index => {
+                if index != old {
+                    *inner = outer.data[FromEnd(0)].val.target.seeker();
+                }
+                inner.method(outer.data[index].offset)
+            }
+        }
+    }
+}
+
+pub type PlayList<T> = Vec<Channel<T>>;
+pub type PlayListSeeker<'a, T> = Seeker<(),Vec<(
+    ChannelSeeker<'a, T>,
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output
+)>>;
 
 impl<'a, T> SeekerTypes for PlayListSeeker<'a, T>
 where
     T: Seekable<'a>
 {
-    type Source = Epoch<SignalResponse<'a, T>>;
+    type Source = Epoch<SignalResponse<T>>;
     type Output = Vec<<<T as Seekable<'a>>::Seeker as SeekerTypes>::Output>;
 }
 
@@ -85,15 +124,12 @@ impl<'a, T> Seek for PlayListSeeker<'a, T>
 where
     T: Seekable<'a>
 {
-    #[duplicate(method; [jump]; [seek])]
+
+    #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> Self::Output {
-        /*let initial_pass: Self::Output = */
         self.meta
             .iter_mut()
-            .map(|(channel_seeker, item_seeker)| {
-                item_seeker = if !eq(&channel_seeker.method(offset).val, item_seeker.data) {
-                }
-            })
+            .map(|(seeker, output)| output = seeker.method())
             .collect()
     }
 }
@@ -162,18 +198,18 @@ struct SongMetaData {
     //hash or song ID? 
 }
 
-pub struct Globals<'a> {
+pub struct Globals {
     sense_muls: Channel<f32>,
     bpms: Vec<Epoch<BPM>>,
-    camera_pos: Channel<SignalResponse<'a, ComplexSpline>>,
-    camera_rot: Channel<SignalResponse<'a, TransformPoint<Rotation>>>,
-    camera_scale: Channel<SignalResponse<'a, TransformPoint<Scale>>>
+    camera_pos: Channel<ComplexSpline>,
+    camera_rot: Channel<TransformPoint<Rotation>>,
+    camera_scale: Channel<TransformPoint<Scale>>
 }
 
-pub struct LiveChart<'a> {
+pub struct LiveChart {
     poly_entities: Vec<PolyEntity>,
-    rotations: PlayList<'a, TransformPoint<Rotation>>,
-    scale: PlayList<'a, TransformPoint<Scale>>,
-    splines: PlayList<'a, ComplexSpline>,
-    colours: PlayList<'a, DynColor>
+    rotations: PlayList<TransformPoint<Rotation>>,
+    scale: PlayList<TransformPoint<Scale>>,
+    splines: PlayList<ComplexSpline>,
+    colours: PlayList<DynColor>
 }

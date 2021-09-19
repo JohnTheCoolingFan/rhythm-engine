@@ -5,9 +5,9 @@ use lyon_geom::Point;
 use tinyvec::tiny_vec;
 use duplicate::duplicate;
 
-type MetaSegmentSeeker<'a> = Seeker<&'a [Epoch<Segment>], usize>;
+type SegmentMetaSeeker<'a> = Seeker<&'a [Epoch<Segment>], usize>;
 
-impl<'a> MetaSegmentSeeker<'a> {
+impl<'a> SegmentMetaSeeker<'a> {
     pub fn point_from_s(&self, virtual_s: f32) -> Vec2 {
         match self.data.seeker().jump(virtual_s) {
             0 => self.data[1].val.seeker().seek(0.),
@@ -17,7 +17,7 @@ impl<'a> MetaSegmentSeeker<'a> {
             },
             index => {
                 let segment = &self.data[index];
-                let mut real_s = virtual_s - self.data[index- 1].offset;
+                let mut real_s = virtual_s - self.data[index - 1].offset;
                 if let Ctrl::ThreePointCircle(_, _) = segment.val.ctrls {
                     real_s /= segment.val.length();
                 }
@@ -27,12 +27,12 @@ impl<'a> MetaSegmentSeeker<'a> {
     }
 }
 
-impl<'a> SeekerTypes for MetaSegmentSeeker<'a> {
+impl<'a> SeekerTypes for SegmentMetaSeeker<'a> {
     type Source = Epoch<Segment>;
     type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
 }
 
-impl<'a> Exhibit for MetaSegmentSeeker<'a> {
+impl<'a> Exhibit for SegmentMetaSeeker<'a> {
     fn exhibit(&self, _: f32) -> Self::Output {
         self.meta
     }
