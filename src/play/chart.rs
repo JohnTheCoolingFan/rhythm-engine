@@ -22,6 +22,9 @@ pub enum Response {
 }
 
 pub struct HitInfo {
+    //  
+    //  [CLARIFICATION]
+    //  
     //  the time the object is supposed to be hit instead of when it actually is hit
     //  this way animations will always be in sync with the music
     //  reguardless of how accurate the hit was
@@ -40,6 +43,9 @@ impl<'a, T> SignalResponse<T>
 where
     T: Seekable<'a>
 {
+    //  
+    //  [CLARIFICATION]
+    //  
     //  Holds will behave like hits for implementation simplicity
     //  And because I can't think of scenarios where Hold behavior
     //  would be useful. Might change in future tho.
@@ -57,6 +63,9 @@ where
         }
     }
 
+    //
+    //  [MISSING IMPL]
+    //
     //pub fn translate(&self, t: f32) -> f32 {
     //}
 }
@@ -98,9 +107,9 @@ where
             },
             index => {
                 if index != old {
-                    *inner = outer.data[FromEnd(0)].val.target.seeker();
+                    *inner = outer.data[index].val.target.seeker();
                 }
-                inner.method(outer.data[index].offset)
+                inner.method(offset - outer.data[index].offset)
             }
         }
     }
@@ -114,23 +123,32 @@ pub type PlayListSeeker<'a, T> = Seeker<(),Vec<(
 
 impl<'a, T> SeekerTypes for PlayListSeeker<'a, T>
 where
-    T: Seekable<'a>
+    T: Seekable<'a>,
 {
     type Source = Epoch<SignalResponse<T>>;
-    type Output = Vec<<<T as Seekable<'a>>::Seeker as SeekerTypes>::Output>;
+    type Output = ();
 }
 
 impl<'a, T> Seek for PlayListSeeker<'a, T>
 where
-    T: Seekable<'a>
+    T: Seekable<'a>,
+    <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Self::Source>,
+    ChannelSeeker<'a, T>:  Exhibit + Seek + SeekerTypes<
+        Source = Self::Source,
+        Output = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output
+    >
 {
 
     #[duplicate(method; [seek]; [jump])]
-    fn method(&mut self, offset: f32) -> Self::Output {
+    fn method(&mut self, offset: f32) {
         self.meta
             .iter_mut()
-            .map(|(seeker, output)| output = seeker.method())
-            .collect()
+            .for_each(|(seeker, output)| *output = seeker.method(offset));
+
+        //  
+        //  [MISSING IMPL]
+        //
+        //  Add output delegation
     }
 }
 //

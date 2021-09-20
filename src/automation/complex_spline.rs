@@ -5,9 +5,16 @@ use lyon_geom::Point;
 use tinyvec::tiny_vec;
 use duplicate::duplicate;
 
-type SegmentMetaSeeker<'a> = Seeker<&'a [Epoch<Segment>], usize>;
+type SplineSeeker<'a> = Seeker<&'a [Epoch<Segment>], usize>;
 
-impl<'a> SegmentMetaSeeker<'a> {
+//  
+//  [CLARIFICATION]
+//
+//  this uses the epoch offset as a way to express total distance travelled
+//  along the spline at the end of the segment. so the previos offset must be subtracted
+//  from the input offset instead of the current. the first segment in a spline is
+//  also the origin so a '0' case is needed for this
+impl<'a> SplineSeeker<'a> {
     pub fn point_from_s(&self, virtual_s: f32) -> Vec2 {
         match self.data.seeker().jump(virtual_s) {
             0 => self.data[1].val.seeker().seek(0.),
@@ -27,12 +34,12 @@ impl<'a> SegmentMetaSeeker<'a> {
     }
 }
 
-impl<'a> SeekerTypes for SegmentMetaSeeker<'a> {
+impl<'a> SeekerTypes for SplineSeeker<'a> {
     type Source = Epoch<Segment>;
     type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
 }
 
-impl<'a> Exhibit for SegmentMetaSeeker<'a> {
+impl<'a> Exhibit for SplineSeeker<'a> {
     fn exhibit(&self, _: f32) -> Self::Output {
         self.meta
     }
