@@ -74,7 +74,13 @@ where
     pub fn translate(&self, t: f32) -> f32 {
         match self.response {
             Response::Commence{ started } => if started { t } else { 0. },
-            Response::Follow{ excess, last_hit } =>
+            Response::Follow{ excess, last_hit } => {
+                if let Some(hit) = last_hit {
+                    t.clamp(0., hit + excess)
+                }
+                else { 0. }
+            }
+            _ => t
         }
     }
 }
@@ -108,17 +114,18 @@ where
         let Seeker{ meta: (outer, inner), ..} = self;
         let old = outer.meta;
         outer.method(offset); 
-        match outer.meta { //need to manually index cause lifetimes
+        //need to manually index cause lifetimes
+        match outer.meta { 
             oob if outer.data.len() <= oob => {
                 outer.data[FromEnd(0)].val.target.seeker().jump(
-                    offset - outer.data[FromEnd(0)].offset
+                    outer.data[FromEnd(0)].val.translate(offset - outer.data[FromEnd(0)].offset)
                 )
             },
             index => {
                 if index != old {
                     *inner = outer.data[index].val.target.seeker();
                 }
-                inner.method(offset - outer.data[index].offset)
+                inner.method(outer.data[index].val.translate(offset - outer.data[index].offset))
             }
         }
     }
@@ -141,6 +148,7 @@ where
 impl<'a, T> Seek for PlayListSeeker<'a, T>
 where
     T: Seekable<'a>,
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output: Copy,
     <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Self::Source>,
     ChannelSeeker<'a, T>:  Exhibit + Seek + SeekerTypes<
         Source = Self::Source,
@@ -150,14 +158,29 @@ where
 
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) {
+        let reserve: Vec<_> = self.meta
+            .iter_mut()
+            .map(|(seeker, _)| seeker.method(offset))
+            .collect();
+
         self.meta
             .iter_mut()
-            .for_each(|(seeker, output)| *output = seeker.method(offset));
-
-        //  
-        //  [MISSING IMPL]
-        //
-        //  Add output delegation
+            .enumerate()
+            .for_each(|(index, (ref seeker, ref mut output))| match seeker.meta.0.current() {
+                Ok(item) | Err(item) => {
+                    match item.val.response {
+                        Response::Switch{ switched, delegate } | Response::Toggle{ switched, delegate } => {
+                            *output = reserve[
+                                if switched  && delegate < reserve.len() { delegate }
+                                else { index }
+                            ]
+                        },
+                        _ => {
+                            *output = reserve[index]
+                        }
+                    }
+                }
+            });
     }
 }
 
@@ -228,4 +251,11 @@ pub struct Chart<T> {
     pub colours: PlayList<DynColor>,
     //meta data: only deserialized in editor and menu
     pub meta: T,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn bpm() {
+    }
 }
