@@ -211,7 +211,7 @@ pub struct Bpm {
 
 impl Bpm {
     fn quantum_from_division(&self, division: i32) -> f32 {
-        60. * 1000. / self.bpm
+        ((60. * 1000.) / self.bpm) / self.signature as f32
     }
 }
 
@@ -239,7 +239,7 @@ impl<'a> SeekerTypes for Seeker<&'a [Bpm], usize> {
 }
 
 impl<'a> Exhibit for Seeker<&'a [Bpm], usize> {
-    fn exhibit(& self, _: f32) -> Self::Output {
+    fn exhibit(&self, _: f32) -> Self::Output {
         match self.current() {
             Ok(item) | Err(item) => *item
         }
@@ -294,11 +294,16 @@ mod tests {
     }
 
     impl Test {
-        fn new() -> Self {
-            Self {
-                dimensions: Vec2::new(2000., 1000.),
+        fn new() -> GameResult<Self> {
+            let dimensions = Vec2::new(2000., 1000.);
+            let mut new = Self {
+                dimensions,
                 chart: Chart::default()
-            }
+            };
+
+            new.chart.bpm.push(Bpm::default());
+
+            Ok(new)
         }
     }
 
@@ -320,15 +325,26 @@ mod tests {
                 (time_since_start(ctx).as_millis() as f32 % 5000.)
                 / 5000.
             );
-
+            let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
 
             let bpm = self.chart.bpm.seeker().jump(t);
+
+            if (t - t.quant_floor(bpm.quantum_from_division(4), bpm.offset)).abs() < 5. {
+                draw(ctx, &metronome, (mouse_pos,))?;
+            }
 
             Ok(())
         }
     }
 
     #[test]
-    fn chart() {
+    fn chart() -> GameResult {
+        let state = Test::new()?;
+        let cb = ggez::ContextBuilder::new("Automation test", "iiYese").window_mode(
+            ggez::conf::WindowMode::default().dimensions(state.dimensions.x, state.dimensions.y),
+        );
+        let (ctx, event_loop) = cb.build()?;
+        event::run(ctx, event_loop, state)
+
     }
 }
