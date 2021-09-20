@@ -199,19 +199,34 @@ where
 //
 //
 //
+pub enum Beat {
+    Division(f32),
+    Accent(f32),
+    Tick(f32),
+}
+
+impl Beat {
+    fn get(&self) -> f32 {
+        match self {
+            Beat::Division(beat) | Beat::Tick(beat) | Beat::Accent(beat) => *beat
+        }
+    }
+}
+
 //  offset is needed by user so having it in the type itself
 //  is more ergonomic than using Epoch
 #[derive(Clone, Copy)]
 pub struct Bpm {
-    offset: f32,
     bpm: f32,
-    signature: i32
+    offset: f32,
+    signature: (i32, i32)
 }
 
 
 impl Bpm {
-    fn quantum_from_division(&self, division: i32) -> f32 {
-        ((60. * 1000.) / self.bpm) / self.signature as f32
+    fn quantize(&self, offset: f32) -> Beat {
+        let snapped = offset.quant_floor(60000. / self.bpm, self.offset);
+        Beat::Tick(snapped)
     }
 }
 
@@ -220,7 +235,7 @@ impl Default for Bpm {
         Self {
             offset: 0.,
             bpm: 120.,
-            signature: 4
+            signature: (4, 4)
         }
     }
 }
@@ -301,7 +316,10 @@ mod tests {
                 chart: Chart::default()
             };
 
-            new.chart.bpm.push(Bpm::default());
+            new.chart.bpm.push(Bpm{
+                bpm: 90.,
+                .. Bpm::default()
+            });
 
             Ok(new)
         }
@@ -321,18 +339,17 @@ mod tests {
                 Color::new(1., 1., 1., 1.),
             )?;
 
-            let t = self.dimensions.x * (
-                (time_since_start(ctx).as_millis() as f32 % 5000.)
-                / 5000.
-            );
+            let t = time_since_start(ctx).as_millis() as f32;
             let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
 
             let bpm = self.chart.bpm.seeker().jump(t);
+            println!("got here");
 
-            if (t - t.quant_floor(bpm.quantum_from_division(4), bpm.offset)).abs() < 5. {
+            if (t - bpm.quantize(t).get()).abs() < 20. {
                 draw(ctx, &metronome, (mouse_pos,))?;
             }
 
+            present(ctx)?;
             Ok(())
         }
     }
@@ -340,7 +357,7 @@ mod tests {
     #[test]
     fn chart() -> GameResult {
         let state = Test::new()?;
-        let cb = ggez::ContextBuilder::new("Automation test", "iiYese").window_mode(
+        let cb = ggez::ContextBuilder::new("Chart test", "iiYese").window_mode(
             ggez::conf::WindowMode::default().dimensions(state.dimensions.x, state.dimensions.y),
         );
         let (ctx, event_loop) = cb.build()?;
