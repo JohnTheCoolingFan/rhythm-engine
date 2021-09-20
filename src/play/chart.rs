@@ -55,19 +55,28 @@ where
                 match self.response {
                     Response::Commence{ ref mut started } => *started = true,
                     Response::Switch{ ref mut switched, .. } => *switched = true,
-                    Response::Toggle{ ref mut switched, .. } => *switched = !*switched,
                     Response::Follow{ ref mut last_hit, .. } => *last_hit = Some(hit.obj_time),
                     _ => {}
                 }
             }
         }
+
+        if let Response::Toggle{ mut switched, .. } = self.response {
+            hits.iter()
+                .any(|hit_info| {
+                    if let Some(HitInfo { layer, .. }) = hit_info { self.layer == *layer }
+                    else { false }
+                })
+                .then(|| switched = !switched);
+        }
     }
 
-    //
-    //  [MISSING IMPL]
-    //
-    //pub fn translate(&self, t: f32) -> f32 {
-    //}
+    pub fn translate(&self, t: f32) -> f32 {
+        match self.response {
+            Response::Commence{ started } => if started { t } else { 0. },
+            Response::Follow{ excess, last_hit } =>
+        }
+    }
 }
 //
 //
