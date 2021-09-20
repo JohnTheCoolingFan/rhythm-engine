@@ -160,7 +160,7 @@ where
     fn method(&mut self, offset: f32) {
         let reserve: Vec<_> = self.meta
             .iter_mut()
-            .map(|(seeker, _)| seeker.method(offset))
+            .map(|(ref mut seeker, _)| seeker.method(offset))
             .collect();
 
         self.meta
@@ -199,27 +199,49 @@ where
 //
 //
 //
+//  offset is needed by user so having it in the type itself
+//  is more ergonomic than using Epoch
 #[derive(Clone, Copy)]
 pub struct Bpm {
+    offset: f32,
     bpm: f32,
     signature: i32
+}
+
+
+impl Bpm {
+    fn quantum_from_division(&self, division: i32) -> f32 {
+        60. * 1000. / self.bpm
+    }
 }
 
 impl Default for Bpm {
     fn default() -> Self {
         Self {
+            offset: 0.,
             bpm: 120.,
             signature: 4
         }
     }
 }
 
-type BpmSeeker<'a> = Seeker<&'a [Epoch<Bpm>], usize>;
+impl Quantify for Bpm {
+    type Quantifier = f32;
 
-impl<'a> Exhibit for BpmSeeker<'a> {
-    fn exhibit(&self, _: f32) -> Bpm {
+    fn quantify(&self) -> Self::Quantifier {
+        self.offset
+    }
+}
+
+impl<'a> SeekerTypes for Seeker<&'a [Bpm], usize> {
+    type Source = Bpm;
+    type Output = Bpm;
+}
+
+impl<'a> Exhibit for Seeker<&'a [Bpm], usize> {
+    fn exhibit(& self, _: f32) -> Self::Output {
         match self.current() {
-            Ok(bpm) | Err(bpm) => bpm.val
+            Ok(item) | Err(item) => *item
         }
     }
 }
@@ -228,16 +250,18 @@ impl<'a> Exhibit for BpmSeeker<'a> {
 //
 //
 //
-struct SongMetaData<T> {
+#[derive(Default)]
+pub struct SongMetaData {
     pub artists: String,
     pub title: String,
-    pub authors: TVec<String>,
-    //used in editor
-    pub extra: T, //Vec<Epoch<Bpm>>
+    pub authors: TVec<String>, 
 }
 
-pub struct Chart<T> {
+#[derive(Default)]
+pub struct Chart {
     pub audio_source: String,
+    pub approach_delta: f32,
+    pub bpm: Vec<Bpm>,
     //globals
     pub sense_muls: Vec<Epoch<f32>>,
     pub camera_pos: usize,
@@ -249,13 +273,62 @@ pub struct Chart<T> {
     pub scale: PlayList<TransformPoint<Scale>>,
     pub splines: PlayList<ComplexSpline>,
     pub colours: PlayList<DynColor>,
-    //meta data: only deserialized in editor and menu
-    pub meta: T,
+    //meta data
+    pub song_meta: SongMetaData,
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use ggez::{
+        event::{self, EventHandler, KeyCode, KeyMods, MouseButton},
+        graphics::*,
+        timer::time_since_start,
+        Context, GameResult, GameError
+    };
+    use glam::Vec2;
+
+    struct Test {
+        dimensions: Vec2,
+        chart: Chart
+    }
+
+    impl Test {
+        fn new() -> Self {
+            Self {
+                dimensions: Vec2::new(2000., 1000.),
+                chart: Chart::default()
+            }
+        }
+    }
+
+    impl EventHandler<GameError> for Test {
+        fn update(&mut self, _ctx: &mut Context) -> Result<(), GameError> {
+            Ok(())
+        }
+
+        fn draw(&mut self, ctx: &mut Context) -> Result<(), GameError> {
+            clear(ctx, Color::new(0., 0., 0., 1.));
+            let metronome = Mesh::new_rectangle(
+                ctx,
+                DrawMode::fill(),
+                Rect::new(-5., -5., 10., 10.),
+                Color::new(1., 1., 1., 1.),
+            )?;
+
+            let t = self.dimensions.x * (
+                (time_since_start(ctx).as_millis() as f32 % 5000.)
+                / 5000.
+            );
+
+
+            let bpm = self.chart.bpm.seeker().jump(t);
+
+            Ok(())
+        }
+    }
+
     #[test]
-    fn bpm() {
+    fn chart() {
     }
 }

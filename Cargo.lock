@@ -2070,6 +2070,7 @@ dependencies = [
  "ggez",
  "glam 0.13.1",
  "lyon_geom",
+ "serde",
  "tinyvec",
  "undo",
 ]
