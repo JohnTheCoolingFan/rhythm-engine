@@ -1,5 +1,6 @@
 use crate::{automation::*, utils::*};
 use duplicate::duplicate;
+use std::ops::Index;
 use super::*;
 
 pub enum Response {
@@ -32,8 +33,7 @@ pub struct HitInfo {
     layer: u8
 }
 
-pub struct SignalResponse<T>
-{
+pub struct SignalResponse<T> {
     response: Response,
     layer: u8,
     target: T
@@ -151,83 +151,72 @@ where
         //  Add output delegation
     }
 }
+
+impl<'a, T> Index<usize> for PlayListSeeker<'a, T>
+where
+    T: Seekable<'a>
+{
+    type Output = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.meta[index].1
+    }
+}
 //
 //
 //
 //
 //
 #[derive(Clone, Copy)]
-pub enum BPM {
-    Defined {
-        bpm: f32,
-        signature: i32
-    },
-    Undefined {
-        division_factor: f32,
-        signature: i32
-    },
+pub struct Bpm {
+    bpm: f32,
+    signature: i32
 }
 
-impl Default for BPM {
+impl Default for Bpm {
     fn default() -> Self {
-        Self::Undefined {
-            division_factor: 1.,
-            signature: 1
+        Self {
+            bpm: 120.,
+            signature: 4
         }
     }
 }
 
-type BPMSeeker<'a> = Seeker<&'a TVec<Epoch<BPM>>, usize>;
+type BpmSeeker<'a> = Seeker<&'a [Epoch<Bpm>], usize>;
 
-/*impl<'a> Exhibit for BPMSeeker<'a> {
-    fn exhibit(&self, offset: f32) -> BPM {
-        match (self.previous(), self.current()) {
-            match prev.val {
-                BPM::Defined{ .. } => prev.val,
-                BPM::Undefined{ division_factor, signature } => {
-                    let interval = curr.time - prev.time;
-                    BPM::Defined{
-                        bpm: (60. * 1000.) / (interval / division_factor),
-                        signature
-                    }
-                }
-            }
+impl<'a> Exhibit for BpmSeeker<'a> {
+    fn exhibit(&self, _: f32) -> Bpm {
+        match self.current() {
+            Ok(bpm) | Err(bpm) => bpm.val
         }
     }
-}*/
-//
-//
-//
-//
-//
-enum AudioSource {
-    File(String),
-    //For later
-    Stream {
-        url: String,
-        service: String
-    }
 }
-
-struct SongMetaData {
+//
+//
+//
+//
+//
+struct SongMetaData<T> {
     pub artists: String,
     pub title: String,
-    pub audio: AudioSource,
-    //hash or song ID? 
+    pub authors: TVec<String>,
+    //used in editor
+    pub extra: T, //Vec<Epoch<Bpm>>
 }
 
-pub struct Globals {
-    sense_muls: Channel<f32>,
-    bpms: Vec<Epoch<BPM>>,
-    camera_pos: Channel<ComplexSpline>,
-    camera_rot: Channel<TransformPoint<Rotation>>,
-    camera_scale: Channel<TransformPoint<Scale>>
-}
-
-pub struct LiveChart {
-    poly_entities: Vec<PolyEntity>,
-    rotations: PlayList<TransformPoint<Rotation>>,
-    scale: PlayList<TransformPoint<Scale>>,
-    splines: PlayList<ComplexSpline>,
-    colours: PlayList<DynColor>
+pub struct Chart<T> {
+    pub audio_source: String,
+    //globals
+    pub sense_muls: Vec<Epoch<f32>>,
+    pub camera_pos: usize,
+    pub camera_rot: usize,
+    pub camera_scale: usize,
+    //live data
+    pub poly_entities: Vec<PolyEntity>,
+    pub rotations: PlayList<TransformPoint<Rotation>>,
+    pub scale: PlayList<TransformPoint<Scale>>,
+    pub splines: PlayList<ComplexSpline>,
+    pub colours: PlayList<DynColor>,
+    //meta data: only deserialized in editor and menu
+    pub meta: T,
 }
