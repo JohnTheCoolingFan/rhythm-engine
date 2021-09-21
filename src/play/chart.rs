@@ -89,6 +89,86 @@ where
 //
 //
 //
+#[derive(Clone, Copy)]
+pub enum Beat {
+    Division(f32),
+    Accent(f32),
+    Tick(f32),
+}
+
+impl Beat {
+    fn get(&self) -> f32 {
+        match self {
+            Beat::Division(beat) | Beat::Tick(beat) | Beat::Accent(beat) => *beat
+        }
+    }
+}
+
+//  offset is needed by user so having it in the type itself
+//  is more ergonomic than using Epoch
+#[derive(Clone, Copy)]
+pub struct Bpm {
+    bpm: f32,
+    offset: f32,
+    divisions: (i32, i32)
+}
+
+
+impl Bpm {
+    fn snap(&self, offset: f32) -> Beat {
+        let (beat_divisions, measure_divisions) = self.divisions;
+        let beat_period = 60000. / self.bpm;
+        let division_period = beat_period / beat_divisions as f32;
+        let snapped = offset.quant_floor(division_period, self.offset);
+
+        let div_num = ((snapped - self.offset) / division_period).floor();
+        if (div_num / (measure_divisions as f32 * beat_divisions as f32)).fract() < f32::EPSILON {
+            Beat::Accent(snapped)
+        }
+        else if (div_num / measure_divisions as f32).fract() < f32::EPSILON {
+            Beat::Tick(snapped)
+        }
+        else {
+            Beat::Division(snapped)
+        }
+    }
+}
+
+impl Default for Bpm {
+    fn default() -> Self {
+        Self {
+            offset: 0.,
+            bpm: 120.,
+            divisions: (4, 4)
+        }
+    }
+}
+
+impl Quantify for Bpm {
+    type Quantifier = f32;
+
+    fn quantify(&self) -> Self::Quantifier {
+        self.offset
+    }
+}
+
+impl<'a> SeekerTypes for Seeker<&'a [Bpm], usize> {
+    type Source = Bpm;
+    type Output = Bpm;
+}
+
+impl<'a> Exhibit for Seeker<&'a [Bpm], usize> {
+    fn exhibit(&self, _: f32) -> Self::Output {
+        match (self.previous(), self.current()) {
+            (None, Ok(item) | Err(item)) | (Some(item), _) => *item,
+        }
+    }
+}
+//
+//
+//
+//
+//
 pub type Channel<T> = Vec<Epoch<SignalResponse<T>>>;
 pub type ChannelSeeker<'a, T> = Seeker<(), (
     Seeker<&'a [Epoch<SignalResponse<T>>], usize>, 
@@ -197,86 +277,6 @@ where
 //
 //
 //
-#[derive(Clone, Copy)]
-pub enum Beat {
-    Division(f32),
-    Accent(f32),
-    Tick(f32),
-}
-
-impl Beat {
-    fn get(&self) -> f32 {
-        match self {
-            Beat::Division(beat) | Beat::Tick(beat) | Beat::Accent(beat) => *beat
-        }
-    }
-}
-
-//  offset is needed by user so having it in the type itself
-//  is more ergonomic than using Epoch
-#[derive(Clone, Copy)]
-pub struct Bpm {
-    bpm: f32,
-    offset: f32,
-    divisions: (i32, i32)
-}
-
-
-impl Bpm {
-    fn snap(&self, offset: f32) -> Beat {
-        let (beat_divisions, measure_divisions) = self.divisions;
-        let beat_period = 60000. / self.bpm;
-        let division_period = beat_period / beat_divisions as f32;
-        let snapped = offset.quant_floor(division_period, self.offset);
-
-        let div_num = ((snapped - self.offset) / division_period).floor();
-        if (div_num / (measure_divisions as f32 * beat_divisions as f32)).fract() < f32::EPSILON {
-            Beat::Accent(snapped)
-        }
-        else if (div_num / measure_divisions as f32).fract() < f32::EPSILON {
-            Beat::Tick(snapped)
-        }
-        else {
-            Beat::Division(snapped)
-        }
-    }
-}
-
-impl Default for Bpm {
-    fn default() -> Self {
-        Self {
-            offset: 0.,
-            bpm: 120.,
-            divisions: (4, 4)
-        }
-    }
-}
-
-impl Quantify for Bpm {
-    type Quantifier = f32;
-
-    fn quantify(&self) -> Self::Quantifier {
-        self.offset
-    }
-}
-
-impl<'a> SeekerTypes for Seeker<&'a [Bpm], usize> {
-    type Source = Bpm;
-    type Output = Bpm;
-}
-
-impl<'a> Exhibit for Seeker<&'a [Bpm], usize> {
-    fn exhibit(&self, _: f32) -> Self::Output {
-        match self.current() {
-            Ok(item) | Err(item) => *item
-        }
-    }
-}
-//
-//
-//
-//
-//
 #[derive(Default)]
 pub struct SongMetaData {
     pub artists: String,
@@ -330,6 +330,18 @@ mod tests {
 
             new.chart.bpm.push(Bpm{
                 bpm: 90.,
+                .. Bpm::default()
+            });
+
+            new.chart.bpm.push(Bpm{
+                offset: 5000.,
+                bpm: 120.,
+                .. Bpm::default()
+            });
+
+            new.chart.bpm.push(Bpm{
+                offset: 10000.,
+                bpm: 200.,
                 .. Bpm::default()
             });
 
