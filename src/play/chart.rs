@@ -175,9 +175,7 @@ where
                                 else { index }
                             ]
                         },
-                        _ => {
-                            *output = reserve[index]
-                        }
+                        _ => *output = reserve[index]
                     }
                 }
             });
@@ -199,6 +197,7 @@ where
 //
 //
 //
+#[derive(Clone, Copy)]
 pub enum Beat {
     Division(f32),
     Accent(f32),
@@ -227,14 +226,14 @@ impl Bpm {
     fn snap(&self, offset: f32) -> Beat {
         let (beat_divisions, measure_divisions) = self.divisions;
         let beat_period = 60000. / self.bpm;
-        let accent_period = beat_period * measure_divisions as f32;
         let division_period = beat_period / beat_divisions as f32;
         let snapped = offset.quant_floor(division_period, self.offset);
 
-        if ((snapped / accent_period) - (snapped / accent_period).floor()).abs() < f32::EPSILON {
+        let div_num = ((snapped - self.offset) / division_period).floor();
+        if (div_num / (measure_divisions as f32 * beat_divisions as f32)).fract() < f32::EPSILON {
             Beat::Accent(snapped)
         }
-        else if ((snapped / beat_period) - (snapped / beat_period).floor()).abs() < f32::EPSILON {
+        else if (div_num / measure_divisions as f32).fract() < f32::EPSILON {
             Beat::Tick(snapped)
         }
         else {
@@ -330,7 +329,7 @@ mod tests {
             };
 
             new.chart.bpm.push(Bpm{
-                bpm: 80.,
+                bpm: 90.,
                 .. Bpm::default()
             });
 
@@ -344,44 +343,23 @@ mod tests {
         }
 
         fn draw(&mut self, ctx: &mut Context) -> Result<(), GameError> {
-            clear(ctx, Color::new(0., 0., 0., 1.));
-            let white_rect = Mesh::new_rectangle(
-                ctx,
-                DrawMode::fill(),
-                Rect::new(-10., -10., 20., 20.),
-                Color::new(1., 1., 1., 1.),
-            )?;
-
-            let red_rect = Mesh::new_rectangle(
-                ctx,
-                DrawMode::fill(),
-                Rect::new(-10., -10., 20., 20.),
-                Color::new(1., 0., 0., 1.),
-            )?;
-
-            let blue_rect = Mesh::new_rectangle(
-                ctx,
-                DrawMode::fill(),
-                Rect::new(-10., -10., 20., 20.),
-                Color::new(0., 0., 1., 1.),
-            )?;
-
-
             let t = time_since_start(ctx).as_millis() as f32;
-            let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
-
+            //let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
             let timing = self.chart.bpm.seeker().jump(t).snap(t);
 
-            if (t - timing.get()).abs() < 20. {
-                draw(
-                    ctx,
+            clear(ctx, Color::BLACK);
+            let t_line = MeshBuilder::new()
+                .polyline(
+                    DrawMode::Stroke(StrokeOptions::DEFAULT),
+                    &[Vec2::new(0., 0.), Vec2::new(0., self.dimensions.y)],
                     match timing {
-                        Beat::Accent(_) => &red_rect,
-                        Beat::Tick(_) => &blue_rect,
-                        Beat::Division(_) => &white_rect,
+                        Beat::Accent(_) => Color::RED,
+                        Beat::Tick(_) => Color::CYAN,
+                        Beat::Division(_) => Color::new(0.5, 0.5, 0.5, 1.)
                     },
-                    (mouse_pos,))?;
-            }
+                )?
+                .build(ctx)?;
+            draw(ctx, &t_line, (Vec2::new((timing.get() / 8.) % self.dimensions.x, 0.0),))?;
 
             present(ctx)?;
             Ok(())

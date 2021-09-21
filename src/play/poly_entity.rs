@@ -34,7 +34,7 @@ pub struct HitKeys {
     phat: bool,
 }
 
-pub enum Beat {
+pub enum Hit {
     //0. <= pre <= 1.
     //pre + attack = activation time
     //pre + post = release time
@@ -84,7 +84,7 @@ pub struct Properties {
     pub scale: Vec<Controller<Scale>>,
     pub color: Controller<Color>,
     pub bloom: Controller<f32>,
-    pub beats: Vec<Beat>,
+    pub hits: Vec<Hit>,
 }
 
 pub struct PolyEntity {
@@ -123,7 +123,7 @@ impl PolyEntity {
                     scale: vec![],
                     color: Controller::Static(Color::WHITE),
                     bloom: Controller::Static(0.),
-                    beats: vec![]
+                    hits: vec![]
                 }
             })
         }
