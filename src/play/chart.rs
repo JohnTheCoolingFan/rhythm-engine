@@ -127,15 +127,19 @@ pub struct Bpm {
 impl Bpm {
     fn snap(&self, offset: f32) -> Beat {
         let (beat_divisions, measure_divisions) = self.divisions;
-        let beat_period = 60000. / self.bpm;
-        let division_period = beat_period / beat_divisions as f32;
+        let tick_period = 60000. / self.bpm;
+        let division_period = tick_period / beat_divisions as f32;
         let snapped = offset.quant_floor(division_period, self.offset);
 
-        let div_num = ((snapped - self.offset) / division_period).floor();
-        if (div_num / (measure_divisions as f32 * beat_divisions as f32)).abs().fract() < f32::EPSILON {
+        let t = offset - self.offset;
+        let measures = (t / (measure_divisions as f32 * tick_period)).floor();
+        let ticks = (t / tick_period).floor();
+        let divisions = (t / division_period).floor();
+
+        if divisions <= measures * measure_divisions as f32 * beat_divisions as f32 {
             Beat::Accent(snapped)
         }
-        else if (div_num / measure_divisions as f32).abs().fract() < f32::EPSILON {
+        else if divisions <= ticks * beat_divisions as f32 {
             Beat::Tick(snapped)
         }
         else {
@@ -367,7 +371,7 @@ mod tests {
             };
 
             new.chart.bpm.push(Bpm{
-                bpm: 320.,
+                bpm: 212.,
                 .. Bpm::default()
             });
 
@@ -444,11 +448,13 @@ mod tests {
                     match timing {
                         Beat::Accent(_) => Color::RED,
                         Beat::Tick(_) => Color::CYAN,
-                        Beat::Division(_) => Color::new(0.5, 0.5, 0.5, 0.2)
+                        Beat::Division(_) => Color::new(0.2, 0.2, 0.2, 0.2)
                     },
                 )?
                 .build(ctx)?;
             draw(ctx, &t_line, (Vec2::new((timing.get() / 8.) % self.dimensions.x, 0.0),))?;
+
+
 
             present(ctx)?;
             Ok(())
