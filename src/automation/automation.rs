@@ -77,6 +77,7 @@ where
 //
 //
 //
+#[derive(Clone)]
 pub struct Automation<T>
 where
     T: Default + BoundLerp + Copy

@@ -6,22 +6,23 @@ use super::*;
 pub enum Response {
     Ignore,
     Commence{
-        started: bool
-    },
+        started: bool           //stays at 0 state until hit, from which it will commece
+    },                          //from the current time
     Switch {
-        delegate: usize,
-        switched: bool
+        delegate: usize,        //switches to a different automation permenantly with a start
+        switched: bool          //from the current time
     },
     Toggle {
-        delegate: usize,
-        switched: bool
+        delegate: usize,        //switches to a different automation but will switch back to the original 
+        switched: bool          //automation on another hit. this can be repeated indefinetly
     },
     Follow {
-        excess: f32,
-        last_hit: Option<f32>,
+        excess: f32,            //will stay at 0 state with no hit, once hit it will play the automation
+        last_hit: Option<f32>,  //from the hit time to hit time + excess. 
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct HitInfo {
     //  
     //  [CLARIFICATION]
@@ -43,6 +44,15 @@ impl<'a, T> SignalResponse<T>
 where
     T: Seekable<'a>
 {
+
+    pub fn new(target: T, layer: u8, response: Response) -> Self {
+        Self {
+            target,
+            layer,
+            response
+        }
+    }
+
     //  
     //  [CLARIFICATION]
     //  
@@ -122,10 +132,10 @@ impl Bpm {
         let snapped = offset.quant_floor(division_period, self.offset);
 
         let div_num = ((snapped - self.offset) / division_period).floor();
-        if (div_num / (measure_divisions as f32 * beat_divisions as f32)).fract() < f32::EPSILON {
+        if (div_num / (measure_divisions as f32 * beat_divisions as f32)).abs().fract() < f32::EPSILON {
             Beat::Accent(snapped)
         }
-        else if (div_num / measure_divisions as f32).fract() < f32::EPSILON {
+        else if (div_num / measure_divisions as f32).abs().fract() < f32::EPSILON {
             Beat::Tick(snapped)
         }
         else {
@@ -304,6 +314,32 @@ pub struct Chart {
     pub song_meta: SongMetaData,
 }
 
+impl Chart
+{
+    fn apply_hits_playlist<'a, T>(playlist: &mut PlayList<T>, hits: &[Option<HitInfo>; 4]) 
+    where
+        T: Seekable<'a>
+    {
+        playlist.iter_mut()
+            .for_each(|channel| channel.iter_mut()
+                .for_each(|item| item.val.respond(hits))
+            );
+    }
+
+    pub fn apply_hits(&mut self, hits: &mut [Option<HitInfo>; 4]) {
+        Self::apply_hits_playlist(&mut self.rotations, hits);
+        Self::apply_hits_playlist(&mut self.scale, hits);
+        Self::apply_hits_playlist(&mut self.splines, hits);
+        Self::apply_hits_playlist(&mut self.colours, hits);
+
+        *hits = [None; 4];
+    }
+}
+//
+//
+//
+//
+//
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,7 +353,8 @@ mod tests {
 
     struct Test {
         dimensions: Vec2,
-        chart: Chart
+        chart: Chart,
+        hits: [Option<HitInfo>; 4]
     }
 
     impl Test {
@@ -325,15 +362,16 @@ mod tests {
             let dimensions = Vec2::new(2000., 1000.);
             let mut new = Self {
                 dimensions,
-                chart: Chart::default()
+                chart: Chart::default(),
+                hits: [None; 4]
             };
 
             new.chart.bpm.push(Bpm{
-                bpm: 90.,
+                bpm: 320.,
                 .. Bpm::default()
             });
 
-            new.chart.bpm.push(Bpm{
+            /*new.chart.bpm.push(Bpm{
                 offset: 5000.,
                 bpm: 120.,
                 .. Bpm::default()
@@ -343,7 +381,44 @@ mod tests {
                 offset: 10000.,
                 bpm: 200.,
                 .. Bpm::default()
-            });
+            });*/
+
+            let mut auto1 = Automation::<Scale>::new(Scale(1.), Scale(3.), dimensions.x);
+            let mut auto2 = auto1.clone();
+
+            auto1.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 1.)));
+            auto2.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 0.5)));
+
+            new.chart.scale.push(vec![
+                Epoch {
+                    offset: 0.,
+                    val: SignalResponse::new(
+                        TransformPoint::<Scale> {
+                            automation: auto1,
+                            point: None,
+                        },
+                        0,
+                        Response::Commence {
+                            started: false
+                        }
+                    )
+                }
+            ]);
+
+            new.chart.scale.push(vec![
+                Epoch {
+                    offset: 0.,
+                    val: SignalResponse::new(
+                        TransformPoint::<Scale> {
+                            automation: auto2,
+                            point: None,
+                        },
+                        0,
+                        Response::Ignore
+                    )
+                }
+            ]);
+
 
             Ok(new)
         }
@@ -351,6 +426,8 @@ mod tests {
 
     impl EventHandler<GameError> for Test {
         fn update(&mut self, _ctx: &mut Context) -> Result<(), GameError> {
+            self.chart.apply_hits(&mut self.hits);
+
             Ok(())
         }
 
@@ -367,7 +444,7 @@ mod tests {
                     match timing {
                         Beat::Accent(_) => Color::RED,
                         Beat::Tick(_) => Color::CYAN,
-                        Beat::Division(_) => Color::new(0.5, 0.5, 0.5, 1.)
+                        Beat::Division(_) => Color::new(0.5, 0.5, 0.5, 0.2)
                     },
                 )?
                 .build(ctx)?;
