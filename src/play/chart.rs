@@ -3,6 +3,7 @@ use duplicate::duplicate;
 use std::ops::Index;
 use super::*;
 
+#[derive(Clone, Copy)]
 pub enum Response {
     Ignore,
     Commence{
@@ -183,6 +184,23 @@ impl<'a> Exhibit for Seeker<&'a [Bpm], usize> {
 //
 //
 //
+impl<'a, T> SeekerTypes for Seeker<&'a [Epoch<SignalResponse<T>>], usize>
+where
+    T: Seekable<'a>
+{
+    type Source = Epoch<SignalResponse<T>>;
+    type Output = usize;
+}
+
+impl<'a, T> Exhibit for Seeker<&'a [Epoch<SignalResponse<T>>], usize>
+where
+    T: Seekable<'a>
+{
+    fn exhibit(&self, _: f32) -> Self::Output {
+        self.meta
+    }
+}
+
 pub type Channel<T> = Vec<Epoch<SignalResponse<T>>>;
 pub type ChannelSeeker<'a, T> = Seeker<(), (
     Seeker<&'a [Epoch<SignalResponse<T>>], usize>, 
@@ -201,7 +219,7 @@ impl<'a, T> Seek for ChannelSeeker<'a, T>
 where
     T: Seekable<'a>,
     <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Self::Source>,
-    Seeker<&'a [Epoch<SignalResponse<T>>], usize>: SeekerTypes<Source = Self::Source> + Exhibit + Seek
+    Seeker<&'a [Epoch<SignalResponse<T>>], usize>: SeekerTypes<Source = Self::Source> + Seek
 {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> Self::Output {
@@ -225,6 +243,23 @@ where
     }
 }
 
+impl<'a, T> Seekable<'a> for Channel<T>
+where
+    T: Seekable<'a> + 'a,
+    <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Epoch<SignalResponse<T>>>
+{
+    type Seeker = ChannelSeeker<'a, T>;
+    fn seeker(&'a self) -> Self::Seeker {
+        Self::Seeker {
+            data: (),
+            meta: (
+                self.as_slice().seeker(),
+                self[self.as_slice().seeker().seek(0.)].val.target.seeker()
+            )
+        }
+    }
+}
+
 pub type PlayList<T> = Vec<Channel<T>>;
 pub type PlayListSeeker<'a, T> = Seeker<(),Vec<(
     ChannelSeeker<'a, T>,
@@ -244,7 +279,7 @@ where
     T: Seekable<'a>,
     <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output: Copy,
     <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Self::Source>,
-    ChannelSeeker<'a, T>:  Exhibit + Seek + SeekerTypes<
+    ChannelSeeker<'a, T>:  Seek + SeekerTypes<
         Source = Self::Source,
         Output = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output
     >

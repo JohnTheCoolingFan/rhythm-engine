@@ -90,7 +90,7 @@ where
 impl<'a, T> Seekable<'a> for [T]
 where
     T: Quantify + 'a,
-    Seeker<&'a [T], usize>: Exhibit<Source = T>
+    Seeker<&'a [T], usize>: Seek<Source = T>
 {
     type Seeker = Seeker<&'a [T], usize>;
     
