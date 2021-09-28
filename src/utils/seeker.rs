@@ -139,8 +139,7 @@ where
     T: Quantify,
     Self: Exhibit<Source = T>
 {
-    fn seek(&mut self, offset: Quantifier<'a, Self>) -> Output<'a, Self>
-    {
+    fn seek(&mut self, offset: Quantifier<'a, Self>) -> Output<'a, Self> {
         while self.meta < self.data.len() {
             if offset < self.data[self.meta].quantify() {
                 break;

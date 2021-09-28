@@ -25,7 +25,7 @@ duplicate_inline! {
     }
 
     impl Default for T {
-        fn default() -> Self {
+        fn default() -> Self { 
             Self(0.)
         }
     }
@@ -75,6 +75,7 @@ where
 //
 //
 //
+#[derive(Clone, Copy)]
 pub enum Transform<T>
 where
     Mat3: From<CrudeTransform<T>>,

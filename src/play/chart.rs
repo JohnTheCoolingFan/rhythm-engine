@@ -1,6 +1,6 @@
 use crate::{automation::*, utils::*};
 use duplicate::duplicate;
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -184,18 +184,12 @@ impl<'a> Exhibit for Seeker<&'a [Bpm], usize> {
 //
 //
 //
-impl<'a, T> SeekerTypes for Seeker<&'a [Epoch<SignalResponse<T>>], usize>
-where
-    T: Seekable<'a>
-{
+impl<'a, T> SeekerTypes for Seeker<&'a [Epoch<SignalResponse<T>>], usize> {
     type Source = Epoch<SignalResponse<T>>;
-    type Output = usize;
+    type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
 }
 
-impl<'a, T> Exhibit for Seeker<&'a [Epoch<SignalResponse<T>>], usize>
-where
-    T: Seekable<'a>
-{
+impl<'a, T> Exhibit for Seeker<&'a [Epoch<SignalResponse<T>>], usize> {
     fn exhibit(&self, _: f32) -> Self::Output {
         self.meta
     }
@@ -203,13 +197,16 @@ where
 
 pub type Channel<T> = Vec<Epoch<SignalResponse<T>>>;
 pub type ChannelSeeker<'a, T> = Seeker<(), (
-    Seeker<&'a [Epoch<SignalResponse<T>>], usize>, 
+    Seeker<&'a [Epoch<SignalResponse<T>>], usize>,
     <T as Seekable<'a>>::Seeker
 )>;
 
 impl<'a, T> SeekerTypes for ChannelSeeker<'a, T>
 where
-    T: Seekable<'a>
+    T: Seekable<'a>,
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
+        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
+    >
 {
     type Source = Epoch<SignalResponse<T>>;
     type Output = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output;
@@ -218,8 +215,9 @@ where
 impl<'a, T> Seek for ChannelSeeker<'a, T> 
 where
     T: Seekable<'a>,
-    <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Self::Source>,
-    Seeker<&'a [Epoch<SignalResponse<T>>], usize>: SeekerTypes<Source = Self::Source> + Seek
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
+        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
+    >
 {
     #[duplicate(method; [seek]; [jump])]
     fn method(&mut self, offset: f32) -> Self::Output {
@@ -246,7 +244,9 @@ where
 impl<'a, T> Seekable<'a> for Channel<T>
 where
     T: Seekable<'a> + 'a,
-    <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Epoch<SignalResponse<T>>>
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
+        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
+    >
 {
     type Seeker = ChannelSeeker<'a, T>;
     fn seeker(&'a self) -> Self::Seeker {
@@ -259,7 +259,11 @@ where
         }
     }
 }
-
+//
+//
+//
+//
+//
 pub type PlayList<T> = Vec<Channel<T>>;
 pub type PlayListSeeker<'a, T> = Seeker<(),Vec<(
     ChannelSeeker<'a, T>,
@@ -269,8 +273,12 @@ pub type PlayListSeeker<'a, T> = Seeker<(),Vec<(
 impl<'a, T> SeekerTypes for PlayListSeeker<'a, T>
 where
     T: Seekable<'a>,
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
+        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
+    >
+
 {
-    type Source = Epoch<SignalResponse<T>>;
+    type Source = <ChannelSeeker<'a, T> as SeekerTypes>::Source;
     type Output = ();
 }
 
@@ -278,11 +286,9 @@ impl<'a, T> Seek for PlayListSeeker<'a, T>
 where
     T: Seekable<'a>,
     <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output: Copy,
-    <T as Seekable<'a>>::Seeker: SeekerTypes<Source = Self::Source>,
-    ChannelSeeker<'a, T>:  Seek + SeekerTypes<
-        Source = Self::Source,
-        Output = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output
-    >
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
+        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
+    >,
 {
 
     #[duplicate(method; [seek]; [jump])]
@@ -311,6 +317,27 @@ where
     }
 }
 
+impl<'a, T> Seekable<'a> for PlayList<T>
+where
+    T: Seekable<'a> + 'a,
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output: Copy,
+    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
+        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
+    >
+{
+    type Seeker = PlayListSeeker<'a, T>;
+
+    fn seeker(&'a self) -> Self::Seeker {
+        Self::Seeker {
+            data: (),
+            meta: self.iter()
+                .map(|channel| (channel.seeker(), channel.seeker().seek(0.)))
+                .collect()
+        }
+    }
+
+}
+
 impl<'a, T> Index<usize> for PlayListSeeker<'a, T>
 where
     T: Seekable<'a>
@@ -321,6 +348,16 @@ where
         &self.meta[index].1
     }
 }
+
+impl<'a, T> IndexMut<usize> for PlayListSeeker<'a, T>
+where
+    T: Seekable<'a>
+{
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.meta[index].1
+    }
+}
+
 //
 //
 //
@@ -489,8 +526,34 @@ mod tests {
                 .build(ctx)?;
             draw(ctx, &t_line, (Vec2::new((timing.get() / 8.) % self.dimensions.x, 0.0),))?;
 
+            let center = Vec2::new(0.5 * self.dimensions.x, 0.5 * self.dimensions.y);
 
+            let rect =[
+                center + Vec2::new(-20., 20.), center + Vec2::new(20., 20.),
+                center + Vec2::new(20., -20.), center + Vec2::new(-20., -20.) 
+            ];
 
+            let mut seeker = self.chart.scale.seeker();
+            seeker.jump(t);
+            let s = seeker[0].process(&center);
+
+            let scaled: Vec<Vec2> = rect.iter().map(
+                |p| -> Vec2 {
+                    let v3 = *s * p.extend(1.);
+                    (v3.x, v3.y).into()
+                }
+            ).collect();
+
+            let r1 = MeshBuilder::new()
+                .polygon(
+                    DrawMode::Fill(FillOptions::DEFAULT),
+                    scaled.as_slice(),
+                    Color::CYAN
+                )?
+                .build(ctx)?;
+
+            draw(ctx, &r1, (Vec2::new(0., 0.),))?;
+            
             present(ctx)?;
             Ok(())
         }
