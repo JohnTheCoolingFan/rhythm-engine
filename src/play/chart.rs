@@ -46,7 +46,7 @@ where
     T: Seekable<'a>
 {
 
-    pub fn new(target: T, layer: u8, response: Response) -> Self {
+    pub fn new(layer: u8, target: T, response: Response) -> Self {
         Self {
             target,
             layer,
@@ -223,9 +223,8 @@ where
     fn method(&mut self, offset: f32) -> Self::Output {
         let Seeker{ meta: (outer, inner), ..} = self;
         let old = outer.meta;
-        outer.method(offset); 
         //need to manually index cause lifetimes
-        match outer.meta { 
+        match outer.method(offset) { 
             oob if outer.data.len() <= oob => {
                 outer.data[FromEnd(0)].val.target.seeker().jump(
                     outer.data[FromEnd(0)].val.translate(offset - outer.data[FromEnd(0)].offset)
@@ -254,7 +253,7 @@ where
             data: (),
             meta: (
                 self.as_slice().seeker(),
-                self[self.as_slice().seeker().seek(0.)].val.target.seeker()
+                self[0].val.target.seeker()
             )
         }
     }
@@ -459,21 +458,21 @@ mod tests {
                 .. Bpm::default()
             });*/
 
-            let mut auto1 = Automation::<Scale>::new(Scale(1.), Scale(3.), dimensions.x);
+            let mut auto1 = Automation::<Scale>::new(Scale(1.), Scale(3.), 1.);
             let mut auto2 = auto1.clone();
 
-            auto1.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 1.)));
-            auto2.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 0.5)));
+            auto1.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 0.5)));
+            auto2.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 1.)));
 
             new.chart.scale.push(vec![
                 Epoch {
                     offset: 0.,
                     val: SignalResponse::new(
+                        0,
                         TransformPoint::<Scale> {
                             automation: auto1,
                             point: None,
                         },
-                        0,
                         Response::Commence {
                             started: false
                         }
@@ -485,16 +484,15 @@ mod tests {
                 Epoch {
                     offset: 0.,
                     val: SignalResponse::new(
+                        0,
                         TransformPoint::<Scale> {
                             automation: auto2,
                             point: None,
                         },
-                        0,
                         Response::Ignore
                     )
                 }
             ]);
-
 
             Ok(new)
         }
@@ -510,7 +508,7 @@ mod tests {
         fn draw(&mut self, ctx: &mut Context) -> Result<(), GameError> {
             let t = time_since_start(ctx).as_millis() as f32;
             //let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
-            let timing = self.chart.bpm.seeker().jump(t).snap(t);
+            /*let timing = self.chart.bpm.seeker().jump(t).snap(t);
 
             clear(ctx, Color::BLACK);
             let t_line = MeshBuilder::new()
@@ -524,7 +522,7 @@ mod tests {
                     },
                 )?
                 .build(ctx)?;
-            draw(ctx, &t_line, (Vec2::new((timing.get() / 8.) % self.dimensions.x, 0.0),))?;
+            draw(ctx, &t_line, (Vec2::new((timing.get() / 8.) % self.dimensions.x, 0.0),))?;*/
 
             let center = Vec2::new(0.5 * self.dimensions.x, 0.5 * self.dimensions.y);
 
@@ -534,8 +532,9 @@ mod tests {
             ];
 
             let mut seeker = self.chart.scale.seeker();
-            seeker.jump(t);
-            let s = seeker[0].process(&center);
+            seeker.jump(((t % 5000.) / 5000.) * self.dimensions.x);
+            let mut channel_out = seeker[1];
+            let s = channel_out.process(&center);
 
             let scaled: Vec<Vec2> = rect.iter().map(
                 |p| -> Vec2 {

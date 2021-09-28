@@ -14,6 +14,17 @@ type SplineSeeker<'a> = Seeker<&'a [Epoch<Segment>], usize>;
 //  along the spline at the end of the segment. so the previos offset must be subtracted
 //  from the input offset instead of the current. the first segment in a spline is
 //  also the origin so a '0' case is needed for this
+impl<'a> SeekerTypes for SplineSeeker<'a> {
+    type Source = Epoch<Segment>;
+    type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
+}
+
+impl<'a> Exhibit for SplineSeeker<'a> {
+    fn exhibit(&self, _: f32) -> Self::Output {
+        self.meta
+    }
+}
+
 impl<'a> SplineSeeker<'a> {
     pub fn point_from_s(&self, virtual_s: f32) -> Vec2 {
         match self.data.seeker().jump(virtual_s) {
@@ -34,16 +45,6 @@ impl<'a> SplineSeeker<'a> {
     }
 }
 
-impl<'a> SeekerTypes for SplineSeeker<'a> {
-    type Source = Epoch<Segment>;
-    type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
-}
-
-impl<'a> Exhibit for SplineSeeker<'a> {
-    fn exhibit(&self, _: f32) -> Self::Output {
-        self.meta
-    }
-}
 //
 //
 //

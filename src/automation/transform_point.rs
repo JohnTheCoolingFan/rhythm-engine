@@ -8,7 +8,7 @@ use std::default::Default;
 duplicate_inline! {
     [T; [Rotation]; [Scale]] //more stuff like shear, pinch, explode later
     
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Debug)]
     pub struct T(pub f32);
     
     impl Deref for T {
@@ -75,7 +75,7 @@ where
 //
 //
 //
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Transform<T>
 where
     Mat3: From<CrudeTransform<T>>,
@@ -219,13 +219,15 @@ mod tests {
     impl Test {
         fn new() -> GameResult<Self> {
             let dimensions = Vec2::new(2000., 1000.);
+            let mut auto = Automation::<Scale>::new(Scale(1.), Scale(3.), 1.);
+            auto.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 1.)));
             Ok(Self{
                 rotation: TransformPoint::<Rotation>{
                     automation: Automation::<Rotation>::new(Rotation(0.), Rotation(360.), dimensions.x),
                     point: Some(Vec2::new(dimensions.x / 3., dimensions.y / 2.))
                 },
                 scale: TransformPoint::<Scale>{
-                    automation: Automation::<Scale>::new(Scale(1.), Scale(3.), dimensions.x),
+                    automation: auto,
                     point: Some(Vec2::new(dimensions.x * (2. / 3.), dimensions.y / 2.))
                 },
                 dimensions,
