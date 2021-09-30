@@ -3,7 +3,7 @@ use duplicate::duplicate;
 use std::ops::{Index, IndexMut};
 use super::*;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Response {
     Ignore,
     Commence{
@@ -72,13 +72,14 @@ where
             }
         }
 
-        if let Response::Toggle{ mut switched, .. } = self.response {
+        let selflayer = self.layer;
+        if let Response::Toggle{ ref mut switched, .. } = self.response {
             hits.iter()
                 .any(|hit_info| {
-                    if let Some(HitInfo { layer, .. }) = hit_info { self.layer == *layer }
+                    if let Some(HitInfo { layer, .. }) = hit_info { selflayer == *layer }
                     else { false }
                 })
-                .then(|| switched = !switched);
+                .then(|| *switched = !*switched);
         }
     }
 
@@ -87,7 +88,7 @@ where
             Response::Commence{ started } => if started { t } else { 0. },
             Response::Follow{ excess, last_hit } => {
                 if let Some(hit) = last_hit {
-                    t.clamp(0., hit + excess)
+                    t.clamp(hit, hit + excess)
                 }
                 else { 0. }
             }
@@ -429,7 +430,8 @@ mod tests {
     struct Test {
         dimensions: Vec2,
         chart: Chart,
-        hits: [Option<HitInfo>; 4]
+        hits: [Option<HitInfo>; 4],
+        t: f32
     }
 
     impl Test {
@@ -438,7 +440,8 @@ mod tests {
             let mut new = Self {
                 dimensions,
                 chart: Chart::default(),
-                hits: [None; 4]
+                hits: [None; 4],
+                t: 0.
             };
 
             new.chart.bpm.push(Bpm{
@@ -458,7 +461,7 @@ mod tests {
                 .. Bpm::default()
             });*/
 
-            let mut auto1 = Automation::<Scale>::new(Scale(1.), Scale(5.), 1.);
+            let mut auto1 = Automation::<Scale>::new(Scale(1.), Scale(20.), 1.);
             let mut auto2 = auto1.clone();
 
             auto1.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 0.5)));
@@ -473,8 +476,9 @@ mod tests {
                             automation: auto1,
                             point: None,
                         },
-                        Response::Commence {
-                            started: false
+                        Response::Follow {
+                            excess: 50.,
+                            last_hit: None
                         }
                     )
                 }
@@ -499,14 +503,14 @@ mod tests {
     }
 
     impl EventHandler<GameError> for Test {
-        fn update(&mut self, _ctx: &mut Context) -> Result<(), GameError> {
+        fn update(&mut self, ctx: &mut Context) -> Result<(), GameError> {
+            self.t = ((time_since_start(ctx).as_millis() as f32 % 5000.) / 5000.) * self.dimensions.x;
             self.chart.apply_hits(&mut self.hits);
 
             Ok(())
         }
 
         fn draw(&mut self, ctx: &mut Context) -> Result<(), GameError> {
-            let t = time_since_start(ctx).as_millis() as f32;
             clear(ctx, Color::BLACK);
             //let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
             /*let timing = self.chart.bpm.seeker().jump(t).snap(t);
@@ -532,7 +536,7 @@ mod tests {
             ];
 
             let mut seeker = self.chart.scale.seeker();
-            seeker.jump(((t % 5000.) / 5000.) * self.dimensions.x);
+            seeker.jump(self.t);
             let mut channel_out = seeker[0];
             let s = channel_out.process(&center);
 
@@ -560,7 +564,7 @@ mod tests {
         fn key_down_event(&mut self, _ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
             if key == KeyCode::Space {
                 self.hits = [
-                    Some(HitInfo{ obj_time: 0., layer: 0 }),
+                    Some(HitInfo{ obj_time: self.t, layer: 0 }),
                     None,
                     None,
                     None
