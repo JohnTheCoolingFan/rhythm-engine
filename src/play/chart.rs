@@ -458,7 +458,7 @@ mod tests {
                 .. Bpm::default()
             });*/
 
-            let mut auto1 = Automation::<Scale>::new(Scale(1.), Scale(3.), 1.);
+            let mut auto1 = Automation::<Scale>::new(Scale(1.), Scale(5.), 1.);
             let mut auto2 = auto1.clone();
 
             auto1.insert_anchor(Anchor::new(Vec2::new(dimensions.x, 0.5)));
@@ -507,10 +507,10 @@ mod tests {
 
         fn draw(&mut self, ctx: &mut Context) -> Result<(), GameError> {
             let t = time_since_start(ctx).as_millis() as f32;
+            clear(ctx, Color::BLACK);
             //let mouse_pos: Vec2 = ggez::input::mouse::position(ctx).into();
             /*let timing = self.chart.bpm.seeker().jump(t).snap(t);
 
-            clear(ctx, Color::BLACK);
             let t_line = MeshBuilder::new()
                 .polyline(
                     DrawMode::Stroke(StrokeOptions::DEFAULT),
@@ -533,7 +533,7 @@ mod tests {
 
             let mut seeker = self.chart.scale.seeker();
             seeker.jump(((t % 5000.) / 5000.) * self.dimensions.x);
-            let mut channel_out = seeker[1];
+            let mut channel_out = seeker[0];
             let s = channel_out.process(&center);
 
             let scaled: Vec<Vec2> = rect.iter().map(
@@ -556,6 +556,17 @@ mod tests {
             present(ctx)?;
             Ok(())
         }
+
+        fn key_down_event(&mut self, _ctx: &mut Context, key: KeyCode, _mods: KeyMods, _: bool) {
+            if key == KeyCode::Space {
+                self.hits = [
+                    Some(HitInfo{ obj_time: 0., layer: 0 }),
+                    None,
+                    None,
+                    None
+                ];
+            }
+        }
     }
 
     #[test]
@@ -566,6 +577,5 @@ mod tests {
         );
         let (ctx, event_loop) = cb.build()?;
         event::run(ctx, event_loop, state)
-
     }
 }
