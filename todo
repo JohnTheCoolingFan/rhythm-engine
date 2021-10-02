@@ -12,6 +12,10 @@ Version 0.1 {
         ===Dyn Color
         ===Complex spline
         ===Transform Point
+        ===Playlist
+        ===Chart
+        ===Signal Response
+        ===BPM
 
         -Beat
             Hold:
@@ -21,18 +25,8 @@ Version 0.1 {
                 S0.contains(S1) || S1.contains(S0) == true
                 S0.contains(mouse) || S1.contains(mouse) == true
         -Poly Entity
-        -Playlist
-        -Chart
-        -Signal Response
-            Switch
-            Hold
-            Toggle
-            Follow
-                Lead
-                Curve
-
+        
         Play + sync audio
-        BPM(static, variable)
         Local center scale based preattack effects
     }
   

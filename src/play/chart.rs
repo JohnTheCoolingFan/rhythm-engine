@@ -1,5 +1,5 @@
 use crate::{automation::*, utils::*};
-use duplicate::duplicate;
+use duplicate::*;
 use std::ops::{Index, IndexMut};
 use super::*;
 
@@ -185,157 +185,153 @@ impl<'a> Exhibit for Seeker<&'a [Bpm], usize> {
 //
 //
 //
-impl<'a, T> SeekerTypes for Seeker<&'a [Epoch<SignalResponse<T>>], usize> {
-    type Source = Epoch<SignalResponse<T>>;
-    type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
-}
+//the trait alias work around doesn't seem to work for the lengthy constraint
+//and even with trait aliases I don't think that would work either so duplicate
+//with a single argument for a simple cut and paste
+duplicate_inline! {
+    [
+        EmbeddedSeeker;
 
-impl<'a, T> Exhibit for Seeker<&'a [Epoch<SignalResponse<T>>], usize> {
-    fn exhibit(&self, _: f32) -> Self::Output {
-        self.meta
+        [T: Seekable<'a>,
+        <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
+            Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
+        >,]
+    ]
+
+    impl<'a, T> SeekerTypes for Seeker<&'a [Epoch<SignalResponse<T>>], usize> {
+        type Source = Epoch<SignalResponse<T>>;
+        type Output = usize;    // Segment shouldn't be Copy and this avoids dealing with lifetimes
     }
-}
 
-pub type Channel<T> = Vec<Epoch<SignalResponse<T>>>;
-pub type ChannelSeeker<'a, T> = Seeker<(), (
-    Seeker<&'a [Epoch<SignalResponse<T>>], usize>,
-    <T as Seekable<'a>>::Seeker
-)>;
+    impl<'a, T> Exhibit for Seeker<&'a [Epoch<SignalResponse<T>>], usize> {
+        fn exhibit(&self, _: f32) -> Self::Output {
+            self.meta
+        }
+    }
 
-impl<'a, T> SeekerTypes for ChannelSeeker<'a, T>
-where
-    T: Seekable<'a>,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
-        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
-    >
-{
-    type Source = Epoch<SignalResponse<T>>;
-    type Output = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output;
-}
+    pub type Channel<T> = Vec<Epoch<SignalResponse<T>>>;
+    pub type ChannelSeeker<'a, T> = Seeker<(), (
+        Seeker<&'a [Epoch<SignalResponse<T>>], usize>,
+        <T as Seekable<'a>>::Seeker
+    )>;
 
-impl<'a, T> Seek for ChannelSeeker<'a, T> 
-where
-    T: Seekable<'a>,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
-        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
-    >
-{
-    #[duplicate(method; [seek]; [jump])]
-    fn method(&mut self, offset: f32) -> Self::Output {
-        let Seeker{ meta: (outer, inner), ..} = self;
-        let old = outer.meta;
-        //need to manually index cause lifetimes
-        match outer.method(offset) { 
-            oob if outer.data.len() <= oob => {
-                outer.data[FromEnd(0)].val.target.seeker().jump(
-                    outer.data[FromEnd(0)].val.translate(offset - outer.data[FromEnd(0)].offset)
-                )
-            },
-            index => {
-                if index != old {
-                    *inner = outer.data[index].val.target.seeker();
+    impl<'a, T> SeekerTypes for ChannelSeeker<'a, T>
+    where
+        EmbeddedSeeker
+    {
+        type Source = Epoch<SignalResponse<T>>;
+        type Output = <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output;
+    }
+
+    impl<'a, T> Seek for ChannelSeeker<'a, T> 
+    where
+        EmbeddedSeeker
+    {
+        #[duplicate(method; [seek]; [jump])]
+        fn method(&mut self, offset: f32) -> Self::Output {
+            let Seeker{ meta: (outer, inner), ..} = self;
+            let old = outer.meta;
+            //need to manually index cause lifetimes
+            match outer.method(offset) { 
+                oob if outer.data.len() <= oob => {
+                    outer.data[FromEnd(0)].val.target.seeker().jump(
+                        outer.data[FromEnd(0)].val.translate(offset - outer.data[FromEnd(0)].offset)
+                    )
+                },
+                index => {
+                    if index != old {
+                        *inner = outer.data[index].val.target.seeker();
+                    }
+                    inner.method(outer.data[index].val.translate(offset - outer.data[index].offset))
                 }
-                inner.method(outer.data[index].val.translate(offset - outer.data[index].offset))
             }
         }
     }
-}
 
-impl<'a, T> Seekable<'a> for Channel<T>
-where
-    T: Seekable<'a> + 'a,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
-        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
-    >
-{
-    type Seeker = ChannelSeeker<'a, T>;
-    fn seeker(&'a self) -> Self::Seeker {
-        Self::Seeker {
-            data: (),
-            meta: (
-                self.as_slice().seeker(),
-                self[0].val.target.seeker()
-            )
+    impl<'a, T> Seekable<'a> for Channel<T>
+    where
+        T: 'a,
+        EmbeddedSeeker
+    {
+        type Seeker = ChannelSeeker<'a, T>;
+        fn seeker(&'a self) -> Self::Seeker {
+            Self::Seeker {
+                data: (),
+                meta: (
+                    self.as_slice().seeker(),
+                    self[0].val.target.seeker()
+                )
+            }
         }
     }
-}
 //
 //
 //
 //
 //
-pub type PlayList<T> = Vec<Channel<T>>;
-pub type PlayListSeeker<'a, T> = Seeker<(),Vec<(
-    ChannelSeeker<'a, T>,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output
-)>>;
+    pub type PlayList<T> = Vec<Channel<T>>;
+    pub type PlayListSeeker<'a, T> = Seeker<(),Vec<(
+        ChannelSeeker<'a, T>,
+        <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output
+    )>>;
 
-impl<'a, T> SeekerTypes for PlayListSeeker<'a, T>
-where
-    T: Seekable<'a>,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
-        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
-    >
+    impl<'a, T> SeekerTypes for PlayListSeeker<'a, T>
+    where
+        EmbeddedSeeker
+    {
+        type Source = <ChannelSeeker<'a, T> as SeekerTypes>::Source;
+        type Output = ();
+    }
 
-{
-    type Source = <ChannelSeeker<'a, T> as SeekerTypes>::Source;
-    type Output = ();
-}
+    impl<'a, T> Seek for PlayListSeeker<'a, T>
+    where
+        <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output: Copy,
+        EmbeddedSeeker
+    {
 
-impl<'a, T> Seek for PlayListSeeker<'a, T>
-where
-    T: Seekable<'a>,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output: Copy,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
-        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
-    >,
-{
+        #[duplicate(method; [seek]; [jump])]
+        fn method(&mut self, offset: f32) {
+            let reserve: Vec<_> = self.meta
+                .iter_mut()
+                .map(|(ref mut seeker, _)| seeker.method(offset))
+                .collect();
 
-    #[duplicate(method; [seek]; [jump])]
-    fn method(&mut self, offset: f32) {
-        let reserve: Vec<_> = self.meta
-            .iter_mut()
-            .map(|(ref mut seeker, _)| seeker.method(offset))
-            .collect();
-
-        self.meta
-            .iter_mut()
-            .enumerate()
-            .for_each(|(index, (ref seeker, ref mut output))| match seeker.meta.0.current() {
-                Ok(item) | Err(item) => {
-                    match item.val.response {
-                        Response::Switch{ switched, delegate } | Response::Toggle{ switched, delegate } => {
-                            *output = reserve[
-                                if switched  && delegate < reserve.len() { delegate }
-                                else { index }
-                            ]
-                        },
-                        _ => *output = reserve[index]
+            self.meta
+                .iter_mut()
+                .enumerate()
+                .for_each(|(index, (ref seeker, ref mut output))| match seeker.meta.0.current() {
+                    Ok(item) | Err(item) => {
+                        match item.val.response {
+                            Response::Switch{ switched, delegate } | Response::Toggle{ switched, delegate } => {
+                                *output = reserve[
+                                    if switched  && delegate < reserve.len() { delegate }
+                                    else { index }
+                                ]
+                            },
+                            _ => *output = reserve[index]
+                        }
                     }
-                }
-            });
-    }
-}
-
-impl<'a, T> Seekable<'a> for PlayList<T>
-where
-    T: Seekable<'a> + 'a,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output: Copy,
-    <<T as Seekable<'a>>::Seeker as SeekerTypes>::Source: Quantify<
-        Quantifier = <Epoch<SignalResponse<T>> as Quantify>::Quantifier
-    >
-{
-    type Seeker = PlayListSeeker<'a, T>;
-
-    fn seeker(&'a self) -> Self::Seeker {
-        Self::Seeker {
-            data: (),
-            meta: self.iter()
-                .map(|channel| (channel.seeker(), channel.seeker().seek(0.)))
-                .collect()
+                });
         }
     }
 
+    impl<'a, T> Seekable<'a> for PlayList<T>
+    where
+        T: 'a,
+        <<T as Seekable<'a>>::Seeker as SeekerTypes>::Output: Copy,
+        EmbeddedSeeker
+    {
+        type Seeker = PlayListSeeker<'a, T>;
+
+        fn seeker(&'a self) -> Self::Seeker {
+            Self::Seeker {
+                data: (),
+                meta: self.iter()
+                    .map(|channel| (channel.seeker(), channel.seeker().seek(0.)))
+                    .collect()
+            }
+        }
+    }
 }
 
 impl<'a, T> Index<usize> for PlayListSeeker<'a, T>
