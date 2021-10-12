@@ -1,4 +1,5 @@
 [package]
+resolver = "2"
 name = "rhythm-engine"
 version = "0.1.0"
 authors = ["iiYese"]
@@ -18,3 +19,10 @@ duplicate = "0.3"
 undo = "0.46.2"
 tinyvec = "1.3.1"
 serde = "1.0.130"
+
+wgpu = "0.11.0"
+winit = "0.25.0"
+cgmath = "0.18.0"
+env_logger = "0.9.0"
+log = "0.4.14"
+pollster = "0.2.4"
