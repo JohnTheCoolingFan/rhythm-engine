@@ -3,7 +3,7 @@ resolver = "2"
 name = "rhythm-engine"
 version = "0.1.0"
 authors = ["iiYese"]
-edition = "2018"
+edition = "2021"
 
 [features]
 default = ["std"]
