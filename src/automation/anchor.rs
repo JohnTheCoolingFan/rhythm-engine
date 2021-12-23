@@ -47,7 +47,7 @@ impl Weight {
     }
 
     pub fn curvature(&self) -> Option<&f32> {
-        if let Self::QuadLike{ref curvature, .. } | Self::CubeLike{ ref curvature, .. } = &self {
+        if let Self::QuadLike{ ref curvature, .. } | Self::CubeLike{ ref curvature, .. } = &self {
             Some(curvature)
         }
         else {
@@ -56,7 +56,7 @@ impl Weight {
     }
 
     pub fn set_curvature(&mut self, new: f32) -> Result<f32, ()> {
-        if let Self::QuadLike{ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } = self {
+        if let Self::QuadLike{ ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } = self {
             let old = *curvature;
             *curvature = new.clamp(-10., 10.);
             Ok(old)
@@ -67,7 +67,7 @@ impl Weight {
     }
 
     pub fn shift_curvature(&mut self, shift: f32) -> Result<f32, ()> {
-        if let Self::QuadLike{ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } = self {
+        if let Self::QuadLike{ ref mut curvature, .. } | Self::CubeLike{ ref mut curvature, .. } = self {
             let old = *curvature;
             *curvature = (old + shift).clamp(-10., 10.);
             Ok(old)

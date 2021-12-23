@@ -45,7 +45,6 @@ impl<'a, T> SignalResponse<T>
 where
     T: Seekable<'a>
 {
-
     pub fn new(layer: u8, target: T, response: Response) -> Self {
         Self {
             target,
@@ -72,11 +71,10 @@ where
             }
         }
 
-        let selflayer = self.layer;
         if let Response::Toggle{ ref mut switched, .. } = self.response {
             hits.iter()
                 .any(|hit_info| {
-                    if let Some(HitInfo { layer, .. }) = hit_info { selflayer == *layer }
+                    if let Some(HitInfo { layer, .. }) = hit_info { self.layer == *layer }
                     else { false }
                 })
                 .then(|| *switched = !*switched);
@@ -388,7 +386,7 @@ pub struct Chart {
 
 impl Chart
 {
-    fn apply_hits_playlist<'a, T>(playlist: &mut PlayList<T>, hits: &[Option<HitInfo>; 4]) 
+    fn hit_applier<'a, T>(playlist: &mut PlayList<T>, hits: &[Option<HitInfo>; 4]) 
     where
         T: Seekable<'a>
     {
@@ -399,10 +397,10 @@ impl Chart
     }
 
     pub fn apply_hits(&mut self, hits: &mut [Option<HitInfo>; 4]) {
-        Self::apply_hits_playlist(&mut self.rotations, hits);
-        Self::apply_hits_playlist(&mut self.scale, hits);
-        Self::apply_hits_playlist(&mut self.splines, hits);
-        Self::apply_hits_playlist(&mut self.colours, hits);
+        Self::hit_applier(&mut self.rotations, hits);
+        Self::hit_applier(&mut self.scale, hits);
+        Self::hit_applier(&mut self.splines, hits);
+        Self::hit_applier(&mut self.colours, hits);
 
         *hits = [None; 4];
     }
@@ -536,12 +534,13 @@ mod tests {
             let mut channel_out = seeker[0];
             let s = channel_out.process(&center);
 
-            let scaled: Vec<Vec2> = rect.iter().map(
-                |p| -> Vec2 {
-                    let v3 = *s * p.extend(1.);
-                    (v3.x, v3.y).into()
-                }
-            ).collect();
+            let scaled: Vec<Vec2> = rect
+                .iter()
+                .map(|p| -> Vec2 {
+                        let v3 = *s * p.extend(1.);
+                        (v3.x, v3.y).into()
+                    }
+                ).collect();
 
             let r1 = MeshBuilder::new()
                 .polygon(

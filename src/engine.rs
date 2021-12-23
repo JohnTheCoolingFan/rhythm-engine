@@ -7,7 +7,6 @@ use winit::{
 enum FPS {
     Adaptive,
     Unlimited,
-    VSync(u32),
 }
 
 struct State {
@@ -63,7 +62,7 @@ impl State {
             height: size.height,
             present_mode: match fps_option {
                 FPS::Unlimited => wgpu::PresentMode::Immediate,
-                FPS::VSync(_) | FPS::Adaptive => wgpu::PresentMode::Fifo
+                FPS::Adaptive => wgpu::PresentMode::Fifo
             }
         };
         surface.configure(&device, &config);
@@ -165,7 +164,7 @@ mod tests{
                     },
                     _ => {}
                 }
-            },
+            }
             Event::RedrawRequested(_) => {
                 state.update();
                 match state.render() {
