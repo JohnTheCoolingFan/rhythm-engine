@@ -1,100 +1,34 @@
--     Working on
-===   Complete
-None  Planned
-
-
-
-
-
-Version 0.1 {
-    -Foundation {
-        ===Automation
-        ===Dyn Color
-        ===Complex spline
-        ===Transform Point
-        ===Playlist
-        ===Chart
-        ===Signal Response
-        ===BPM
-
-        -Beat
-            Hold:
-                Notes:
-                Strike State: S0
-                Rlease State: S1
-                S0.contains(S1) || S1.contains(S0) == true
-                S0.contains(mouse) || S1.contains(mouse) == true
-        -Poly Entity
-        
-        Play + sync audio
-        Local center scale based preattack effects
+Rendering Engine {
+    Polygons {
+        Triangulation,
+        Straight skeleton offsets
     }
-  
-    Play {
-        Simple score
-    }
-
-    Editor {
-        Simple widgets
-        Simple timeline
-        Snapping
-        Repeating
-        Stretching
-
-        Song timer
+    Bloom,
+    Text,
+    Widgets {
+        ...
     }
 }
 
+Re-design {
+    Re-parameterized/Aproximated splines,
+    Redo automation interaction with properties,
+    Change track/playlist structure
+}
 
+Common {
+    Audio playback + Syncing
+}
 
-
-
-Version 0.2 {
-    Misc {
-        Make custom engine with WGPU, Lyon etc.
+Game {
+    Logic {
+        ...
+    },
+    Score {
+        ...
     }
 }
 
-
-
-
-
-Version 0.3 {
-    Foundation {
-        Replace local scale effect with striaght skeleton polygon offsetting  
-    }
-
-    Editor {
-        Map validator
-        Audio visualizer
-    }
+Editor {
+    ...
 }
-
-
-
-
-
-Version 0.4 {
-    -Remove the use of audio files and use audio-playback from system
-    using the users spotify/youtube/soundcloud via browser
-
-    -Git-Like modding system {
-        Mods will be made in the same way pull requests are made.
-        They are submutted either as comments or a comment + a change to the map file
-        After viewing a mod mappers can either reject them or accept them.
-        They can be tuned before the mapper accpetes them if they feel it's slightly off.
-        
-        -Possibly hosted on Steam
-        -Render diffs in editor
-        -Rendered diff views of
-        -Set up git system
-    }
-}
-
-
-
-
-
-Notes:
--For snapping behavior map the values out linearly reguardless of the value itself
-to create needed indifference to tightly spaced values
