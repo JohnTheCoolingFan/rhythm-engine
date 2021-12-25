@@ -11,7 +11,10 @@ Rendering Engine {
 }
 
 Re-design {
-    Re-parameterized/Aproximated splines,
+    Re-parameterized/Aproximated splines 
+        ? https://gamedev.stackexchange.com/a/27138
+        ? clamp t's
+        ? clamp s's
     Redo automation interaction with properties,
     Change track/playlist structure
 }
