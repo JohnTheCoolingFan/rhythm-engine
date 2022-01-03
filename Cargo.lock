@@ -18,15 +18,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "approx"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f2a05fd1bd10b2527e20a2cd32d8873d115b8b39fe219ee25f42a8aca6ba278"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -150,16 +141,6 @@ name = "cfg_aliases"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
-
-[[package]]
-name = "cgmath"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
-dependencies = [
- "approx",
- "num-traits",
-]
 
 [[package]]
 name = "cocoa"
@@ -418,6 +399,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4fa84eead97d5412b2a20aed4d66612a97a9e41e08eababdb9ae2bf88667490"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "glow"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -584,6 +574,12 @@ dependencies = [
  "cfg-if 1.0.0",
  "winapi",
 ]
+
+[[package]]
+name = "libm"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "lock_api"
@@ -782,6 +778,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
 dependencies = [
  "autocfg",
+ "libm",
 ]
 
 [[package]]
@@ -960,8 +957,8 @@ name = "rhythm-engine"
 version = "0.2.0"
 dependencies = [
  "bytemuck",
- "cgmath",
  "env_logger",
+ "glam",
  "log",
  "pollster",
  "wgpu",
