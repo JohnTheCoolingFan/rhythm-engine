@@ -1,15 +1,23 @@
 use wgpu::util::DeviceExt;
+use lyon::tessellation::VertexBuffers;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{WindowBuilder, Window},
 };
 
+#[derive(Clone, Copy)]
 pub struct Color {
     r: f32,
     g: f32,
     b: f32,
     a: f32,
+}
+
+impl From<Color> for [f32; 4] {
+    fn from(color: Color) -> Self {
+        [color.r, color.g, color.b, color.a]
+    }
 }
 
 impl Color {
@@ -21,10 +29,13 @@ impl Color {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
-    position: [f32; 3],
-    color: [f32; 4],
+    pub position: [f32; 3],
+    pub color: [f32; 4],
 }
 
+pub trait Tesselate {
+    fn tesselate(&self) -> VertexBuffers<Vertex, u32>;
+}
 
 impl Vertex {
     const DESC: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
@@ -161,7 +172,7 @@ impl Renderer {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
                 // Requires Features::DEPTH_CLAMPING
