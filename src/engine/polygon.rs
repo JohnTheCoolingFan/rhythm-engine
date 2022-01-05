@@ -1,14 +1,10 @@
-use crate::engine::renderer::VertexCtor;
-
-use super::renderer::{Color, Vertex, Tesselate};
+use super::*;
 use glam::Vec2;
 use lyon::{
     math::point,
     path::polygon::Polygon as LyonPolygon,
     tessellation::{ FillTessellator, VertexBuffers }, lyon_tessellation::{ BuffersBuilder, FillOptions },
 };
-
-
 
 pub struct Polygon {
     points: Vec<Vec2>,
