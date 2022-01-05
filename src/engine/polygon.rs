@@ -1,8 +1,11 @@
+use crate::engine::renderer::VertexCtor;
+
 use super::renderer::{Color, Vertex, Tesselate};
 use glam::Vec2;
 use lyon::{
+    math::point,
     path::polygon::Polygon as LyonPolygon,
-    tessellation::{ FillTessellator, VertexBuffers }
+    tessellation::{ FillTessellator, VertexBuffers }, lyon_tessellation::{ BuffersBuilder, FillOptions },
 };
 
 
@@ -52,28 +55,44 @@ impl Polygon {
 impl Tesselate for Polygon {
     fn tesselate(&self) -> VertexBuffers<Vertex, u32> {
         debug_assert!(self.points.len() >= 3);
-        let mut vertices: Vec<Vertex> = self.points.iter()
-            .map(
-                |p| Vertex { 
-                    position: [p.x, p.y, self.z_offset],
-                    color: self.primary_color.into(), 
-                }
-            )
-            .collect();
+        let attrs = [
+            self.z_offset,
+            self.primary_color.r,
+            self.primary_color.g,
+            self.primary_color.b,
+            self.primary_color.a
+        ];
+        
+        let mut path_builder = lyon::path::Path::builder_with_attributes(4);
+        path_builder.begin(point(self.points[0].x, self.points[0].y), &attrs);
+        for p in &self.points[1..] {
+            path_builder.line_to(point(p.x, p.y), &attrs);
+        }
+        path_builder.close();
+
+        let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+        let mut vertex_builder = BuffersBuilder::new(&mut buffers, VertexCtor);
+
+        let mut tessellator = FillTessellator::new();
+        let _ = tessellator.tessellate_polygon(
+            LyonPolygon {
+                points: self.points.iter()
+                    .map(|p| point(p.x, p.y))
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                closed: true,
+            },
+            &FillOptions::default(),
+            &mut vertex_builder,
+        );
 
         if let Some((secondary_color, start, size)) = self.secondary_color {
-            debug_assert!(start + size <= vertices.len());
-            for vertex in &mut vertices[start..][..size] {
+            debug_assert!(start + size <= self.points.len());
+            for vertex in &mut buffers.vertices {
                 vertex.color = secondary_color.into();
             }
         }
 
-        let tesellator = FillTessellator::new();
-        tesellator.tessellate_polygon(
-            LyonPolygon {
-                points: self.points.as_slice(),
-                closed: true,
-            },
-            options, output)
+        buffers
     }
 }

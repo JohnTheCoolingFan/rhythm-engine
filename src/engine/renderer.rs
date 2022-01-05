@@ -1,5 +1,5 @@
 use wgpu::util::DeviceExt;
-use lyon::tessellation::VertexBuffers;
+use lyon::tessellation::{VertexBuffers, FillVertexConstructor, FillVertex};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -8,10 +8,10 @@ use winit::{
 
 #[derive(Clone, Copy)]
 pub struct Color {
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
 }
 
 impl From<Color> for [f32; 4] {
@@ -31,6 +31,18 @@ impl Color {
 pub struct Vertex {
     pub position: [f32; 3],
     pub color: [f32; 4],
+}
+
+pub struct VertexCtor;
+impl FillVertexConstructor<Vertex> for VertexCtor {
+    fn new_vertex(&mut self, mut vertex: FillVertex) -> Vertex {
+        let position = vertex.position();
+        let attrs = vertex.interpolated_attributes();
+        Vertex {
+            position: [position.x, position.y, attrs[0]],
+            color: [ attrs[1], attrs[2], attrs[3], attrs[4] ],
+        }
+    }
 }
 
 pub trait Tesselate {
