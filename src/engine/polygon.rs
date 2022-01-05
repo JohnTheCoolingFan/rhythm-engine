@@ -1,13 +1,12 @@
 use super::*;
-use glam::Vec2;
 use lyon::{
-    math::point,
+    math::{point, Point},
     path::polygon::Polygon as LyonPolygon,
     tessellation::{ FillTessellator, VertexBuffers }, lyon_tessellation::{ BuffersBuilder, FillOptions },
 };
 
 pub struct Polygon {
-    points: Vec<Vec2>,
+    points: Vec<Point>,
     primary_color: Color,
     secondary_color: Option<(Color, usize, usize)>,
     bloom: f32,
@@ -18,9 +17,9 @@ impl Polygon {
     pub fn new(scale_factor: f32) -> Polygon {
         Polygon {
             points: vec![
-                Vec2::new(0.0, 1.0) * scale_factor,
-                Vec2::new(1.0, 0.0) * scale_factor,
-                Vec2::new(-1.0, 0.0) * scale_factor,
+                point(0.0, 1.0) * scale_factor,
+                point(1.0, 0.0) * scale_factor,
+                point(-1.0, 0.0) * scale_factor,
             ],
             primary_color: Color::new(0.5, 0.6, 0.7, 1.0),
             secondary_color: None,
@@ -29,7 +28,7 @@ impl Polygon {
         }
     }
 
-    pub fn contains(&self, point: Vec2) -> bool {
+    pub fn contains(&self, point: Point) -> bool {
         let mut inside = false;
 
         for i in 0..self.points.len() {
@@ -72,10 +71,7 @@ impl Tesselate for Polygon {
         let mut tessellator = FillTessellator::new();
         let _ = tessellator.tessellate_polygon(
             LyonPolygon {
-                points: self.points.iter()
-                    .map(|p| point(p.x, p.y))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
+                points: self.points.as_slice(),
                 closed: true,
             },
             &FillOptions::default(),

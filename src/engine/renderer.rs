@@ -1,6 +1,5 @@
 use super::*;
 use wgpu::util::DeviceExt;
-use lyon::tessellation::{VertexBuffers, FillVertexConstructor, FillVertex};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
