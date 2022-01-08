@@ -1,4 +1,7 @@
+use polygon::Polygon;
+
 use super::*;
+use lyon::tessellation::VertexBuffers;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -30,9 +33,15 @@ struct Renderer {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
+    
     render_pipeline: wgpu::RenderPipeline,
+    
+    vertices: Vec<Vertex>,
+    indices: Vec<u32>,
+
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_vertices: u32,
@@ -93,7 +102,7 @@ impl Renderer {
         let shader = device.create_shader_module(
             &wgpu::ShaderModuleDescriptor {
                 label: Some("Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
             }
         );
 
@@ -170,9 +179,15 @@ impl Renderer {
             surface,
             device,
             queue,
+
             config,
             size,
+            
             render_pipeline,
+            
+            vertices: vec![],
+            indices: vec![],
+
             vertex_buffer,
             index_buffer,
             num_vertices,
@@ -236,6 +251,20 @@ impl Renderer {
         Ok(())
     }
 
+}
+
+
+
+
+
+impl Draw<Polygon> for Renderer {
+    fn draw(&mut self, items: &[Polygon]) {
+        for item in items {
+            let buffers = item.prepare();
+            self.vertices.extend(buffers.vertices.iter());
+            self.indices.extend(buffers.indices.iter());
+        }
+    }
 }
 
 #[cfg(test)]

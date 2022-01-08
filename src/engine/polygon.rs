@@ -47,8 +47,9 @@ impl Polygon {
     }
 }
 
-impl Tesselate for Polygon {
-    fn tesselate(&self) -> VertexBuffers<Vertex, u32> {
+impl Drawable for Polygon {
+    type Data = VertexBuffers<Vertex, u32>;
+    fn prepare(&self) -> Self::Data {
         debug_assert!(self.points.len() >= 3);
         let attrs = [
             self.z_offset,
