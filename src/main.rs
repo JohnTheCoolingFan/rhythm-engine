@@ -1,49 +1,46 @@
-mod editor;
+use std::collections::BTreeSet;
+
+use bevy::prelude::*;
+use bevy_prototype_lyon::prelude::*;
+use noisy_float::prelude::*;
+
+mod resources;
 mod automation;
-mod utils;
-mod play;
+mod hit;
+mod spline;
 
-use ggez::event;
-use ggez::graphics::{self, Color};
-use ggez::{Context, GameError, GameResult};
-use glam::*;
+use automation::*;
+use hit::*;
 
-struct MainState {}
+#[derive(Component)]
+struct Start(f32);
 
-impl MainState {
-    fn new() -> MainState {
-        MainState {}
-    }
+#[derive(Component)]
+struct Duration(f32);
+
+fn main() {
+    App::new()
+        .insert_resource(Msaa { samples: 4 })
+        .add_plugins(DefaultPlugins)
+        .add_plugin(ShapePlugin)
+        .add_startup_system(setup_system)
+        .run();
 }
 
-impl event::EventHandler<GameError> for MainState {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        Ok(())
-    }
+fn setup_system(mut commands: Commands) {
+    let shape = shapes::RegularPolygon {
+        sides: 6,
+        feature: shapes::RegularPolygonFeature::Radius(200.0),
+        ..shapes::RegularPolygon::default()
+    };
 
-    fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
-        let pos = ggez::input::mouse::position(ctx);
-
-        let circle = graphics::Mesh::new_circle(
-            ctx,
-            graphics::DrawMode::fill(),
-            Vec2::new(pos.x, pos.y),
-            5.0,
-            2.0,
-            Color::new(1.0, 1.0, 1.0, 1.0),
-        )?;
-        graphics::draw(ctx, &circle, (Vec2::new(0., 0.),))?;
-
-        graphics::present(ctx)?;
-        Ok(())
-    }
-}
-
-pub fn main() -> GameResult {
-   let cb = ggez::ContextBuilder::new("Rythm Engine", "iiYese")
-        .window_mode(ggez::conf::WindowMode::default().dimensions(1920., 1080.));
-    let (ctx, event_loop) = cb.build()?;
-    let state = MainState::new();
-    event::run(ctx, event_loop, state)
+    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    commands.spawn_bundle(GeometryBuilder::build_as(
+        &shape,
+        DrawMode::Outlined {
+            fill_mode: FillMode::color(Color::CYAN),
+            outline_mode: StrokeMode::new(Color::BLACK, 10.0),
+        },
+        Transform::default(),
+    ));
 }
