@@ -27,13 +27,13 @@ pub enum HitResponse {
     },
     /// Switches to a different automation permenantly with a start from the current time
     Switch {
-        delegate: usize,
+        delegate: u8,
         switched: bool,
     },
     /// Switches to a different automation but will switch back to the original
     /// automation on another hit. This can be repeated indefinetly
     Toggle {
-        delegate: usize,
+        delegate: u8,
         switched: bool,
     },
     /// Will stay at 0 state with no hit, once hit it will play the automation

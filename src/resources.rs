@@ -1,20 +1,16 @@
 use noisy_float::prelude::*;
 
-use crate::automation::*;
 use crate::hit::*;
+
+pub const CHANNELS_PER_TABLE: usize = 256;
 
 struct HitRegister([HitInfo; 4]);
 
-struct TimeKeeper {
-    start: N32,
-    pos: N32,
-}
+pub struct SongTime(pub N32);
 
-struct ChannelOutput<T> {
-    output: T,
+pub struct ChannelOutput<T> {
+    output: Option<T>,
     redirect: Option<usize>,
 }
 
-struct AutomationTable<T> {
-    table: Vec<ChannelOutput<T>>,
-}
+pub struct OutputTable<T>(pub [T; CHANNELS_PER_TABLE]);

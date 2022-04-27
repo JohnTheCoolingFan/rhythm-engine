@@ -9,3 +9,4 @@ edition = "2021"
 bevy = { version = "0.7.0", features = ["dynamic"] }
 bevy_prototype_lyon = "0.5.0"
 noisy_float = "0.2.0"
+tinyvec = "1.5.1"

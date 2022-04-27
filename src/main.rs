@@ -8,6 +8,7 @@ mod resources;
 mod automation;
 mod hit;
 mod spline;
+mod utils;
 
 use automation::*;
 use hit::*;
