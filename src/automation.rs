@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use itertools::Itertools;
 use noisy_float::prelude::*;
 use tinyvec::TinyVec;
 
@@ -18,26 +19,59 @@ impl Default for Weight {
     }
 }
 
-#[derive(Default)]
-struct Anchor {
+struct ControlPoint {
     point: Vec2,
     weight: Weight,
 }
 
+struct RepeaterBound {
+    start_y: N32,
+    end_y: N32,
+    transition: Weight,
+}
+
+struct Repeater {
+    offset: N32,
+    take_size: usize,
+    roof: RepeaterBound,
+    floor: RepeaterBound,
+}
+
+enum Anchor {
+    ControlPoint(ControlPoint),
+    Repeater(Repeater),
+}
+
+impl Default for Anchor {
+    fn default() -> Self {
+        Anchor::ControlPoint(ControlPoint {
+            point: Vec2::new(0.0, 0.0),
+            weight: Weight::Constant,
+        })
+    }
+}
+
 impl Quantify for Anchor {
     fn quantify(&self) -> N32 {
-        n32(self.point.x)
+        match self {
+            Self::ControlPoint(ControlPoint { point, .. }) => n32(point.x),
+            Self::Repeater(Repeater { offset, .. }) => *offset,
+        }
     }
 }
 
 impl Interpolate for Anchor {
-    type Output = N32;
-    fn interp(&self, other: &Self, t: N32) -> Self::Output {
-        unimplemented!()
-    }
-
-    fn default(&self) -> Self::Output {
-        n32(self.point.y)
+    type Output = Option<N32>;
+    fn interp(&self, passed: &[Self], t: N32) -> Self::Output {
+        match (passed, self) {
+            ([.., last] | [last], Self::ControlPoint { point, weight }) => {
+                unimplemented!()
+            }
+            (passed, Self::Repeater { offset, step_size }) if *step_size <= passed.len() => {
+                unimplemented!()
+            }
+            _ => None,
+        }
     }
 }
 
@@ -57,6 +91,12 @@ struct Automation<T: Default> {
     lower_bounds: TinyVec<[Bound<T>; 4]>,
 }
 
+impl<T: Default> Quantify for Automation<T> {
+    fn quantify(&self) -> N32 {
+        self.start
+    }
+}
+
 #[derive(Component)]
 pub struct Channel<T: Default> {
     id: u8,
@@ -64,35 +104,43 @@ pub struct Channel<T: Default> {
 }
 
 impl<T: Default> Channel<T> {
-    fn currently_skippable(&self, song_time: N32) -> bool {
+    fn can_skip_seeking(&self, song_time: N32) -> bool {
         self.clips
             .last()
-            .map_or(false, |clip| song_time < clip.start)
+            .map_or(true, |clip| clip.start < song_time)
     }
 }
 
 #[derive(Component)]
 pub struct IndexCache(usize);
 
+#[rustfmt::skip]
 fn seek_channels<T: Component + Default>(
     mut channel_table: Query<(&Channel<T>, &mut IndexCache)>,
     song_time: Res<SongTime>,
 ) {
     channel_table
         .iter_mut()
-        .filter(|(channel, _)| !channel.currently_skippable(song_time.0))
+        .filter(|(channel, _)| !channel.can_skip_seeking(song_time.0))
         .for_each(|(channel, mut index_cache)| {
-            if let Some(clip) = channel.clips.get(index_cache.0 + 1) {
-                if clip.start <= song_time.0 {
-                    index_cache.0 += 1;
-                    return;
-                }
-            }
-
             index_cache.0 = channel
                 .clips
-                .as_slice()
-                .seek(|automation| automation.start.cmp(&song_time.0))
+                .iter()
+                .enumerate()
+                .skip(index_cache.0)
+                .coalesce(|prev, curr| (prev.1.start == curr.1.start)
+                    .then(|| curr)
+                    .ok_or((prev, curr))
+                )
+                .take(4)
+                .take_while(|(_, clip)| clip.start < song_time.0)
+                .last()
+                .map(|(index, _)| index)
+                .unwrap_or_else(|| channel
+                    .clips
+                    .as_slice()
+                    .seek(song_time.0)
+                )
         })
 }
 
@@ -104,11 +152,7 @@ fn eval_channels<T: Component + Quantify + Interpolate + Default>(
     channel_table
         .iter_mut()
         .filter(|(channel, _)| !channel.clips.is_empty())
-        .for_each(|(channel, cache)| {
-            let clip = channel.clips[cache.0];
-            let test = Some(clip.anchors.as_ref().interp(song_time.0 - clip.start));
-            output_table.0[channel.id as usize] = unimplemented!();
-        })
+        .for_each(|(channel, cache)| unimplemented!())
 }
 
 struct AutomationPlugin;

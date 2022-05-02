@@ -1,17 +1,11 @@
-use std::collections::BTreeSet;
-
 use bevy::prelude::*;
 use bevy_prototype_lyon::prelude::*;
-use noisy_float::prelude::*;
 
-mod resources;
 mod automation;
 mod hit;
+mod resources;
 mod spline;
 mod utils;
-
-use automation::*;
-use hit::*;
 
 #[derive(Component)]
 struct Start(f32);
