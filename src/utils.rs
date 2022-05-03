@@ -1,22 +1,17 @@
-use itertools::Itertools;
 use noisy_float::prelude::*;
-use std::cmp::Ordering;
+
+pub trait Lerp {
+    fn lerp(self, other: Self, t: N32) -> Self;
+}
 
 pub trait Quantify {
     fn quantify(&self) -> N32;
 }
 
-pub trait Interpolate: Sized {
-    type Output;
-    fn interp(&self, previous: &[Self], t: N32) -> Self::Output;
-}
-
-pub trait SliceSeekExt<T> {
+pub trait SliceExt<'a, T> {
     fn seek(self, by: impl Quantify) -> usize;
-}
-
-pub trait SliceInterpExt<T: Interpolate> {
-    fn interp(self, t: N32) -> Option<T::Output>;
+    fn first_before(self, t: N32) -> Option<&'a T>;
+    fn first_after(self, t: N32) -> Option<&'a T>;
 }
 
 impl Quantify for N32 {
@@ -25,7 +20,7 @@ impl Quantify for N32 {
     }
 }
 
-impl<T: Quantify> SliceSeekExt<T> for &[T] {
+impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
     fn seek(self, to: impl Quantify) -> usize {
         let index = self
             .binary_search_by(|item| item.quantify().cmp(&to.quantify()))
@@ -45,16 +40,15 @@ impl<T: Quantify> SliceSeekExt<T> for &[T] {
 
         index + to_skip
     }
-}
 
-impl<T: Quantify + Interpolate> SliceInterpExt<T> for &[T] {
-    fn interp(self, t: N32) -> Option<T::Output> {
-        let passed = self.iter().take_while(|item| item.quantify() < t).count();
+    fn first_before(self, t: N32) -> Option<&'a T> {
+        self.iter().take_while(|item| item.quantify() <= t).last()
+    }
 
+    fn first_after(self, t: N32) -> Option<&'a T> {
         self.iter()
             .rev()
-            .take_while(|item| t <= item.quantify())
+            .take_while(|item| t < item.quantify())
             .last()
-            .map(|curr| curr.interp(&self[..passed], t))
     }
 }

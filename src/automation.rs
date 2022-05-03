@@ -13,15 +13,16 @@ enum Weight {
     Cubic(N32),
 }
 
+impl Weight {
+    fn eval(&self, t: N32) -> N32 {
+        unimplemented!()
+    }
+}
+
 impl Default for Weight {
     fn default() -> Self {
         Weight::Constant
     }
-}
-
-struct ControlPoint {
-    point: Vec2,
-    weight: Weight,
 }
 
 struct RepeaterBound {
@@ -30,47 +31,39 @@ struct RepeaterBound {
     transition: Weight,
 }
 
-struct Repeater {
-    offset: N32,
-    take_size: usize,
-    roof: RepeaterBound,
-    floor: RepeaterBound,
+enum Anchor {
+    ControlPoint {
+        point: Vec2,
+        weight: Weight,
+    },
+    Repeater {
+        point: Vec2,
+        take_size: usize,
+        roof: RepeaterBound,
+        floor: RepeaterBound,
+    },
 }
 
-enum Anchor {
-    ControlPoint(ControlPoint),
-    Repeater(Repeater),
+impl Anchor {
+    fn eval(&self, passed: &[Self], t: N32) -> Option<N32> {
+        unimplemented!()
+    }
 }
 
 impl Default for Anchor {
     fn default() -> Self {
-        Anchor::ControlPoint(ControlPoint {
+        Self::ControlPoint {
             point: Vec2::new(0.0, 0.0),
             weight: Weight::Constant,
-        })
+        }
     }
 }
 
 impl Quantify for Anchor {
     fn quantify(&self) -> N32 {
         match self {
-            Self::ControlPoint(ControlPoint { point, .. }) => n32(point.x),
-            Self::Repeater(Repeater { offset, .. }) => *offset,
-        }
-    }
-}
-
-impl Interpolate for Anchor {
-    type Output = Option<N32>;
-    fn interp(&self, passed: &[Self], t: N32) -> Self::Output {
-        match (passed, self) {
-            ([.., last] | [last], Self::ControlPoint { point, weight }) => {
-                unimplemented!()
-            }
-            (passed, Self::Repeater { offset, step_size }) if *step_size <= passed.len() => {
-                unimplemented!()
-            }
-            _ => None,
+            Self::ControlPoint { point, .. } => n32(point.x),
+            Self::Repeater { point, .. } => n32(point.x),
         }
     }
 }
@@ -82,13 +75,50 @@ struct Bound<T> {
     transition: Weight,
 }
 
+impl<T> Quantify for Bound<T> {
+    fn quantify(&self) -> N32 {
+        self.offset
+    }
+}
+
 struct Automation<T: Default> {
     start: N32,
     response: HitResponse,
     layer: u8,
+    /// Evals by last (<= t)
     upper_bounds: TinyVec<[Bound<T>; 4]>,
+    /// Evals by first (t <)
     anchors: TinyVec<[Anchor; 4]>,
+    /// Evals by last (<= t)
     lower_bounds: TinyVec<[Bound<T>; 4]>,
+}
+
+impl<T: Default + Copy + Lerp> Automation<T> {
+    fn eval(self, t: N32) -> Option<T> {
+        let passed = self
+            .anchors
+            .iter()
+            .take_while(|item| item.quantify() <= t)
+            .count();
+
+        let interpolate = |bounds: &[Bound<T>]| {
+            bounds.first_before(t).and_then(|before| {
+                bounds.first_after(t).map(|after| {
+                    let t = (t - before.quantify()) / (after.quantify() - before.quantify());
+                    let d = before.transition.eval(t);
+                    before.val.lerp(after.val, d)
+                })
+            })
+        };
+
+        self.anchors.as_slice().first_after(t).and_then(|after| {
+            after.eval(&self.anchors[..passed], t).and_then(|t| {
+                interpolate(&self.lower_bounds).and_then(|lower| {
+                    interpolate(&self.upper_bounds).map(|upper| lower.lerp(upper, t))
+                })
+            })
+        })
+    }
 }
 
 impl<T: Default> Quantify for Automation<T> {
@@ -100,6 +130,7 @@ impl<T: Default> Quantify for Automation<T> {
 #[derive(Component)]
 pub struct Channel<T: Default> {
     id: u8,
+    /// Evals by last (<= t)
     clips: Vec<Automation<T>>,
 }
 
@@ -115,7 +146,7 @@ impl<T: Default> Channel<T> {
 pub struct IndexCache(usize);
 
 #[rustfmt::skip]
-fn seek_channels<T: Component + Default>(
+fn seek_channels<T: Default + Component>(
     mut channel_table: Query<(&Channel<T>, &mut IndexCache)>,
     song_time: Res<SongTime>,
 ) {
@@ -144,7 +175,7 @@ fn seek_channels<T: Component + Default>(
         })
 }
 
-fn eval_channels<T: Component + Quantify + Interpolate + Default>(
+fn eval_channels<T: Default + Component + Quantify>(
     mut channel_table: Query<(&Channel<T>, &IndexCache)>,
     song_time: Res<SongTime>,
     mut output_table: ResMut<OutputTable<ChannelOutput<T>>>,
