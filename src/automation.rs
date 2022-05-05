@@ -14,8 +14,40 @@ enum Weight {
 }
 
 impl Weight {
+    #[rustfmt::skip]
     fn eval(&self, t: N32) -> N32 {
-        unimplemented!()
+        let curvature = match self {
+            Weight::Constant => n32(0.0),
+            Weight::Quadratic(c) => *c,
+            Weight::Cubic(c) => *c,
+        };
+
+        let t = t.const_raw();
+        
+        let options = [
+            [1.,    -0.5,   (1. - t) / 0.5  ],
+            [0.,    0.5,    t / 0.5         ],
+            [0.,    1.,     t               ]
+        ];
+
+        let [starting, delta, x] = if let Self::Cubic(_) = self {
+            match t {
+                _ if 0.5 < t => options[0],
+                _ => options[1],
+            }
+        } else {
+            options[2]
+        };
+
+        let k = curvature.abs() + 1.;
+        let y = match k {
+            _ if n32(1.5) < k => (k.powi(5).powf(n32(x)) - 1.) / (k.powi(5) - 1.),
+            _ => n32(x)
+        };
+
+        n32(starting)
+            + n32(delta)
+            * if n32(1.5) < k && curvature < n32(0.) { n32(1.) - y } else { y }
     }
 }
 
@@ -112,10 +144,10 @@ impl<T: Default + Copy + Lerp> Automation<T> {
         };
 
         self.anchors.as_slice().first_after(t).and_then(|after| {
-            after.eval(&self.anchors[..passed], t).and_then(|t| {
-                interpolate(&self.lower_bounds).and_then(|lower| {
-                    interpolate(&self.upper_bounds).map(|upper| lower.lerp(upper, t))
-                })
+            after.eval(&self.anchors[..passed], t).map(|t| {
+                let lower = interpolate(&self.lower_bounds).unwrap();
+                let upper = interpolate(&self.upper_bounds).unwrap();
+                lower.lerp(upper, t)
             })
         })
     }
