@@ -14,46 +14,22 @@ enum Weight {
 }
 
 impl Weight {
-    #[rustfmt::skip]
     fn eval(&self, t: N32) -> N32 {
-        let curvature = match self {
-            Weight::Constant => n32(0.0),
-            Weight::Quadratic(c) => *c,
-            Weight::Cubic(c) => *c,
-        };
+        let f = |x: f32, k: f32| x.signum() * x.abs().powf((k + k.signum()).abs().powf(k.signum()));
 
-        let t = t.const_raw();
-        
-        let options = [
-            [1.,    -0.5,   (1. - t) / 0.5  ],
-            [0.,    0.5,    t / 0.5         ],
-            [0.,    1.,     t               ]
-        ];
-
-        let [starting, delta, x] = if let Self::Cubic(_) = self {
-            match t {
-                _ if 0.5 < t => options[0],
-                _ => options[1],
-            }
-        } else {
-            options[2]
-        };
-
-        let k = curvature.abs() + 1.;
-        let y = match k {
-            _ if n32(1.5) < k => (k.powi(5).powf(n32(x)) - 1.) / (k.powi(5) - 1.),
-            _ => n32(x)
-        };
-
-        n32(starting)
-            + n32(delta)
-            * if n32(1.5) < k && curvature < n32(0.) { n32(1.) - y } else { y }
+        match self {
+            Weight::Constant => n32(0.),
+            Weight::Quadratic(k) => n32(f(t.raw(), k.raw())),
+            Weight::Cubic(k) => n32(((f(2. * t.raw() - 1., k.raw()) - 1.) / 2.) + 1.),
+        }
     }
 }
 
+mod test {}
+
 impl Default for Weight {
     fn default() -> Self {
-        Weight::Constant
+        Self::Constant
     }
 }
 
@@ -77,9 +53,7 @@ enum Anchor {
 }
 
 impl Anchor {
-    fn eval(&self, passed: &[Self], t: N32) -> Option<N32> {
-        unimplemented!()
-    }
+    fn eval(&self, passed: &[Self], t: N32) -> Option<N32> {}
 }
 
 impl Default for Anchor {
@@ -134,19 +108,18 @@ impl<T: Default + Copy + Lerp> Automation<T> {
             .count();
 
         let interpolate = |bounds: &[Bound<T>]| {
-            bounds.first_before(t).and_then(|before| {
-                bounds.first_after(t).map(|after| {
-                    let t = (t - before.quantify()) / (after.quantify() - before.quantify());
-                    let d = before.transition.eval(t);
-                    before.val.lerp(after.val, d)
-                })
+            let before = bounds.first_before(t).unwrap();
+            bounds.first_after(t).map_or(before.val, |after| {
+                let t = (t - before.quantify()) / (after.quantify() - before.quantify());
+                let d = before.transition.eval(t);
+                before.val.lerp(after.val, d)
             })
         };
 
         self.anchors.as_slice().first_after(t).and_then(|after| {
             after.eval(&self.anchors[..passed], t).map(|t| {
-                let lower = interpolate(&self.lower_bounds).unwrap();
-                let upper = interpolate(&self.upper_bounds).unwrap();
+                let lower = interpolate(&self.lower_bounds);
+                let upper = interpolate(&self.upper_bounds);
                 lower.lerp(upper, t)
             })
         })
