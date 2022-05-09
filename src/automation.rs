@@ -25,8 +25,6 @@ impl Weight {
     }
 }
 
-mod test {}
-
 impl Default for Weight {
     fn default() -> Self {
         Self::Constant
@@ -46,14 +44,46 @@ enum Anchor {
     },
     Repeater {
         point: Vec2,
-        take_size: usize,
+        repeat_size: usize,
         roof: RepeaterBound,
         floor: RepeaterBound,
     },
 }
 
 impl Anchor {
-    fn eval(&self, passed: &[Self], t: N32) -> Option<N32> {}
+    fn point(&self) -> &Vec2 {
+        match self {
+            | Self::ControlPoint { point, .. } | Self::Repeater { point, .. } => point,
+        }
+    }
+
+    #[rustfmt::skip]
+    fn eval(&self, passed: &[Self], t: N32) -> Option<N32> {
+        let interpolate = |first: &Vec2, second: &Vec2, weight: &Weight| -> N32 {
+            let t = (t - first.y) / (second.y - first.y);
+            n32(first.y) + n32(second.y - first.y) * weight.eval(t)
+        };
+
+        match self {
+            Self::ControlPoint { point, weight } => {
+                passed.last().map(|prev| interpolate(prev.point(), point, weight))
+            }
+            Self::Repeater { point, repeat_size, roof, floor } => {
+                let reachable = passed
+                    .iter()
+                    .rev()
+                    .take(*repeat_size)
+                    .filter_map(|anchor| match anchor {
+                        Self::ControlPoint { point, weight } => Some((point, weight)),
+                        Self::Repeater { .. } => None,
+                    });
+
+                (*repeat_size == reachable.clone().count()).then(|| {
+                    todo!()
+                })
+            }
+        }
+    }
 }
 
 impl Default for Anchor {
@@ -67,10 +97,7 @@ impl Default for Anchor {
 
 impl Quantify for Anchor {
     fn quantify(&self) -> N32 {
-        match self {
-            Self::ControlPoint { point, .. } => n32(point.x),
-            Self::Repeater { point, .. } => n32(point.x),
-        }
+        n32(self.point().x)
     }
 }
 
