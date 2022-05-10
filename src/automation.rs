@@ -31,12 +31,6 @@ impl Default for Weight {
     }
 }
 
-struct RepeaterBound {
-    start_y: N32,
-    end_y: N32,
-    transition: Weight,
-}
-
 enum Anchor {
     ControlPoint {
         point: Vec2,
@@ -45,42 +39,62 @@ enum Anchor {
     Repeater {
         point: Vec2,
         repeat_size: usize,
-        roof: RepeaterBound,
-        floor: RepeaterBound,
     },
 }
 
 impl Anchor {
     fn point(&self) -> &Vec2 {
         match self {
-            | Self::ControlPoint { point, .. } | Self::Repeater { point, .. } => point,
+            Self::ControlPoint { point, .. } | Self::Repeater { point, .. } => point,
+        }
+    }
+
+    /// Should only ever be called by `eval` on repeater branches
+    /// after verifying all the anchors it's going to access are ControlPoints
+    fn control_weight(&self) -> &Weight {
+        match self {
+            Self::ControlPoint { weight, .. } => weight,
+            _ => unreachable!(),
         }
     }
 
     #[rustfmt::skip]
     fn eval(&self, passed: &[Self], t: N32) -> Option<N32> {
-        let interpolate = |first: &Vec2, second: &Vec2, weight: &Weight| -> N32 {
-            let t = (t - first.y) / (second.y - first.y);
+        let interpolate = |first: &Vec2, second: &Vec2, weight: &Weight, t: N32| -> N32 {
+            let t = (t - first.x) / (second.x- first.x);
             n32(first.y) + n32(second.y - first.y) * weight.eval(t)
         };
 
         match self {
-            Self::ControlPoint { point, weight } => {
-                passed.last().map(|prev| interpolate(prev.point(), point, weight))
-            }
-            Self::Repeater { point, repeat_size, roof, floor } => {
-                let reachable = passed
-                    .iter()
-                    .rev()
-                    .take(*repeat_size)
-                    .filter_map(|anchor| match anchor {
-                        Self::ControlPoint { point, weight } => Some((point, weight)),
-                        Self::Repeater { .. } => None,
-                    });
+            Self::ControlPoint { point, weight } => passed.last().map(|prev| {
+                interpolate(prev.point(), point, weight, t);
+                todo!(); //change to quntizable bounds
+            }),
+            Self::Repeater { point, repeat_size } => {
+                let reachable = passed.iter().rev().take(*repeat_size).take_while(|anchor| 
+                    matches!(anchor, Self::ControlPoint { .. })
+                );
 
-                (*repeat_size == reachable.clone().count()).then(|| {
-                    todo!()
-                })
+                let result = (1 < *repeat_size && *repeat_size == reachable.count()).then(|| {
+                    let ctrl_chain = &passed[passed.len() - *repeat_size..];
+                    let repeat_start = ctrl_chain.last().unwrap().point().x;
+                    let ctrl_chain_span = repeat_start - ctrl_chain.first().unwrap().point().x;
+
+                    (f32::EPSILON < ctrl_chain_span.abs()).then(||{
+                        let chain_relative_t = (t - repeat_start) % ctrl_chain_span;
+                        let lead = ctrl_chain.first_after(t).unwrap();
+                        let follow = ctrl_chain.first_before_or_at(t).unwrap();
+                        let y = interpolate(
+                            follow.point(),
+                            lead.point(),
+                            chain_relative_t,
+                            lead.weight()
+                        );
+                        todo!(); //change to quntizable bounds
+                    })
+                });
+
+                result.flatten()
             }
         }
     }
@@ -135,7 +149,7 @@ impl<T: Default + Copy + Lerp> Automation<T> {
             .count();
 
         let interpolate = |bounds: &[Bound<T>]| {
-            let before = bounds.first_before(t).unwrap();
+            let before = bounds.first_before_or_at(t).unwrap();
             bounds.first_after(t).map_or(before.val, |after| {
                 let t = (t - before.quantify()) / (after.quantify() - before.quantify());
                 let d = before.transition.eval(t);
