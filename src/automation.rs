@@ -7,6 +7,7 @@ use crate::hit::*;
 use crate::resources::*;
 use crate::utils::*;
 
+#[derive(Debug, Clone, Copy)]
 enum Weight {
     Constant,
     Quadratic(N32),
@@ -25,101 +26,42 @@ impl Weight {
     }
 }
 
-impl Default for Weight {
-    fn default() -> Self {
-        Self::Constant
-    }
-}
-
-enum Anchor {
-    ControlPoint {
-        point: Vec2,
-        weight: Weight,
-    },
-    Repeater {
-        point: Vec2,
-        repeat_size: usize,
-    },
-}
-
-impl Anchor {
-    fn point(&self) -> &Vec2 {
-        match self {
-            Self::ControlPoint { point, .. } | Self::Repeater { point, .. } => point,
-        }
-    }
-
-    /// Should only ever be called by `eval` on repeater branches
-    /// after verifying all the anchors it's going to access are ControlPoints
-    fn control_weight(&self) -> &Weight {
-        match self {
-            Self::ControlPoint { weight, .. } => weight,
-            _ => unreachable!(),
-        }
-    }
-
-    #[rustfmt::skip]
-    fn eval(&self, passed: &[Self], t: N32) -> Option<N32> {
-        let interpolate = |first: &Vec2, second: &Vec2, weight: &Weight, t: N32| -> N32 {
-            let t = (t - first.x) / (second.x- first.x);
-            n32(first.y) + n32(second.y - first.y) * weight.eval(t)
-        };
-
-        match self {
-            Self::ControlPoint { point, weight } => passed.last().map(|prev| {
-                interpolate(prev.point(), point, weight, t);
-                todo!(); //change to quntizable bounds
-            }),
-            Self::Repeater { point, repeat_size } => {
-                let reachable = passed.iter().rev().take(*repeat_size).take_while(|anchor| 
-                    matches!(anchor, Self::ControlPoint { .. })
-                );
-
-                let result = (1 < *repeat_size && *repeat_size == reachable.count()).then(|| {
-                    let ctrl_chain = &passed[passed.len() - *repeat_size..];
-                    let repeat_start = ctrl_chain.last().unwrap().point().x;
-                    let ctrl_chain_span = repeat_start - ctrl_chain.first().unwrap().point().x;
-
-                    (f32::EPSILON < ctrl_chain_span.abs()).then(||{
-                        let chain_relative_t = (t - repeat_start) % ctrl_chain_span;
-                        let lead = ctrl_chain.first_after(t).unwrap();
-                        let follow = ctrl_chain.first_before_or_at(t).unwrap();
-                        let y = interpolate(
-                            follow.point(),
-                            lead.point(),
-                            chain_relative_t,
-                            lead.weight()
-                        );
-                        todo!(); //change to quntizable bounds
-                    })
-                });
-
-                result.flatten()
-            }
-        }
-    }
+struct Anchor {
+    point: Vec2,
+    weight: Weight,
 }
 
 impl Default for Anchor {
     fn default() -> Self {
-        Self::ControlPoint {
-            point: Vec2::new(0.0, 0.0),
-            weight: Weight::Constant,
+        Anchor {
+            point: Vec2::default(),
+            weight: Weight::Quadratic(n32(0.)),
         }
     }
 }
 
 impl Quantify for Anchor {
     fn quantify(&self) -> N32 {
-        n32(self.point().x)
+        n32(self.point.x)
     }
+}
+
+struct RepeaterBound {
+    start: N32,
+    end: N32,
+    weight: Weight,
+}
+
+struct Repeater {
+    duration: N32,
+    ceil: RepeaterBound,
+    floor: RepeaterBound,
 }
 
 #[derive(Default)]
 struct Bound<T> {
     val: T,
     offset: N32,
-    transition: Weight,
 }
 
 impl<T> Quantify for Bound<T> {
@@ -132,38 +74,30 @@ struct Automation<T: Default> {
     start: N32,
     response: HitResponse,
     layer: u8,
-    /// Evals by last (<= t)
+    repeater: Option<Repeater>,
     upper_bounds: TinyVec<[Bound<T>; 4]>,
-    /// Evals by first (t <)
-    anchors: TinyVec<[Anchor; 4]>,
-    /// Evals by last (<= t)
+    anchors: TinyVec<[Anchor; 8]>,
     lower_bounds: TinyVec<[Bound<T>; 4]>,
 }
 
-impl<T: Default + Copy + Lerp> Automation<T> {
-    fn eval(self, t: N32) -> Option<T> {
-        let passed = self
-            .anchors
-            .iter()
-            .take_while(|item| item.quantify() <= t)
-            .count();
-
-        let interpolate = |bounds: &[Bound<T>]| {
-            let before = bounds.first_before_or_at(t).unwrap();
-            bounds.first_after(t).map_or(before.val, |after| {
-                let t = (t - before.quantify()) / (after.quantify() - before.quantify());
-                let d = before.transition.eval(t);
-                before.val.lerp(after.val, d)
+impl<T: Default + Sample> Automation<T> {
+    #[rustfmt::skip]
+    fn eval(&self, t: N32) -> Option<T> {
+        let interp = |t: N32| {
+            self.anchors.as_slice().after(t).first().and_then(|Anchor { point: control, weight }| {
+                self.anchors.as_slice().before_or_at(t).last().map(|Anchor { point: follow, .. }| {
+                    let t = (t - follow.x) / (control.x - follow.x);
+                    n32(follow.y) + n32(control.y - follow.y) * weight.eval(t)
+                })
             })
         };
 
-        self.anchors.as_slice().first_after(t).and_then(|after| {
-            after.eval(&self.anchors[..passed], t).map(|t| {
-                let lower = interpolate(&self.lower_bounds);
-                let upper = interpolate(&self.upper_bounds);
-                lower.lerp(upper, t)
-            })
-        })
+        let t = t - self.start;
+
+        match &self.repeater {
+            Some(repeater) => unimplemented!(),
+            None => unimplemented!(),
+        }
     }
 }
 
