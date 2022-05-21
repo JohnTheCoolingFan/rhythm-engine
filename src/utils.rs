@@ -1,19 +1,38 @@
-use noisy_float::prelude::*;
+use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
+
+struct UnitIntervalChecker;
+
+impl FloatChecker<f32> for UnitIntervalChecker {
+    fn check(value: f32) -> bool {
+        (0.0..=1.0).contains(&value)
+    }
+
+    fn assert(value: f32) {
+        debug_assert!(Self::check(value));
+    }
+}
+
+pub type T32 = NoisyFloat<f32, UnitIntervalChecker>;
+
+pub fn t32(value: f32) -> T32 {
+    T32::new(value)
+}
 
 pub trait Quantify {
-    fn quantify(&self) -> N32;
+    fn quantify(&self) -> R32;
 }
 
 pub trait FloatExt {
     fn quant_floor(self, period: Self, offset: Self) -> Self;
+    fn unit_interval(self, control: Self, follow: Self) -> T32;
 }
 
 pub trait Lerp {
-    fn lerp(&self, other: &Self, t: N32) -> Self;
+    fn lerp(&self, other: &Self, t: T32) -> Self;
 }
 
 pub trait Sample: Sized + Clone {
-    fn sample(&self, _other: &Self, _t: N32) -> Self {
+    fn sample(&self, _other: &Self, _t: T32) -> Self {
         self.clone()
     }
 }
@@ -22,26 +41,22 @@ pub trait Sample: Sized + Clone {
 pub trait SliceExt<'a, T> {
     fn seek(self, by: impl Quantify) -> usize;
     /// Should be small and trivially linear searchable
-    fn before(self, t: N32) -> &'a [T];
+    fn before(self, offset: R32) -> &'a [T];
     /// Should be small and trivially linear searchable
-    fn before_or_at(self, t: N32) -> &'a [T];
+    fn before_or_at(self, offset: R32) -> &'a [T];
     /// Should be small and trivially linear searchable
-    fn after(self, t: N32) -> &'a [T];
+    fn after(self, offset: R32) -> &'a [T];
     /// Should be small and trivially linear searchable
-    fn after_or_at(self, t: N32) -> &'a [T];
-    /// Should be small and trivially linear searchable
-    fn sample(self, t: N32) -> Option<T>
-    where
-        T: Sample;
+    fn after_or_at(self, offset: R32) -> &'a [T];
 }
 
-impl Quantify for N32 {
-    fn quantify(&self) -> N32 {
+impl Quantify for R32 {
+    fn quantify(&self) -> R32 {
         *self
     }
 }
 
-impl FloatExt for N32 {
+impl FloatExt for R32 {
     fn quant_floor(self, period: Self, offset: Self) -> Self {
         if f32::EPSILON < period.raw().abs() {
             ((self - offset) / period).floor() * period + offset
@@ -49,11 +64,15 @@ impl FloatExt for N32 {
             self
         }
     }
+
+    fn unit_interval(self, first: Self, second: Self) -> T32 {
+        t32(((self - first) / (second - first)).raw())
+    }
 }
 
-impl Lerp for N32 {
-    fn lerp(&self, other: &Self, amount: N32) -> Self {
-        *self + (*other - *self) * amount
+impl Lerp for R32 {
+    fn lerp(&self, other: &Self, t: T32) -> Self {
+        *self + (*other - *self) * t.raw()
     }
 }
 
@@ -78,43 +97,42 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
         index + to_skip
     }
 
-    fn before(self, t: N32) -> &'a [T] {
-        &self[..self.iter().take_while(|item| item.quantify() < t).count()]
+    fn before(self, offset: R32) -> &'a [T] {
+        let end = self
+            .iter()
+            .take_while(|item| item.quantify() < offset)
+            .count();
+
+        &self[..end]
     }
 
-    fn before_or_at(self, t: N32) -> &'a [T] {
-        &self[..self.iter().take_while(|item| item.quantify() <= t).count()]
+    fn before_or_at(self, offset: R32) -> &'a [T] {
+        let end = self
+            .iter()
+            .take_while(|item| item.quantify() <= offset)
+            .count();
+
+        &self[..end]
     }
 
-    fn after(self, t: N32) -> &'a [T] {
+    fn after(self, offset: R32) -> &'a [T] {
         let num = self
             .iter()
             .rev()
-            .take_while(|item| t < item.quantify())
+            .take_while(|item| offset < item.quantify())
             .count();
 
         &self[self.len() - num..]
     }
 
-    fn after_or_at(self, t: N32) -> &'a [T] {
+    fn after_or_at(self, offset: R32) -> &'a [T] {
         let num = self
             .iter()
             .rev()
-            .take_while(|item| t <= item.quantify())
+            .take_while(|item| offset <= item.quantify())
             .count();
 
         &self[self.len() - num..]
-    }
-
-    fn sample(self, t: N32) -> Option<T>
-    where
-        T: Sample,
-    {
-        self.before_or_at(t).last().and_then(|control| {
-            self.after(t)
-                .first()
-                .map(|follow| control.sample(&follow, t))
-        })
     }
 }
 
@@ -122,37 +140,37 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
 mod tests {
     use super::*;
 
-    fn numbers() -> Vec<N32> {
+    fn numbers() -> Vec<R32> {
         [1., 2., 3., 4., 5., 6., 7., 7., 8., 9., 10.]
             .into_iter()
-            .map(n32)
+            .map(r32)
             .collect::<Vec<_>>()
     }
 
     #[test]
     fn slice_ext_before() {
-        assert_eq!(numbers().before(n32(0.0)), [] as [N32; 0]);
-        assert_eq!(numbers().before(n32(2.0)), &[n32(1.0)]);
+        assert_eq!(numbers().before(r32(0.0)), [] as [R32; 0]);
+        assert_eq!(numbers().before(r32(2.0)), &[r32(1.0)]);
     }
 
     #[test]
     fn slice_ext_before_or_at() {
-        assert_eq!(numbers().before_or_at(n32(0.0)), [] as [N32; 0]);
-        assert_eq!(numbers().before_or_at(n32(2.0)), &[n32(1.0), n32(2.0)]);
+        assert_eq!(numbers().before_or_at(r32(0.0)), [] as [R32; 0]);
+        assert_eq!(numbers().before_or_at(r32(2.0)), &[r32(1.0), r32(2.0)]);
     }
 
     #[test]
     fn slice_ext_after() {
-        assert_eq!(numbers().after(n32(10.)), [] as [N32; 0]);
-        assert_eq!(numbers().after(n32(7.5)), &[n32(8.0), n32(9.0), n32(10.0)]);
+        assert_eq!(numbers().after(r32(10.)), [] as [R32; 0]);
+        assert_eq!(numbers().after(r32(7.5)), &[r32(8.0), r32(9.0), r32(10.0)]);
     }
 
     #[test]
     fn slice_ext_after_or_at() {
-        assert_eq!(numbers().after_or_at(n32(10.1)), [] as [N32; 0]);
+        assert_eq!(numbers().after_or_at(r32(10.1)), [] as [R32; 0]);
         assert_eq!(
-            numbers().after_or_at(n32(7.)),
-            &[n32(7.0), n32(7.0), n32(8.0), n32(9.0), n32(10.0)]
+            numbers().after_or_at(r32(7.)),
+            &[r32(7.0), r32(7.0), r32(8.0), r32(9.0), r32(10.0)]
         );
     }
 }

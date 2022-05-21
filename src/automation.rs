@@ -10,18 +10,18 @@ use crate::utils::*;
 #[derive(Debug, Clone, Copy)]
 enum Weight {
     Constant,
-    Quadratic(N32),
-    Cubic(N32),
+    Quadratic(R32),
+    Cubic(R32),
 }
 
 impl Weight {
-    fn eval(&self, t: N32) -> N32 {
+    fn eval(&self, t: T32) -> T32 {
         let f = |x: f32, k: f32| x.signum() * x.abs().powf((k + k.signum()).abs().powf(k.signum()));
 
         match self {
-            Weight::Constant => n32(0.),
-            Weight::Quadratic(k) => n32(f(t.raw(), k.raw())),
-            Weight::Cubic(k) => n32(((f(2. * t.raw() - 1., k.raw()) - 1.) / 2.) + 1.),
+            Weight::Constant => t32(0.),
+            Weight::Quadratic(k) => t32(f(t.raw(), k.raw())),
+            Weight::Cubic(k) => t32(((f(2. * t.raw() - 1., k.raw()) - 1.) / 2.) + 1.),
         }
     }
 }
@@ -35,25 +35,25 @@ impl Default for Anchor {
     fn default() -> Self {
         Anchor {
             point: Vec2::default(),
-            weight: Weight::Quadratic(n32(0.)),
+            weight: Weight::Quadratic(r32(0.)),
         }
     }
 }
 
 impl Quantify for Anchor {
-    fn quantify(&self) -> N32 {
-        n32(self.point.x)
+    fn quantify(&self) -> R32 {
+        r32(self.point.x)
     }
 }
 
 struct RepeaterBound {
-    start: N32,
-    end: N32,
+    start: R32,
+    end: R32,
     weight: Weight,
 }
 
 struct Repeater {
-    duration: N32,
+    duration: R32,
     ceil: RepeaterBound,
     floor: RepeaterBound,
 }
@@ -61,17 +61,17 @@ struct Repeater {
 #[derive(Default)]
 struct Bound<T> {
     val: T,
-    offset: N32,
+    offset: R32,
 }
 
 impl<T> Quantify for Bound<T> {
-    fn quantify(&self) -> N32 {
+    fn quantify(&self) -> R32 {
         self.offset
     }
 }
 
 struct Automation<T: Default> {
-    start: N32,
+    start: R32,
     response: HitResponse,
     layer: u8,
     repeater: Option<Repeater>,
@@ -80,29 +80,40 @@ struct Automation<T: Default> {
     lower_bounds: TinyVec<[Bound<T>; 4]>,
 }
 
-impl<T: Default + Sample> Automation<T> {
+impl<T: Copy + Default + Sample> Automation<T> {
     #[rustfmt::skip]
-    fn eval(&self, t: N32) -> Option<T> {
-        let interp = |t: N32| {
-            self.anchors.as_slice().after(t).first().and_then(|Anchor { point: control, weight }| {
-                self.anchors.as_slice().before_or_at(t).last().map(|Anchor { point: follow, .. }| {
-                    let t = (t - follow.x) / (control.x - follow.x);
-                    n32(follow.y) + n32(control.y - follow.y) * weight.eval(t)
+    fn eval(&self, offset: R32) -> Option<T> {
+        let interp_anchors = |offest: R32| {
+            self.anchors
+                .as_slice()
+                .before_or_at(offset)
+                .last()
+                .zip(self.anchors.as_slice().after(offset).first())
+                .map(|(Anchor { point: follow, .. }, Anchor { point: control, weight })| r32(
+                    follow.y
+                        + (control.y - follow.y)
+                        * weight.eval(offset.unit_interval(r32(follow.x), r32(control.x))).raw()
+                ))
+        };
+
+        let interp_bounds = |bounds: &[Bound<T>]| {
+            let t = offset - self.start;
+            bounds.before(t).last().map(|control| {
+                bounds.after_or_at(t).first().map_or(control.val, |follow| {
+                    control.val.sample(
+                        &follow.val,
+                        (t - control.offset) / (follow.offset - control.offset)
+                    )
                 })
             })
         };
 
-        let t = t - self.start;
-
-        match &self.repeater {
-            Some(repeater) => unimplemented!(),
-            None => unimplemented!(),
-        }
+        unimplemented!()
     }
 }
 
 impl<T: Default> Quantify for Automation<T> {
-    fn quantify(&self) -> N32 {
+    fn quantify(&self) -> R32 {
         self.start
     }
 }
@@ -115,7 +126,7 @@ pub struct Channel<T: Default> {
 }
 
 impl<T: Default> Channel<T> {
-    fn can_skip_seeking(&self, song_time: N32) -> bool {
+    fn can_skip_seeking(&self, song_time: R32) -> bool {
         self.clips
             .last()
             .map_or(true, |clip| clip.start < song_time)

@@ -6,7 +6,7 @@ pub const CHANNELS_PER_TABLE: usize = 256;
 
 struct HitRegister([HitInfo; 4]);
 
-pub struct SongTime(pub N32);
+pub struct SongTime(pub R32);
 
 pub struct ChannelOutput<T> {
     output: Option<T>,
