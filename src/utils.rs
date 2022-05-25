@@ -1,6 +1,6 @@
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
 
-struct UnitIntervalChecker;
+pub struct UnitIntervalChecker;
 
 impl FloatChecker<f32> for UnitIntervalChecker {
     fn check(value: f32) -> bool {
@@ -23,7 +23,8 @@ pub trait Quantify {
 }
 
 pub trait FloatExt {
-    fn quant_floor(self, period: Self, offset: Self) -> Self;
+    fn quantized_floor(self, period: Self, offset: Self) -> Self;
+    fn quantized_remainder(self, period: Self, offset: Self) -> Self;
     fn unit_interval(self, control: Self, follow: Self) -> T32;
 }
 
@@ -57,9 +58,17 @@ impl Quantify for R32 {
 }
 
 impl FloatExt for R32 {
-    fn quant_floor(self, period: Self, offset: Self) -> Self {
+    fn quantized_floor(self, period: Self, offset: Self) -> Self {
         if f32::EPSILON < period.raw().abs() {
             ((self - offset) / period).floor() * period + offset
+        } else {
+            self
+        }
+    }
+
+    fn quantized_remainder(self, period: Self, offset: Self) -> Self {
+        if f32::EPSILON < period.raw().abs() {
+            (self - offset) % period
         } else {
             self
         }

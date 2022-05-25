@@ -56,6 +56,7 @@ struct Repeater {
     duration: R32,
     ceil: RepeaterBound,
     floor: RepeaterBound,
+    repeat_bounds: bool,
 }
 
 #[derive(Default)]
@@ -80,35 +81,55 @@ struct Automation<T: Default> {
     lower_bounds: TinyVec<[Bound<T>; 4]>,
 }
 
-impl<T: Copy + Default + Sample> Automation<T> {
+impl<T: Copy + Default + Sample + Lerp> Automation<T> {
     #[rustfmt::skip]
+    fn interp_anchors(anchors: &[Anchor], offset: R32) -> Option<T32> {
+        let follow = anchors.before_or_at(offset).last();
+        let control = anchors.after(offset).first();
+
+        follow.zip(control).map(|(follow, control)| 
+            t32(
+                follow.point.y
+                + (control.point.y - control.point.y)
+                * control
+                    .weight
+                    .eval(offset.unit_interval(r32(follow.point.x), r32(control.point.x)))
+                    .raw()
+            )
+        )
+    }
+
+    fn sample_bound(bounds: &[Bound<T>], offset: R32) -> T {
+        let control = bounds.before_or_at(offset).last().unwrap();
+        let follow = bounds.after(offset).first().unwrap_or(control);
+
+        control.val.sample(
+            &follow.val,
+            offset.unit_interval(control.offset, follow.offset),
+        )
+    }
+
     fn eval(&self, offset: R32) -> Option<T> {
-        let interp_anchors = |offest: R32| {
-            self.anchors
-                .as_slice()
-                .before_or_at(offset)
-                .last()
-                .zip(self.anchors.as_slice().after(offset).first())
-                .map(|(Anchor { point: follow, .. }, Anchor { point: control, weight })| r32(
-                    follow.y
-                        + (control.y - follow.y)
-                        * weight.eval(offset.unit_interval(r32(follow.x), r32(control.x))).raw()
-                ))
-        };
-
-        let interp_bounds = |bounds: &[Bound<T>]| {
-            let t = offset - self.start;
-            bounds.before(t).last().map(|control| {
-                bounds.after_or_at(t).first().map_or(control.val, |follow| {
-                    control.val.sample(
-                        &follow.val,
-                        (t - control.offset) / (follow.offset - control.offset)
-                    )
+        let options = match self.repeater {
+            Some(repeater) if offset < repeater.duration + self.start => {
+                let period = r32(self.anchors.last().unwrap().point.x);
+                let anchor_offset = (offset - self.start) % period;
+                
+                Self::interp_anchors(&self.anchors, anchor_offset).map(|lerp_amount| {
+                    let lerp_amount = 
                 })
-            })
+            }
+            _ => {
+                let offset = offset - self.start;
+                Self::interp_anchors(&self.anchors, offset).map(|lerp_amount| (offset, lerp_amount))
+            }
         };
-
-        unimplemented!()
+        
+        options.map(|(bound_offset, lerp_amount)| {
+            let lower = Self::sample_bound(&self.lower_bounds, bound_offset);
+            let upper = Self::sample_bound(&self.upper_bounds, bound_offset);
+            lower.lerp(&upper, lerp_amount)
+        })
     }
 }
 
