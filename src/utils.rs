@@ -8,7 +8,10 @@ impl FloatChecker<f32> for UnitIntervalChecker {
     }
 
     fn assert(value: f32) {
-        debug_assert!(Self::check(value));
+        debug_assert!(
+            Self::check(value),
+            "Expected within 0.0 - 1.0 (inclusive). Actual value: {value}"
+        );
     }
 }
 
@@ -80,6 +83,12 @@ impl FloatExt for R32 {
 }
 
 impl Lerp for R32 {
+    fn lerp(&self, other: &Self, t: T32) -> Self {
+        *self + (*other - *self) * t.raw()
+    }
+}
+
+impl Lerp for T32 {
     fn lerp(&self, other: &Self, t: T32) -> Self {
         *self + (*other - *self) * t.raw()
     }

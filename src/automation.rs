@@ -19,7 +19,7 @@ impl Weight {
         let f = |x: f32, k: f32| x.signum() * x.abs().powf((k + k.signum()).abs().powf(k.signum()));
 
         match self {
-            Weight::Constant => t32(0.),
+            Weight::Constant => t32(1.),
             Weight::Quadratic(k) => t32(f(t.raw(), k.raw())),
             Weight::Cubic(k) => t32(((f(2. * t.raw() - 1., k.raw()) - 1.) / 2.) + 1.),
         }
@@ -47,9 +47,15 @@ impl Quantify for Anchor {
 }
 
 struct RepeaterBound {
-    start: R32,
-    end: R32,
+    start: T32,
+    end: T32,
     weight: Weight,
+}
+
+impl RepeaterBound {
+    fn eval(&self, t: T32) -> T32 {
+        self.start.lerp(&self.end, self.weight.eval(t))
+    }
 }
 
 struct Repeater {
@@ -60,12 +66,12 @@ struct Repeater {
 }
 
 #[derive(Default)]
-struct Bound<T> {
+struct ValueBound<T> {
     val: T,
     offset: R32,
 }
 
-impl<T> Quantify for Bound<T> {
+impl<T> Quantify for ValueBound<T> {
     fn quantify(&self) -> R32 {
         self.offset
     }
@@ -76,9 +82,9 @@ struct Automation<T: Default> {
     response: HitResponse,
     layer: u8,
     repeater: Option<Repeater>,
-    upper_bounds: TinyVec<[Bound<T>; 4]>,
+    upper_bounds: TinyVec<[ValueBound<T>; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[Bound<T>; 4]>,
+    lower_bounds: TinyVec<[ValueBound<T>; 4]>,
 }
 
 impl<T: Copy + Default + Sample + Lerp> Automation<T> {
@@ -99,7 +105,7 @@ impl<T: Copy + Default + Sample + Lerp> Automation<T> {
         )
     }
 
-    fn sample_bound(bounds: &[Bound<T>], offset: R32) -> T {
+    fn sample_bound(bounds: &[ValueBound<T>], offset: R32) -> T {
         let control = bounds.before_or_at(offset).last().unwrap();
         let follow = bounds.after(offset).first().unwrap_or(control);
 
@@ -110,21 +116,34 @@ impl<T: Copy + Default + Sample + Lerp> Automation<T> {
     }
 
     fn eval(&self, offset: R32) -> Option<T> {
-        let options = match self.repeater {
-            Some(repeater) if offset < repeater.duration + self.start => {
+        let offset = offset - self.start;
+
+        let options = match &self.repeater {
+            Some(repeater) if offset < repeater.duration => {
                 let period = r32(self.anchors.last().unwrap().point.x);
-                let anchor_offset = (offset - self.start) % period;
-                
-                Self::interp_anchors(&self.anchors, anchor_offset).map(|lerp_amount| {
-                    let lerp_amount = 
+                let period_offset = offset % period;
+
+                Self::interp_anchors(&self.anchors, self.start + period_offset).map(|lerp_amount| {
+                    let repeat_bound_unit_interval = (offset / period)
+                        .trunc()
+                        .unit_interval(r32(0.), repeater.duration);
+
+                    let bound_offset = match repeater.repeat_bounds {
+                        true => period_offset,
+                        false => offset
+                    };
+
+                    let ceil = repeater.ceil.eval(repeat_bound_unit_interval);
+                    let floor = repeater.floor.eval(repeat_bound_unit_interval);
+
+                    (bound_offset, floor.lerp(&ceil, lerp_amount))
                 })
             }
             _ => {
-                let offset = offset - self.start;
                 Self::interp_anchors(&self.anchors, offset).map(|lerp_amount| (offset, lerp_amount))
             }
         };
-        
+
         options.map(|(bound_offset, lerp_amount)| {
             let lower = Self::sample_bound(&self.lower_bounds, bound_offset);
             let upper = Self::sample_bound(&self.upper_bounds, bound_offset);
@@ -202,4 +221,25 @@ struct AutomationPlugin;
 
 impl Plugin for AutomationPlugin {
     fn build(&self, app: &mut App) {}
+}
+
+
+#[cfg(test)] 
+mod tests {
+    use super::*;
+
+    #[test]
+    fn weight() {
+        assert_eq!(Weight::Constant.eval(t32(0.)), t32(1.));
+        assert_eq!(Weight::Constant.eval(t32(0.5)), t32(1.));
+        assert_eq!(Weight::Constant.eval(t32(1.)), t32(1.));
+        assert_eq!(Weight::Quadratic(r32(0.)).eval(t32(0.5)), t32(0.5));
+        (0..20).map(|i| i as f32).map(r32).for_each(|w|{
+            assert_eq!(Weight::Quadratic(w).eval(t32(0.)), t32(0.));
+            assert_eq!(Weight::Quadratic(w).eval(t32(1.)), t32(1.));
+            assert_eq!(Weight::Cubic(w).eval(t32(0.)), t32(0.));
+            assert_eq!(Weight::Cubic(w).eval(t32(0.5)), t32(0.5));
+            assert_eq!(Weight::Cubic(w).eval(t32(1.)), t32(1.));
+        })
+    }
 }
