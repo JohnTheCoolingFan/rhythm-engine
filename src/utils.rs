@@ -1,5 +1,6 @@
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
 
+#[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;
 
 impl FloatChecker<f32> for UnitIntervalChecker {
@@ -78,6 +79,7 @@ impl FloatExt for R32 {
     }
 
     fn unit_interval(self, first: Self, second: Self) -> T32 {
+        println!("{} {}", first, second);
         t32(((self - first) / (second - first)).raw())
     }
 }
@@ -90,7 +92,7 @@ impl Lerp for R32 {
 
 impl Lerp for T32 {
     fn lerp(&self, other: &Self, t: T32) -> Self {
-        *self + (*other - *self) * t.raw()
+        *self + (other.raw() - self.raw()) * t.raw()
     }
 }
 
