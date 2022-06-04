@@ -80,7 +80,7 @@ impl<T> Quantify for ValueBound<T> {
 struct Automation<T: Default> {
     start: R32,
     response: HitResponse,
-    layer: u8,
+    layer: Option<u8>,
     repeater: Option<Repeater>,
     upper_bounds: TinyVec<[ValueBound<T>; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
@@ -103,14 +103,14 @@ impl<T: Copy + Default + Sample + Lerp> Automation<T> {
 
     fn sample_bound(bounds: &[ValueBound<T>], offset: R32) -> T {
         let control = bounds.before_or_at(offset).last().unwrap();
-        let sampled = bounds.after(offset).first().map(|follow| {
+        let follow = bounds.after(offset).first();
+
+        follow.map_or(control.val, |follow| {
             control.val.sample(
                 &follow.val,
                 offset.unit_interval(control.offset, follow.offset),
             )
-        });
-
-        sampled.unwrap_or(control.val)
+        })
     }
 
     fn eval(&self, offset: R32) -> Option<T> {
@@ -224,6 +224,7 @@ impl Plugin for AutomationPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tinyvec::tiny_vec;
 
     /// Needed for some constraints
     impl Sample for R32 {}
@@ -234,66 +235,137 @@ mod tests {
         assert_eq!(Weight::Constant.eval(t32(0.5)), t32(1.));
         assert_eq!(Weight::Constant.eval(t32(1.)), t32(1.));
         assert_eq!(Weight::Quadratic(r32(0.)).eval(t32(0.5)), t32(0.5));
-        (0..20).map(|i| i as f32).map(r32).for_each(|w| {
-            assert_eq!(Weight::Quadratic(w).eval(t32(0.)), t32(0.));
-            assert_eq!(Weight::Quadratic(w).eval(t32(1.)), t32(1.));
-            assert_eq!(Weight::Cubic(w).eval(t32(0.)), t32(0.));
-            assert_eq!(Weight::Cubic(w).eval(t32(0.5)), t32(0.5));
-            assert_eq!(Weight::Cubic(w).eval(t32(1.)), t32(1.));
+
+        (-20..20).map(|i| i as f32).map(r32).for_each(|weight| {
+            assert_eq!(Weight::Quadratic(weight).eval(t32(0.)), t32(0.));
+            assert_eq!(Weight::Quadratic(weight).eval(t32(1.)), t32(1.));
+            assert_eq!(Weight::Cubic(weight).eval(t32(0.)), t32(0.));
+            assert_eq!(Weight::Cubic(weight).eval(t32(0.5)), t32(0.5));
+            assert_eq!(Weight::Cubic(weight).eval(t32(1.)), t32(1.));
         })
+    }
+
+    fn automation() -> Automation<R32> {
+        Automation::<R32> {
+            start: r32(0.),
+            response: HitResponse::Ignore,
+            layer: None,
+            repeater: None,
+            upper_bounds: tiny_vec![
+                ValueBound {
+                    val: r32(0.),
+                    offset: r32(0.),
+                },
+                ValueBound {
+                    val: r32(1.),
+                    offset: r32(1.),
+                },
+                ValueBound {
+                    val: r32(2.),
+                    offset: r32(2.),
+                }
+            ],
+            anchors: tiny_vec![
+                Anchor {
+                    point: Vec2::new(0., 0.),
+                    weight: Weight::Constant,
+                },
+                Anchor {
+                    point: Vec2::new(1., 1.),
+                    weight: Weight::Quadratic(r32(0.)),
+                },
+                Anchor {
+                    point: Vec2::new(2., 1.),
+                    weight: Weight::Quadratic(r32(0.)),
+                },
+                Anchor {
+                    point: Vec2::new(3., 0.),
+                    weight: Weight::Quadratic(r32(0.)),
+                }
+            ],
+            lower_bounds: tiny_vec![
+                ValueBound {
+                    val: r32(0.),
+                    offset: r32(0.),
+                },
+                ValueBound {
+                    val: r32(1.),
+                    offset: r32(1.),
+                }
+            ],
+        }
     }
 
     #[test]
     fn anchor_interp() {
-        let anchors = &[
-            Anchor {
-                point: Vec2::new(0., 0.),
-                weight: Weight::Constant,
-            },
-            Anchor {
-                point: Vec2::new(1., 1.),
-                weight: Weight::Quadratic(r32(0.)),
-            },
-            Anchor {
-                point: Vec2::new(2., 0.),
-                weight: Weight::Quadratic(r32(0.)),
-            },
-        ];
         assert_eq!(
-            Automation::<R32>::interp_anchors(anchors, r32(0.)),
+            Automation::<R32>::interp_anchors(&automation().anchors, r32(0.)),
             Some(t32(0.0))
         );
         assert_eq!(
-            Automation::<R32>::interp_anchors(anchors, r32(0.5)),
+            Automation::<R32>::interp_anchors(&automation().anchors, r32(0.5)),
             Some(t32(0.5))
         );
         assert_eq!(
-            Automation::<R32>::interp_anchors(anchors, r32(1.0)),
+            Automation::<R32>::interp_anchors(&automation().anchors, r32(1.0)),
             Some(t32(1.0))
         );
         assert_eq!(
-            Automation::<R32>::interp_anchors(anchors, r32(1.5)),
-            Some(t32(0.5))
+            Automation::<R32>::interp_anchors(&automation().anchors, r32(1.5)),
+            Some(t32(1.))
         );
-        assert_eq!(Automation::<R32>::interp_anchors(anchors, r32(2.)), None);
+        assert_eq!(
+            Automation::<R32>::interp_anchors(&automation().anchors, r32(2.)),
+            Some(t32(1.))
+        );
+        assert_eq!(
+            Automation::<R32>::interp_anchors(&automation().anchors, r32(3.)),
+            None
+        );
+        assert_eq!(
+            Automation::<R32>::interp_anchors(&automation().anchors, r32(4.)),
+            None
+        );
+        assert_eq!(
+            Automation::<R32>::interp_anchors(&automation().anchors, r32(5.)),
+            None
+        );
     }
 
     #[test]
     fn val_bound_sample() {
-        let bounds = &[
-            ValueBound {
-                val: r32(0.),
-                offset: r32(0.),
-            },
-            ValueBound {
-                val: r32(1.),
-                offset: r32(1.),
-            },
-        ];
+        assert_eq!(
+            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(0.)),
+            r32(0.0)
+        );
+        assert_eq!(
+            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(0.5)),
+            r32(0.0)
+        );
+        assert_eq!(
+            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(1.0)),
+            r32(1.0)
+        );
+        assert_eq!(
+            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(2.0)),
+            r32(1.0)
+        );
+        assert_eq!(
+            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(3.0)),
+            r32(1.0)
+        );
+        assert_eq!(
+            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(4.0)),
+            r32(1.0)
+        );
+    }
 
-        assert_eq!(Automation::<R32>::sample_bound(bounds, r32(0.)), r32(0.0));
-        assert_eq!(Automation::<R32>::sample_bound(bounds, r32(0.5)), r32(0.0));
-        assert_eq!(Automation::<R32>::sample_bound(bounds, r32(1.0)), r32(1.0));
-        assert_eq!(Automation::<R32>::sample_bound(bounds, r32(2.0)), r32(1.0));
+    #[test]
+    fn automation_eval() {
+        assert_eq!(automation().eval(r32(0.)), Some(r32(0.)));
+        assert_eq!(automation().eval(r32(0.5)), Some(r32(0.)));
+        assert_eq!(automation().eval(r32(1.)), Some(r32(1.)));
+        assert_eq!(automation().eval(r32(1.5)), Some(r32(1.)));
+        assert_eq!(automation().eval(r32(2.5)), Some(r32(1.5)));
     }
 }
