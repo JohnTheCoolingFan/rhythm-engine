@@ -46,13 +46,20 @@ impl Quantify for Anchor {
     }
 }
 
-struct RepeaterBound {
+impl Lerp for Anchor {
+    type Output = T32;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
+        t32(other.point.y).lerp(&t32(self.point.y), t)
+    }
+}
+
+struct RepeaterClamp {
     start: T32,
     end: T32,
     weight: Weight,
 }
 
-impl RepeaterBound {
+impl RepeaterClamp {
     fn eval(&self, t: T32) -> T32 {
         self.start.lerp(&self.end, self.weight.eval(t))
     }
@@ -60,93 +67,66 @@ impl RepeaterBound {
 
 struct Repeater {
     duration: R32,
-    ceil: RepeaterBound,
-    floor: RepeaterBound,
+    ceil: RepeaterClamp,
+    floor: RepeaterClamp,
     repeat_bounds: bool,
-}
-
-#[derive(Default)]
-struct ValueBound<T> {
-    val: T,
-    offset: R32,
-}
-
-impl<T> Quantify for ValueBound<T> {
-    fn quantify(&self) -> R32 {
-        self.offset
-    }
 }
 
 struct Automation<T: Default> {
     start: R32,
-    response: HitResponse,
+    reaction: HitReaction,
     layer: Option<u8>,
     repeater: Option<Repeater>,
-    upper_bounds: TinyVec<[ValueBound<T>; 4]>,
+    upper_bounds: TinyVec<[T; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[ValueBound<T>; 4]>,
+    lower_bounds: TinyVec<[T; 4]>,
 }
 
-impl<T: Copy + Default + Sample + Lerp> Automation<T> {
+type AutomationOutput<T> = <<T as Sample>::Output as Lerp>::Output;
+
+impl<T> Automation<T>
+where
+    T: Copy + Default + Quantify + Sample + Lerp,
+    <T as Sample>::Output: Lerp,
+{
     #[rustfmt::skip]
-    fn interp_anchors(anchors: &[Anchor], offset: R32) -> Option<T32> {
-        let follow = anchors.before_or_at(offset).last();
-        let control = anchors.after(offset).first();
-
-        follow.zip(control).map(|(Anchor { point: follow, .. }, Anchor { point: control, weight })|
-            t32(follow.y).lerp(
-                &t32(control.y),
-                weight.eval(offset.unit_interval(r32(follow.x), r32(control.x)))
-            )
-        )
-    }
-
-    fn sample_bound(bounds: &[ValueBound<T>], offset: R32) -> T {
-        let control = bounds.before_or_at(offset).last().unwrap();
-        let follow = bounds.after(offset).first();
-
-        follow.map_or(control.val, |follow| {
-            control.val.sample(
-                &follow.val,
-                offset.unit_interval(control.offset, follow.offset),
-            )
-        })
-    }
-
-    fn eval(&self, offset: R32) -> Option<T> {
-        let offset = offset - self.start;
+    fn eval(&self, hits: &HitRegister, offset: R32) -> (Option<u8>, Option<AutomationOutput<T>>) {
+        let (delegate, offset) = self.reaction.react(hits, offset - self.start);
 
         let options = match &self.repeater {
             Some(repeater) if offset < repeater.duration => {
                 let period = r32(self.anchors.last().unwrap().point.x);
                 let period_offset = offset % period;
 
-                Self::interp_anchors(&self.anchors, self.start + period_offset).map(|lerp_amount| {
-                    let repeat_bound_unit_interval = (offset / period)
+                self.anchors.lerp(self.start + period_offset).map(|lerp_amount| {
+                    let bound_offset = if repeater.repeat_bounds { period_offset } else { offset };
+                    let clamp_offset = (offset / period)
                         .trunc()
                         .unit_interval(r32(0.), repeater.duration);
 
-                    let bound_offset = match repeater.repeat_bounds {
-                        true => period_offset,
-                        false => offset,
-                    };
-
-                    let ceil = repeater.ceil.eval(repeat_bound_unit_interval);
-                    let floor = repeater.floor.eval(repeat_bound_unit_interval);
+                    let (floor, ceil) = (
+                        repeater.floor.eval(clamp_offset),
+                        repeater.ceil.eval(clamp_offset),
+                    );
 
                     (bound_offset, floor.lerp(&ceil, lerp_amount))
                 })
             }
             _ => {
-                Self::interp_anchors(&self.anchors, offset).map(|lerp_amount| (offset, lerp_amount))
+                self.anchors.lerp(offset).map(|lerp_amount| (offset, lerp_amount))
             }
         };
 
-        options.map(|(bound_offset, lerp_amount)| {
-            let lower = Self::sample_bound(&self.lower_bounds, bound_offset);
-            let upper = Self::sample_bound(&self.upper_bounds, bound_offset);
+        let output = options.map(|(bound_offset, lerp_amount)| {
+            let (lower, upper) = (
+                self.lower_bounds.sample(bound_offset),
+                self.upper_bounds.sample(bound_offset),
+            );
+
             lower.lerp(&upper, lerp_amount)
-        })
+        });
+
+        (delegate, output)
     }
 }
 
@@ -174,11 +154,15 @@ impl<T: Default> Channel<T> {
 #[derive(Component)]
 pub struct IndexCache(usize);
 
+/// Find each clip we want to evaluate on in each channel
 #[rustfmt::skip]
 fn seek_channels<T: Default + Component>(
     mut channel_table: Query<(&Channel<T>, &mut IndexCache)>,
     song_time: Res<SongTime>,
 ) {
+    //
+    //  TODO: Parallel system
+    //
     channel_table
         .iter_mut()
         .filter(|(channel, _)| !channel.can_skip_seeking(song_time.0))
@@ -204,15 +188,34 @@ fn seek_channels<T: Default + Component>(
         })
 }
 
-fn eval_channels<T: Default + Component + Quantify>(
-    mut channel_table: Query<(&Channel<T>, &IndexCache)>,
+/// Envoke eval functions for each clip and juggle hit responses
+fn eval_channels<T>(
+    channel_table: Query<(&Channel<T>, &IndexCache)>,
     song_time: Res<SongTime>,
-    mut output_table: ResMut<OutputTable<ChannelOutput<T>>>,
-) {
+    hit_reg: Res<HitRegister>,
+    mut output_table: ResMut<OutputTable<AutomationOutput<T>>>,
+) where
+    T: Default + Copy + Component + Quantify + Sample + Lerp,
+    <T as Sample>::Output: Lerp,
+    AutomationOutput<T>: Component,
+{
+    //
+    //  TODO: Parallel system
+    //
     channel_table
-        .iter_mut()
+        .iter()
         .filter(|(channel, _)| !channel.clips.is_empty())
-        .for_each(|(channel, cache)| unimplemented!())
+        .for_each(|(channel, cache)| {
+            let (slot, clip) = (
+                &mut output_table.0[channel.id as usize],
+                &channel.clips[cache.0],
+            );
+
+            let (delegate, output) = clip.eval(&hit_reg, song_time.0);
+
+            slot.output = output;
+            slot.redirect = delegate.map(From::from);
+        })
 }
 
 struct AutomationPlugin;
@@ -223,6 +226,11 @@ impl Plugin for AutomationPlugin {
 
 #[cfg(test)]
 mod tests {
+    //
+    //  TODO:
+    //          - Test Repeater
+    //          - Test HitReactions
+    //
     use super::*;
     use tinyvec::tiny_vec;
 
@@ -248,7 +256,7 @@ mod tests {
     fn automation() -> Automation<R32> {
         Automation::<R32> {
             start: r32(0.),
-            response: HitResponse::Ignore,
+            reaction: HitReaction::Ignore,
             layer: None,
             repeater: None,
             upper_bounds: tiny_vec![
@@ -298,38 +306,14 @@ mod tests {
 
     #[test]
     fn anchor_interp() {
-        assert_eq!(
-            Automation::<R32>::interp_anchors(&automation().anchors, r32(0.)),
-            Some(t32(0.0))
-        );
-        assert_eq!(
-            Automation::<R32>::interp_anchors(&automation().anchors, r32(0.5)),
-            Some(t32(0.5))
-        );
-        assert_eq!(
-            Automation::<R32>::interp_anchors(&automation().anchors, r32(1.0)),
-            Some(t32(1.0))
-        );
-        assert_eq!(
-            Automation::<R32>::interp_anchors(&automation().anchors, r32(1.5)),
-            Some(t32(1.))
-        );
-        assert_eq!(
-            Automation::<R32>::interp_anchors(&automation().anchors, r32(2.)),
-            Some(t32(1.))
-        );
-        assert_eq!(
-            Automation::<R32>::interp_anchors(&automation().anchors, r32(3.)),
-            None
-        );
-        assert_eq!(
-            Automation::<R32>::interp_anchors(&automation().anchors, r32(4.)),
-            None
-        );
-        assert_eq!(
-            Automation::<R32>::interp_anchors(&automation().anchors, r32(5.)),
-            None
-        );
+        assert_eq!(automation().anchors.lerp(r32(0.)), Some(t32(0.0)));
+        assert_eq!(automation().anchors.lerp(r32(0.5)), Some(t32(0.5)));
+        assert_eq!(automation().anchors.lerp(r32(1.0)), Some(t32(1.0)));
+        assert_eq!(automation().anchors.lerp(r32(1.5)), Some(t32(1.)));
+        assert_eq!(automation().anchors.lerp(r32(2.)), Some(t32(1.)));
+        assert_eq!(automation().anchors.lerp(r32(3.)), None);
+        assert_eq!(automation().anchors.lerp(r32(4.)), None);
+        assert_eq!(automation().anchors.lerp(r32(5.)), None);
     }
 
     #[test]
@@ -362,10 +346,25 @@ mod tests {
 
     #[test]
     fn automation_eval() {
-        assert_eq!(automation().eval(r32(0.)), Some(r32(0.)));
-        assert_eq!(automation().eval(r32(0.5)), Some(r32(0.)));
-        assert_eq!(automation().eval(r32(1.)), Some(r32(1.)));
-        assert_eq!(automation().eval(r32(1.5)), Some(r32(1.)));
-        assert_eq!(automation().eval(r32(2.5)), Some(r32(1.5)));
+        assert_eq!(
+            automation().eval(&HitRegister([None; 4]), r32(0.)),
+            (None, Some(r32(0.)))
+        );
+        assert_eq!(
+            automation().eval(&HitRegister([None; 4]), r32(0.5)),
+            (None, Some(r32(0.)))
+        );
+        assert_eq!(
+            automation().eval(&HitRegister([None; 4]), r32(1.)),
+            (None, Some(r32(1.)))
+        );
+        assert_eq!(
+            automation().eval(&HitRegister([None; 4]), r32(1.5)),
+            (None, Some(r32(1.)))
+        );
+        assert_eq!(
+            automation().eval(&HitRegister([None; 4]), r32(2.5)),
+            (None, Some(r32(1.5)))
+        );
     }
 }

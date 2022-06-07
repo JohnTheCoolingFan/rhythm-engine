@@ -32,27 +32,30 @@ pub trait FloatExt {
     fn unit_interval(self, control: Self, follow: Self) -> T32;
 }
 
+/// Will always interpolate
 pub trait Lerp {
-    fn lerp(&self, other: &Self, t: T32) -> Self;
+    type Output;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output;
 }
 
+/// May sometimes interpolate
 pub trait Sample: Sized + Clone {
-    fn sample(&self, _other: &Self, _t: T32) -> Self {
-        self.clone()
-    }
+    type Output;
+    fn sample(&self, other: &Self, t: T32) -> Self::Output;
 }
 
 /// Requires underlying data to be sorted
+/// Dataset should be small and trivially linear searchable
 pub trait SliceExt<'a, T> {
     fn seek(self, by: impl Quantify) -> usize;
-    /// Should be small and trivially linear searchable
-    fn before(self, offset: R32) -> &'a [T];
-    /// Should be small and trivially linear searchable
     fn before_or_at(self, offset: R32) -> &'a [T];
-    /// Should be small and trivially linear searchable
     fn after(self, offset: R32) -> &'a [T];
-    /// Should be small and trivially linear searchable
-    fn after_or_at(self, offset: R32) -> &'a [T];
+    fn lerp(self, offset: R32) -> Option<<T as Lerp>::Output>
+    where
+        T: Lerp;
+    fn sample(self, offset: R32) -> <T as Sample>::Output
+    where
+        T: Sample;
 }
 
 impl Quantify for R32 {
@@ -85,13 +88,15 @@ impl FloatExt for R32 {
 }
 
 impl Lerp for R32 {
-    fn lerp(&self, other: &Self, t: T32) -> Self {
+    type Output = Self;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
         *self + (*other - *self) * t.raw()
     }
 }
 
 impl Lerp for T32 {
-    fn lerp(&self, other: &Self, t: T32) -> Self {
+    type Output = Self;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
         *self + (other.raw() - self.raw()) * t.raw()
     }
 }
@@ -117,16 +122,7 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
         index + to_skip
     }
 
-    fn before(self, offset: R32) -> &'a [T] {
-        let end = self
-            .iter()
-            .take_while(|item| item.quantify() < offset)
-            .count();
-
-        &self[..end]
-    }
-
-    fn before_or_at(self, offset: R32) -> &'a [T] {
+    fn before_or_at(self, offset: R32) -> Self {
         let end = self
             .iter()
             .take_while(|item| item.quantify() <= offset)
@@ -135,24 +131,45 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
         &self[..end]
     }
 
-    fn after(self, offset: R32) -> &'a [T] {
-        let num = self
+    fn after(self, offset: R32) -> Self {
+        let keep_size = self
             .iter()
             .rev()
             .take_while(|item| offset < item.quantify())
             .count();
 
-        &self[self.len() - num..]
+        &self[self.len() - keep_size..]
     }
 
-    fn after_or_at(self, offset: R32) -> &'a [T] {
-        let num = self
-            .iter()
-            .rev()
-            .take_while(|item| offset <= item.quantify())
-            .count();
+    fn lerp(self, offset: R32) -> Option<<T as Lerp>::Output>
+    where
+        T: Lerp,
+    {
+        let (follow, control) = (self.before_or_at(offset).last(), self.after(offset).first());
 
-        &self[self.len() - num..]
+        follow.zip(control).map(|(follow, control)| {
+            control.lerp(
+                follow,
+                offset.unit_interval(follow.quantify(), control.quantify()),
+            )
+        })
+    }
+
+    fn sample(self, offset: R32) -> <T as Sample>::Output
+    where
+        T: Sample,
+    {
+        let (control, follow) = (
+            self.before_or_at(offset).last().unwrap(),
+            self.after(offset).first(),
+        );
+
+        follow.map_or(control.sample(&control, t32(0.)), |follow| {
+            control.sample(
+                &follow,
+                offset.unit_interval(control.quantify(), follow.quantify()),
+            )
+        })
     }
 }
 
@@ -168,12 +185,6 @@ mod tests {
     }
 
     #[test]
-    fn slice_ext_before() {
-        assert_eq!(numbers().before(r32(0.0)), [] as [R32; 0]);
-        assert_eq!(numbers().before(r32(2.0)), &[r32(1.0)]);
-    }
-
-    #[test]
     fn slice_ext_before_or_at() {
         assert_eq!(numbers().before_or_at(r32(0.0)), [] as [R32; 0]);
         assert_eq!(numbers().before_or_at(r32(2.0)), &[r32(1.0), r32(2.0)]);
@@ -183,14 +194,5 @@ mod tests {
     fn slice_ext_after() {
         assert_eq!(numbers().after(r32(10.)), [] as [R32; 0]);
         assert_eq!(numbers().after(r32(7.5)), &[r32(8.0), r32(9.0), r32(10.0)]);
-    }
-
-    #[test]
-    fn slice_ext_after_or_at() {
-        assert_eq!(numbers().after_or_at(r32(10.1)), [] as [R32; 0]);
-        assert_eq!(
-            numbers().after_or_at(r32(7.)),
-            &[r32(7.0), r32(7.0), r32(8.0), r32(9.0), r32(10.0)]
-        );
     }
 }

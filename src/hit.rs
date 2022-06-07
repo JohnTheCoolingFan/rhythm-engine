@@ -1,5 +1,7 @@
 use noisy_float::prelude::*;
 
+use crate::resources::HitRegister;
+
 enum PressKind {
     Press(N32),
     Hold(N32, N32),
@@ -19,7 +21,14 @@ pub struct HitPrompt {
     signal_layer: u8,
 }
 
-pub enum HitResponse {
+#[derive(Clone, Copy)]
+pub struct HitInfo {
+    time: N32,
+    layer: u8,
+}
+
+#[derive(Clone, Copy)]
+pub enum HitReaction {
     Ignore,
     /// Stays at 0 state until hit, once hit which it will commece from the current time
     Commence {
@@ -36,7 +45,7 @@ pub enum HitResponse {
         delegate: u8,
         switched: bool,
     },
-    /// Will stay at 0 state with no hit, once hit it will play the automation
+    /// Will stay at 0 state with no hit, for each hit it will play the automation
     /// from the hit time to hit time + excess.
     Follow {
         excess: N32,
@@ -44,9 +53,9 @@ pub enum HitResponse {
     },
 }
 
-pub struct HitInfo {
-    time: N32,
-    layer: u8,
+impl HitReaction {
+    pub fn react(&self, HitRegister(hits): &HitRegister, offset: R32) -> (Option<u8>, R32) {
+        // TODO
+        (None, offset)
+    }
 }
-
-struct HitQueue(Vec<HitPrompt>);
