@@ -39,13 +39,13 @@ pub trait Lerp {
 }
 
 /// May sometimes interpolate
-pub trait Sample: Sized + Clone {
+pub trait Sample {
     type Output;
     fn sample(&self, other: &Self, t: T32) -> Self::Output;
 }
 
-/// Requires underlying data to be sorted
-/// Dataset should be small and trivially linear searchable
+/// Requires underlying dataset to be sorted
+/// Dataset should be small (< 0.5KB) and trivially linear searchable
 pub trait SliceExt<'a, T> {
     fn seek(self, by: impl Quantify) -> usize;
     fn before_or_at(self, offset: R32) -> &'a [T];
@@ -91,6 +91,13 @@ impl Lerp for R32 {
     type Output = Self;
     fn lerp(&self, other: &Self, t: T32) -> Self::Output {
         *self + (*other - *self) * t.raw()
+    }
+}
+
+impl Sample for R32 {
+    type Output = Self;
+    fn sample(&self, _other: &Self, _t: T32) -> Self::Output {
+        *self
     }
 }
 
@@ -173,6 +180,28 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
     }
 }
 
+#[derive(Default)]
+pub struct ValueDescriptor<T> {
+    pub scalar: R32,
+    pub value: T,
+}
+
+impl<T> Quantify for ValueDescriptor<T> {
+    fn quantify(&self) -> R32 {
+        self.scalar
+    }
+}
+
+impl<T> Sample for ValueDescriptor<T>
+where
+    T: Sample,
+{
+    type Output = <T as Sample>::Output;
+    fn sample(&self, other: &Self, t: T32) -> Self::Output {
+        self.value.sample(&other.value, t)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,5 +223,28 @@ mod tests {
     fn slice_ext_after() {
         assert_eq!(numbers().after(r32(10.)), [] as [R32; 0]);
         assert_eq!(numbers().after(r32(7.5)), &[r32(8.0), r32(9.0), r32(10.0)]);
+    }
+
+    fn bounds() -> Vec<ValueDescriptor<R32>> {
+        vec![
+            ValueDescriptor {
+                value: r32(0.),
+                scalar: r32(0.),
+            },
+            ValueDescriptor {
+                value: r32(1.),
+                scalar: r32(1.),
+            },
+        ]
+    }
+
+    #[test]
+    fn val_bound_sample() {
+        let co_vals = [(0., 0.), (0.5, 0.), (1., 1.), (2., 1.), (3., 1.), (4., 1.)];
+
+        co_vals
+            .iter()
+            .map(|&(input, output)| (r32(input), r32(output)))
+            .for_each(|(input, output)| assert_eq!(bounds().sample(input), output));
     }
 }

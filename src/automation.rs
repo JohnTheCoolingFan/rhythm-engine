@@ -77,12 +77,17 @@ struct Automation<T: Default> {
     reaction: HitReaction,
     layer: Option<u8>,
     repeater: Option<Repeater>,
-    upper_bounds: TinyVec<[T; 4]>,
+    upper_bounds: TinyVec<[ValueDescriptor<T>; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[T; 4]>,
+    lower_bounds: TinyVec<[ValueDescriptor<T>; 4]>,
 }
 
-type AutomationOutput<T> = <<T as Sample>::Output as Lerp>::Output;
+type AutomationOutput<T> = <<ValueDescriptor<T> as Sample>::Output as Lerp>::Output;
+
+pub struct ChannelOutput<T> {
+    pub output: Option<T>,
+    pub redirect: Option<usize>,
+}
 
 impl<T> Automation<T>
 where
@@ -193,7 +198,7 @@ fn eval_channels<T>(
     channel_table: Query<(&Channel<T>, &IndexCache)>,
     song_time: Res<SongTime>,
     hit_reg: Res<HitRegister>,
-    mut output_table: ResMut<OutputTable<AutomationOutput<T>>>,
+    mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
 ) where
     T: Default + Copy + Component + Quantify + Sample + Lerp,
     <T as Sample>::Output: Lerp,
@@ -235,7 +240,6 @@ mod tests {
     use tinyvec::tiny_vec;
 
     /// Needed for some constraints
-    impl Sample for R32 {}
 
     #[test]
     fn weight_inflections() {
@@ -260,17 +264,17 @@ mod tests {
             layer: None,
             repeater: None,
             upper_bounds: tiny_vec![
-                ValueBound {
-                    val: r32(0.),
-                    offset: r32(0.),
+                ValueDescriptor {
+                    value: r32(0.),
+                    scalar: r32(0.),
                 },
-                ValueBound {
-                    val: r32(1.),
-                    offset: r32(1.),
+                ValueDescriptor {
+                    value: r32(1.),
+                    scalar: r32(1.),
                 },
-                ValueBound {
-                    val: r32(2.),
-                    offset: r32(2.),
+                ValueDescriptor {
+                    value: r32(2.),
+                    scalar: r32(2.),
                 }
             ],
             anchors: tiny_vec![
@@ -292,13 +296,13 @@ mod tests {
                 }
             ],
             lower_bounds: tiny_vec![
-                ValueBound {
-                    val: r32(0.),
-                    offset: r32(0.),
+                ValueDescriptor {
+                    value: r32(0.),
+                    scalar: r32(0.),
                 },
-                ValueBound {
-                    val: r32(1.),
-                    offset: r32(1.),
+                ValueDescriptor {
+                    value: r32(1.),
+                    scalar: r32(1.),
                 }
             ],
         }
@@ -306,65 +310,40 @@ mod tests {
 
     #[test]
     fn anchor_interp() {
-        assert_eq!(automation().anchors.lerp(r32(0.)), Some(t32(0.0)));
-        assert_eq!(automation().anchors.lerp(r32(0.5)), Some(t32(0.5)));
-        assert_eq!(automation().anchors.lerp(r32(1.0)), Some(t32(1.0)));
-        assert_eq!(automation().anchors.lerp(r32(1.5)), Some(t32(1.)));
-        assert_eq!(automation().anchors.lerp(r32(2.)), Some(t32(1.)));
-        assert_eq!(automation().anchors.lerp(r32(3.)), None);
-        assert_eq!(automation().anchors.lerp(r32(4.)), None);
-        assert_eq!(automation().anchors.lerp(r32(5.)), None);
-    }
+        let co_vals = [
+            (0., Some(0.)),
+            (0.5, Some(0.5)),
+            (1.0, Some(1.0)),
+            (1.5, Some(1.)),
+            (2., Some(1.)),
+            (3., None),
+            (4., None),
+            (5., None),
+        ];
 
-    #[test]
-    fn val_bound_sample() {
-        assert_eq!(
-            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(0.)),
-            r32(0.0)
-        );
-        assert_eq!(
-            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(0.5)),
-            r32(0.0)
-        );
-        assert_eq!(
-            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(1.0)),
-            r32(1.0)
-        );
-        assert_eq!(
-            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(2.0)),
-            r32(1.0)
-        );
-        assert_eq!(
-            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(3.0)),
-            r32(1.0)
-        );
-        assert_eq!(
-            Automation::<R32>::sample_bound(&automation().lower_bounds, r32(4.0)),
-            r32(1.0)
-        );
+        co_vals
+            .iter()
+            .map(|&(input, output)| (r32(input), output.map(|t| t32(t))))
+            .for_each(|(input, output)| assert_eq!(automation().anchors.lerp(input), output));
     }
 
     #[test]
     fn automation_eval() {
-        assert_eq!(
-            automation().eval(&HitRegister([None; 4]), r32(0.)),
-            (None, Some(r32(0.)))
-        );
-        assert_eq!(
-            automation().eval(&HitRegister([None; 4]), r32(0.5)),
-            (None, Some(r32(0.)))
-        );
-        assert_eq!(
-            automation().eval(&HitRegister([None; 4]), r32(1.)),
-            (None, Some(r32(1.)))
-        );
-        assert_eq!(
-            automation().eval(&HitRegister([None; 4]), r32(1.5)),
-            (None, Some(r32(1.)))
-        );
-        assert_eq!(
-            automation().eval(&HitRegister([None; 4]), r32(2.5)),
-            (None, Some(r32(1.5)))
-        );
+        let co_vals = [
+            (0., Some(0.)),
+            (0.5, Some(0.)),
+            (1., Some(1.)),
+            (1.5, Some(1.)),
+            (2.5, Some(1.5)),
+        ];
+
+        let hits = HitRegister([None; 4]);
+
+        co_vals
+            .iter()
+            .map(|&(input, output)| (r32(input), output.map(|t| r32(t))))
+            .for_each(|(input, output)| {
+                assert_eq!(automation().eval(&hits, input), (None, output))
+            });
     }
 }
