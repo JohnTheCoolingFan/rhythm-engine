@@ -77,12 +77,12 @@ struct Automation<T: Default> {
     reaction: HitReaction,
     layer: Option<u8>,
     repeater: Option<Repeater>,
-    upper_bounds: TinyVec<[ValueDescriptor<T>; 4]>,
+    upper_bounds: TinyVec<[ScalarBound<T>; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[ValueDescriptor<T>; 4]>,
+    lower_bounds: TinyVec<[ScalarBound<T>; 4]>,
 }
 
-type AutomationOutput<T> = <<ValueDescriptor<T> as Sample>::Output as Lerp>::Output;
+type AutomationOutput<T> = <<ScalarBound<T> as Sample>::Output as Lerp>::Output;
 
 pub struct ChannelOutput<T> {
     pub output: Option<T>,
@@ -264,15 +264,15 @@ mod tests {
             layer: None,
             repeater: None,
             upper_bounds: tiny_vec![
-                ValueDescriptor {
+                ScalarBound {
                     value: r32(0.),
                     scalar: r32(0.),
                 },
-                ValueDescriptor {
+                ScalarBound {
                     value: r32(1.),
                     scalar: r32(1.),
                 },
-                ValueDescriptor {
+                ScalarBound {
                     value: r32(2.),
                     scalar: r32(2.),
                 }
@@ -296,11 +296,11 @@ mod tests {
                 }
             ],
             lower_bounds: tiny_vec![
-                ValueDescriptor {
+                ScalarBound {
                     value: r32(0.),
                     scalar: r32(0.),
                 },
-                ValueDescriptor {
+                ScalarBound {
                     value: r32(1.),
                     scalar: r32(1.),
                 }
@@ -323,7 +323,7 @@ mod tests {
 
         co_vals
             .iter()
-            .map(|&(input, output)| (r32(input), output.map(|t| t32(t))))
+            .map(|&(input, output)| (r32(input), output.map(t32)))
             .for_each(|(input, output)| assert_eq!(automation().anchors.lerp(input), output));
     }
 
@@ -341,7 +341,7 @@ mod tests {
 
         co_vals
             .iter()
-            .map(|&(input, output)| (r32(input), output.map(|t| r32(t))))
+            .map(|&(input, output)| (r32(input), output.map(r32)))
             .for_each(|(input, output)| {
                 assert_eq!(automation().eval(&hits, input), (None, output))
             });

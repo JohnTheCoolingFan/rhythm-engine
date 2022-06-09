@@ -58,12 +58,6 @@ pub trait SliceExt<'a, T> {
         T: Sample;
 }
 
-impl Quantify for R32 {
-    fn quantify(&self) -> R32 {
-        *self
-    }
-}
-
 impl FloatExt for R32 {
     fn quantized_floor(self, period: Self, offset: Self) -> Self {
         if f32::EPSILON < period.raw().abs() {
@@ -84,6 +78,12 @@ impl FloatExt for R32 {
     fn unit_interval(self, first: Self, second: Self) -> T32 {
         println!("{} {}", first, second);
         t32(((self - first) / (second - first)).raw())
+    }
+}
+
+impl Quantify for R32 {
+    fn quantify(&self) -> R32 {
+        *self
     }
 }
 
@@ -171,9 +171,9 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
             self.after(offset).first(),
         );
 
-        follow.map_or(control.sample(&control, t32(0.)), |follow| {
+        follow.map_or(control.sample(control, t32(0.)), |follow| {
             control.sample(
-                &follow,
+                follow,
                 offset.unit_interval(control.quantify(), follow.quantify()),
             )
         })
@@ -181,18 +181,45 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
 }
 
 #[derive(Default)]
-pub struct ValueDescriptor<T> {
+pub struct ScalarBound<T> {
     pub scalar: R32,
     pub value: T,
 }
 
-impl<T> Quantify for ValueDescriptor<T> {
+struct SpatialBound;
+//
+//      DESC:
+//
+//          +   Bounds which are also a function of space. The objects position is now
+//              an additional input value aswell as time (which now just picks a boundspace)
+//
+//      MOTIVATION:
+//
+//          +   Automations can express change through time but not change through space.
+//          +   There is situations where you might want repeating patterns of similar objects
+//              where spatial patterns form. A simple checkard board coloured grid for instance.
+//
+//      TODO:
+//
+//          -
+//          |   - Scrutinize
+//          |   - Redesign
+//          |   - Repeat until satisfactory
+//          -
+//
+//          +   Implementation details
+//
+//      BREAKS:
+//
+//          +   Should not be a breaking introduction
+
+impl<T> Quantify for ScalarBound<T> {
     fn quantify(&self) -> R32 {
         self.scalar
     }
 }
 
-impl<T> Sample for ValueDescriptor<T>
+impl<T> Sample for ScalarBound<T>
 where
     T: Sample,
 {
@@ -225,13 +252,13 @@ mod tests {
         assert_eq!(numbers().after(r32(7.5)), &[r32(8.0), r32(9.0), r32(10.0)]);
     }
 
-    fn bounds() -> Vec<ValueDescriptor<R32>> {
+    fn bounds() -> Vec<ScalarBound<R32>> {
         vec![
-            ValueDescriptor {
+            ScalarBound {
                 value: r32(0.),
                 scalar: r32(0.),
             },
-            ValueDescriptor {
+            ScalarBound {
                 value: r32(1.),
                 scalar: r32(1.),
             },
@@ -239,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn val_bound_sample() {
+    fn scalar_bound_sample() {
         let co_vals = [(0., 0.), (0.5, 0.), (1., 1.), (2., 1.), (3., 1.), (4., 1.)];
 
         co_vals
