@@ -186,33 +186,6 @@ pub struct ScalarBound<T> {
     pub value: T,
 }
 
-struct SpatialBound;
-//
-//      DESC:
-//
-//          +   Bounds which are also a function of space. The objects position is now
-//              an additional input value aswell as time (which now just picks a boundspace)
-//
-//      MOTIVATION:
-//
-//          +   Automations can express change through time but not change through space.
-//          +   There is situations where you might want repeating patterns of similar objects
-//              where spatial patterns form. A simple checkard board coloured grid for instance.
-//
-//      TODO:
-//
-//          -
-//          |   - Scrutinize
-//          |   - Redesign
-//          |   - Repeat until satisfactory
-//          -
-//
-//          +   Implementation details
-//
-//      BREAKS:
-//
-//          +   Should not be a breaking introduction
-
 impl<T> Quantify for ScalarBound<T> {
     fn quantify(&self) -> R32 {
         self.scalar

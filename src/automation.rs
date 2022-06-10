@@ -49,7 +49,7 @@ impl Quantify for Anchor {
 impl Lerp for Anchor {
     type Output = T32;
     fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        t32(other.point.y).lerp(&t32(self.point.y), t)
+        t32(other.point.y).lerp(&t32(self.point.y), self.weight.eval(t))
     }
 }
 
