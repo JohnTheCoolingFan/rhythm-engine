@@ -6,6 +6,7 @@ authors = ["iiYese iiyese@outlook.com"]
 edition = "2021"
 
 [dependencies]
+derive_more = "0.99.17"
 bevy = { version = "0.7.0", features = ["dynamic"] }
 bevy_prototype_lyon = "0.5.0"
 noisy_float = "0.2.0"
