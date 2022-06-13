@@ -137,7 +137,6 @@ impl<T: Default> Quantify for Automation<T> {
 #[derive(Component)]
 pub struct Channel<T: Default> {
     id: u8,
-    /// Evals by last (<= t)
     clips: Vec<Automation<T>>,
 }
 
@@ -188,9 +187,9 @@ fn seek_channels<T: Default + Component>(
 
 /// Envoke eval functions for each clip and juggle hit responses
 fn eval_channels<T>(
-    channel_table: Query<(&Channel<T>, &IndexCache)>,
+    mut channel_table: Query<(&mut Channel<T>, &IndexCache)>,
     song_time: Res<SongTime>,
-    hit_reg: Res<HitRegister>,
+    hits: Res<HitRegister>,
     mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
 ) where
     T: Default + Copy + Component + Quantify + Sample + Lerp,
@@ -201,22 +200,34 @@ fn eval_channels<T>(
     //  TODO: Parallel system
     //
     channel_table
-        .iter()
+        .iter_mut()
         .filter(|(channel, _)| !channel.clips.is_empty())
-        .for_each(|(channel, cache)| {
+        .for_each(|(mut channel, cache)| {
             let (slot, clip) = (
                 &mut output_table.0[channel.id as usize],
-                &channel.clips[cache.0],
+                &mut channel.clips[cache.0],
             );
+
+            if let Some((layer, reaction)) = clip.reaction.as_mut() {
+                hits.0
+                    .iter()
+                    .filter_map(Option::as_ref)
+                    .filter(|hit| hit.layer == *layer)
+                    .for_each(|hit| reaction.react(hit));
+            }
+
             let offset = song_time.0 - clip.start;
 
             slot.output = clip.eval(
                 clip.reaction
-                    .map(|(_, reaction)| reaction.translate(&hit_reg, offset))
+                    .as_ref()
+                    .map(|(_, reaction)| reaction.translate(offset))
                     .unwrap_or(offset),
             );
+
             slot.redirect = clip
                 .reaction
+                .as_ref()
                 .and_then(|(_, reaction)| reaction.delegate())
                 .map(From::from)
         })
@@ -265,37 +276,39 @@ mod tests {
                 assert_ne!(Weight::Cubic(weight).eval(t32(0.25)), t32(0.25));
                 assert_ne!(Weight::Cubic(weight).eval(t32(0.75)), t32(0.75));
 
-                assert!(
-                    Weight::Quadratic(weight)
-                        .eval(Weight::Quadratic(-weight).eval(t32(0.5)))
-                        .raw()
-                        - 0.5
-                        < 0.001
-                );
-
                 (1..50)
                     .chain(51..100)
                     .map(|i| i as f32)
                     .map(r32)
                     .map(|f| f.unit_interval(r32(0.), r32(100.)))
                     .for_each(|t| {
-                        assert!(
-                            Weight::Quadratic(weight)
-                                .eval(Weight::Quadratic(-weight).eval(t))
-                                .raw()
-                                - t.raw()
-                                < 0.001
+                        assert_eq!(
+                            Weight::Quadratic(weight).eval(t) - Weight::Quadratic(weight).eval(t),
+                            0.
                         );
-
-                        assert!(
-                            Weight::Quadratic(weight)
-                                .eval(Weight::Quadratic(-weight).eval(t))
-                                .raw()
-                                - t.raw()
-                                < 0.001
-                        )
+                        assert_eq!(
+                            Weight::Cubic(weight).eval(t) - Weight::Cubic(weight).eval(t),
+                            0.
+                        );
                     })
             })
+    }
+
+    #[test]
+    fn weight_growth() {
+        (-20..=20).map(|i| i as f32).map(r32).for_each(|weight| {
+            (1..=100)
+                .map(|i| i as f32)
+                .map(r32)
+                .map(|f| f.unit_interval(r32(0.), r32(100.)))
+                .for_each(|t1| {
+                    let t0 = t1 - 0.01;
+                    assert!(
+                        Weight::Quadratic(weight).eval(t0) < Weight::Quadratic(weight).eval(t1)
+                    );
+                    assert!(Weight::Cubic(weight).eval(t0) <= Weight::Cubic(weight).eval(t1));
+                })
+        })
     }
 
     fn automation() -> Automation<R32> {
