@@ -74,8 +74,7 @@ struct Repeater {
 
 struct Automation<T: Default> {
     start: R32,
-    reaction: HitReaction,
-    layer: Option<u8>,
+    reaction: Option<(u8, HitReaction)>,
     repeater: Option<Repeater>,
     upper_bounds: TinyVec<[ScalarBound<T>; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
@@ -95,43 +94,37 @@ where
     <T as Sample>::Output: Lerp,
 {
     #[rustfmt::skip]
-    fn eval(&self, hits: &HitRegister, offset: R32) -> (Option<u8>, Option<AutomationOutput<T>>) {
-        let (delegate, offset) = self.reaction.react(hits, offset - self.start);
-
-        let options = match &self.repeater {
-            Some(repeater) if offset < repeater.duration => {
+    fn eval(&self, offset: R32) -> Option<AutomationOutput<T>> {
+        self.repeater
+            .as_ref()
+            .and_then(|repeater| (offset < repeater.duration).then(|| {
                 let period = r32(self.anchors.last().unwrap().point.x);
                 let period_offset = offset % period;
 
                 self.anchors.lerp(self.start + period_offset).map(|lerp_amount| {
-                    let bound_offset = if repeater.repeat_bounds { period_offset } else { offset };
                     let clamp_offset = (offset / period)
                         .trunc()
                         .unit_interval(r32(0.), repeater.duration);
 
-                    let (floor, ceil) = (
-                        repeater.floor.eval(clamp_offset),
-                        repeater.ceil.eval(clamp_offset),
-                    );
+                    let bound_offset = if repeater.repeat_bounds { period_offset } else { offset };
+                    let lerp_amount = repeater
+                        .floor
+                        .eval(clamp_offset)
+                        .lerp(&repeater.ceil.eval(clamp_offset), lerp_amount);
 
-                    (bound_offset, floor.lerp(&ceil, lerp_amount))
+                    (bound_offset, lerp_amount)
                 })
-            }
-            _ => {
-                self.anchors.lerp(offset).map(|lerp_amount| (offset, lerp_amount))
-            }
-        };
-
-        let output = options.map(|(bound_offset, lerp_amount)| {
-            let (lower, upper) = (
-                self.lower_bounds.sample(bound_offset),
-                self.upper_bounds.sample(bound_offset),
-            );
-
-            lower.lerp(&upper, lerp_amount)
-        });
-
-        (delegate, output)
+            }))
+            .unwrap_or_else(|| self
+                .anchors
+                .lerp(offset)
+                .map(|lerp_amount| (offset, lerp_amount))
+            )
+            .map(|(bound_offset, lerp_amount)| self
+                .lower_bounds
+                .sample(bound_offset)
+                .lerp(&self.upper_bounds.sample(bound_offset), lerp_amount)
+            )
     }
 }
 
@@ -215,11 +208,17 @@ fn eval_channels<T>(
                 &mut output_table.0[channel.id as usize],
                 &channel.clips[cache.0],
             );
+            let offset = song_time.0 - clip.start;
 
-            let (delegate, output) = clip.eval(&hit_reg, song_time.0);
-
-            slot.output = output;
-            slot.redirect = delegate.map(From::from);
+            slot.output = clip.eval(
+                clip.reaction
+                    .map(|(_, reaction)| reaction.translate(&hit_reg, offset))
+                    .unwrap_or(offset),
+            );
+            slot.redirect = clip
+                .reaction
+                .and_then(|(_, reaction)| reaction.delegate())
+                .map(From::from)
         })
 }
 
@@ -239,8 +238,6 @@ mod tests {
     use super::*;
     use tinyvec::tiny_vec;
 
-    /// Needed for some constraints
-
     #[test]
     fn weight_inflections() {
         assert_eq!(Weight::Constant.eval(t32(0.)), t32(1.));
@@ -257,11 +254,54 @@ mod tests {
         })
     }
 
+    #[test]
+    fn weight_symmetry() {
+        (-20..=-1)
+            .chain(1..=20)
+            .map(|i| i as f32)
+            .map(r32)
+            .for_each(|weight| {
+                assert_ne!(Weight::Quadratic(weight).eval(t32(0.5)), t32(0.5));
+                assert_ne!(Weight::Cubic(weight).eval(t32(0.25)), t32(0.25));
+                assert_ne!(Weight::Cubic(weight).eval(t32(0.75)), t32(0.75));
+
+                assert!(
+                    Weight::Quadratic(weight)
+                        .eval(Weight::Quadratic(-weight).eval(t32(0.5)))
+                        .raw()
+                        - 0.5
+                        < 0.001
+                );
+
+                (1..50)
+                    .chain(51..100)
+                    .map(|i| i as f32)
+                    .map(r32)
+                    .map(|f| f.unit_interval(r32(0.), r32(100.)))
+                    .for_each(|t| {
+                        assert!(
+                            Weight::Quadratic(weight)
+                                .eval(Weight::Quadratic(-weight).eval(t))
+                                .raw()
+                                - t.raw()
+                                < 0.001
+                        );
+
+                        assert!(
+                            Weight::Quadratic(weight)
+                                .eval(Weight::Quadratic(-weight).eval(t))
+                                .raw()
+                                - t.raw()
+                                < 0.001
+                        )
+                    })
+            })
+    }
+
     fn automation() -> Automation<R32> {
         Automation::<R32> {
             start: r32(0.),
-            reaction: HitReaction::Ignore,
-            layer: None,
+            reaction: None,
             repeater: None,
             upper_bounds: tiny_vec![
                 ScalarBound {
@@ -337,13 +377,9 @@ mod tests {
             (2.5, Some(1.5)),
         ];
 
-        let hits = HitRegister([None; 4]);
-
         co_vals
             .iter()
             .map(|&(input, output)| (r32(input), output.map(r32)))
-            .for_each(|(input, output)| {
-                assert_eq!(automation().eval(&hits, input), (None, output))
-            });
+            .for_each(|(input, output)| assert_eq!(automation().eval(input), output));
     }
 }

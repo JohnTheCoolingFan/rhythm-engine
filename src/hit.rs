@@ -29,7 +29,6 @@ pub struct HitInfo {
 
 #[derive(Clone, Copy)]
 pub enum HitReaction {
-    Ignore,
     /// Stays at 0 state until hit, once hit which it will commece from the current time
     Commence {
         started: bool,
@@ -54,8 +53,17 @@ pub enum HitReaction {
 }
 
 impl HitReaction {
-    pub fn react(&self, HitRegister(hits): &HitRegister, offset: R32) -> (Option<u8>, R32) {
+    pub fn delegate(&self) -> Option<u8> {
+        match self {
+            Self::Switch { delegate, switched } | Self::Toggle { delegate, switched } => {
+                switched.then(|| *delegate)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn translate(&self, HitRegister(hits): &HitRegister, offset: R32) -> R32 {
         // TODO
-        (None, offset)
+        offset
     }
 }
