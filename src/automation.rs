@@ -4,19 +4,20 @@ use itertools::Itertools;
 use noisy_float::prelude::*;
 use tinyvec::TinyVec;
 
+use crate::bounds::*;
 use crate::hit::*;
 use crate::resources::*;
 use crate::utils::*;
 
 #[derive(Debug, Clone, Copy)]
-enum Weight {
+pub enum Weight {
     Constant,
     Quadratic(R32),
     Cubic(R32),
 }
 
 impl Weight {
-    fn eval(&self, t: T32) -> T32 {
+    pub fn eval(&self, t: T32) -> T32 {
         let f = |x: f32, k: f32| x.signum() * x.abs().powf((k + k.signum()).abs().powf(k.signum()));
 
         match self {
@@ -77,12 +78,12 @@ struct Automation<T: Default> {
     start: R32,
     reaction: Option<(u8, HitReaction)>,
     repeater: Option<Repeater>,
-    upper_bounds: TinyVec<[ScalarBound<T>; 4]>,
+    upper_bounds: TinyVec<[Bound<T>; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[ScalarBound<T>; 4]>,
+    lower_bounds: TinyVec<[Bound<T>; 4]>,
 }
 
-type AutomationOutput<T> = <<ScalarBound<T> as Sample>::Output as Lerp>::Output;
+type AutomationOutput<T> = <<Bound<T> as Sample>::Output as Lerp>::Output;
 
 pub struct ChannelOutput<T> {
     pub output: Option<T>,
@@ -91,7 +92,7 @@ pub struct ChannelOutput<T> {
 
 impl<T> Automation<T>
 where
-    T: Copy + Default + Quantify + Sample + Lerp,
+    T: Copy + Default + Quantify + Sample,
     <T as Sample>::Output: Lerp,
 {
     #[rustfmt::skip]
@@ -193,7 +194,7 @@ fn eval_channels<T>(
     hits: Res<HitRegister>,
     mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
 ) where
-    T: Default + Copy + Component + Quantify + Sample + Lerp,
+    T: Default + Copy + Component + Quantify + Sample,
     <T as Sample>::Output: Lerp,
     AutomationOutput<T>: Component,
 {
@@ -312,22 +313,22 @@ mod tests {
     }
 
     fn automation() -> Automation<R32> {
-        Automation::<R32> {
+        Automation {
             start: r32(0.),
             reaction: None,
             repeater: None,
             upper_bounds: tiny_vec![
-                ScalarBound {
+                Bound {
                     value: r32(0.),
-                    scalar: r32(0.),
+                    offset: r32(0.),
                 },
-                ScalarBound {
+                Bound {
                     value: r32(1.),
-                    scalar: r32(1.),
+                    offset: r32(1.),
                 },
-                ScalarBound {
+                Bound {
                     value: r32(2.),
-                    scalar: r32(2.),
+                    offset: r32(2.),
                 }
             ],
             anchors: tiny_vec![
@@ -349,13 +350,13 @@ mod tests {
                 }
             ],
             lower_bounds: tiny_vec![
-                ScalarBound {
+                Bound {
                     value: r32(0.),
-                    scalar: r32(0.),
+                    offset: r32(0.),
                 },
-                ScalarBound {
+                Bound {
                     value: r32(1.),
-                    scalar: r32(1.),
+                    offset: r32(1.),
                 }
             ],
         }

@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_prototype_lyon::prelude::*;
 
 mod automation;
+mod bounds;
 mod hit;
 mod resources;
 mod spline;

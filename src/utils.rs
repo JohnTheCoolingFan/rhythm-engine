@@ -180,28 +180,6 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
     }
 }
 
-#[derive(Default)]
-pub struct ScalarBound<T> {
-    pub scalar: R32,
-    pub value: T,
-}
-
-impl<T> Quantify for ScalarBound<T> {
-    fn quantify(&self) -> R32 {
-        self.scalar
-    }
-}
-
-impl<T> Sample for ScalarBound<T>
-where
-    T: Sample,
-{
-    type Output = <T as Sample>::Output;
-    fn sample(&self, other: &Self, t: T32) -> Self::Output {
-        self.value.sample(&other.value, t)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,28 +201,5 @@ mod tests {
     fn slice_ext_after() {
         assert_eq!(numbers().after(r32(10.)), [] as [R32; 0]);
         assert_eq!(numbers().after(r32(7.5)), &[r32(8.0), r32(9.0), r32(10.0)]);
-    }
-
-    fn bounds() -> Vec<ScalarBound<R32>> {
-        vec![
-            ScalarBound {
-                value: r32(0.),
-                scalar: r32(0.),
-            },
-            ScalarBound {
-                value: r32(1.),
-                scalar: r32(1.),
-            },
-        ]
-    }
-
-    #[test]
-    fn scalar_bound_sample() {
-        let co_vals = [(0., 0.), (0.5, 0.), (1., 1.), (2., 1.), (3., 1.), (4., 1.)];
-
-        co_vals
-            .iter()
-            .map(|&(input, output)| (r32(input), r32(output)))
-            .for_each(|(input, output)| assert_eq!(bounds().sample(input), output));
     }
 }
