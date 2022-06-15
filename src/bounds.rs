@@ -8,32 +8,49 @@ use crate::automation::Weight;
 use crate::utils::*;
 
 #[derive(Default)]
-pub struct Bound<T> {
+pub struct ScalarBound<T> {
     pub offset: R32,
     pub value: T,
 }
 
-impl<T> Quantify for Bound<T> {
+impl<T> Quantify for ScalarBound<T> {
     fn quantify(&self) -> R32 {
         self.offset
     }
 }
 
-impl<T> Sample for Bound<T>
+impl<T> Lerp for ScalarBound<T>
 where
-    T: Sample,
+    T: Copy + Lerp<Output = T>,
 {
-    type Output = <T as Sample>::Output;
-    fn sample(&self, other: &Self, t: T32) -> Self::Output {
-        self.value.sample(&other.value, t)
+    type Output = <T as Lerp>::Output;
+    fn lerp(&self, _other: &Self, _t: T32) -> Self::Output {
+        self.value
     }
 }
 
-#[derive(Clone, Copy, Deref, DerefMut, Lerp, Sample)]
+struct TransBound<T> {
+    weight: Weight,
+    bound: ScalarBound<T>,
+}
+
+impl<T> Lerp for TransBound<T>
+where
+    T: Copy + Lerp<Output = T>,
+{
+    type Output = <T as Lerp>::Output;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
+        self.bound
+            .value
+            .lerp(&other.bound.value, other.weight.eval(t))
+    }
+}
+
+#[derive(Clone, Copy, Deref, DerefMut, Lerp)]
 struct Scale(R32);
-#[derive(Clone, Copy, Deref, DerefMut, Lerp, Sample)]
+#[derive(Clone, Copy, Deref, DerefMut, Lerp)]
 struct Rotation(R32);
-#[derive(Clone, Copy, Deref, DerefMut, Lerp, Sample)]
+#[derive(Clone, Copy, Deref, DerefMut, Lerp)]
 struct Luminosity(T32);
 
 #[derive(Clone, Copy, Deref, DerefMut)]
@@ -51,29 +68,17 @@ impl Lerp for Rgba {
     }
 }
 
-struct TransColor {
-    weight: Weight,
-    rgba: Rgba,
-}
-
-impl Sample for TransColor {
-    type Output = Rgba;
-    fn sample(&self, other: &Self, t: T32) -> Self::Output {
-        self.rgba.lerp(&other.rgba, other.weight.eval(t))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn bounds() -> Vec<Bound<R32>> {
+    fn bounds() -> Vec<ScalarBound<R32>> {
         vec![
-            Bound {
+            ScalarBound {
                 value: r32(0.),
                 offset: r32(0.),
             },
-            Bound {
+            ScalarBound {
                 value: r32(1.),
                 offset: r32(1.),
             },

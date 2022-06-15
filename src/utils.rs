@@ -32,16 +32,9 @@ pub trait FloatExt {
     fn unit_interval(self, control: Self, follow: Self) -> T32;
 }
 
-/// Will always interpolate
 pub trait Lerp {
     type Output;
     fn lerp(&self, other: &Self, t: T32) -> Self::Output;
-}
-
-/// May sometimes interpolate
-pub trait Sample {
-    type Output;
-    fn sample(&self, other: &Self, t: T32) -> Self::Output;
 }
 
 /// Requires underlying dataset to be sorted
@@ -53,9 +46,9 @@ pub trait SliceExt<'a, T> {
     fn lerp(self, offset: R32) -> Option<<T as Lerp>::Output>
     where
         T: Lerp;
-    fn sample(self, offset: R32) -> <T as Sample>::Output
+    fn sample(self, offset: R32) -> <T as Lerp>::Output
     where
-        T: Sample;
+        T: Lerp;
 }
 
 impl FloatExt for R32 {
@@ -91,13 +84,6 @@ impl Lerp for R32 {
     type Output = Self;
     fn lerp(&self, other: &Self, t: T32) -> Self::Output {
         *self + (*other - *self) * t.raw()
-    }
-}
-
-impl Sample for R32 {
-    type Output = Self;
-    fn sample(&self, _other: &Self, _t: T32) -> Self::Output {
-        *self
     }
 }
 
@@ -162,17 +148,17 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
         })
     }
 
-    fn sample(self, offset: R32) -> <T as Sample>::Output
+    fn sample(self, offset: R32) -> <T as Lerp>::Output
     where
-        T: Sample,
+        T: Lerp,
     {
         let (control, follow) = (
             self.before_or_at(offset).last().unwrap(),
             self.after(offset).first(),
         );
 
-        follow.map_or(control.sample(control, t32(0.)), |follow| {
-            control.sample(
+        follow.map_or(control.lerp(control, t32(0.)), |follow| {
+            control.lerp(
                 follow,
                 offset.unit_interval(control.quantify(), follow.quantify()),
             )

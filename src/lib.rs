@@ -15,17 +15,3 @@ pub fn derive_lerp(input: TokenStream) -> TokenStream {
         }
     })
 }
-
-#[proc_macro_derive(Sample)]
-pub fn derive_sample(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let ident = &input.ident;
-    TokenStream::from(quote! {
-        impl Sample for #ident {
-            type Output = Self;
-            fn sample(&self, _other: &Self, _t: T32) -> Self::Output {
-                *self
-            }
-        }
-    })
-}

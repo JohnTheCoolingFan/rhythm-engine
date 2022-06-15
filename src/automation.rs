@@ -78,12 +78,12 @@ struct Automation<T: Default> {
     start: R32,
     reaction: Option<(u8, HitReaction)>,
     repeater: Option<Repeater>,
-    upper_bounds: TinyVec<[Bound<T>; 4]>,
+    upper_bounds: TinyVec<[T; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[Bound<T>; 4]>,
+    lower_bounds: TinyVec<[T; 4]>,
 }
 
-type AutomationOutput<T> = <<Bound<T> as Sample>::Output as Lerp>::Output;
+type AutomationOutput<T> = <<T as Lerp>::Output as Lerp>::Output;
 
 pub struct ChannelOutput<T> {
     pub output: Option<T>,
@@ -92,31 +92,30 @@ pub struct ChannelOutput<T> {
 
 impl<T> Automation<T>
 where
-    T: Copy + Default + Quantify + Sample,
-    <T as Sample>::Output: Lerp,
+    T: Default + Quantify + Lerp,
+    <T as Lerp>::Output: Lerp<Output = <T as Lerp>::Output>,
 {
     #[rustfmt::skip]
     fn eval(&self, offset: R32) -> Option<AutomationOutput<T>> {
         self.repeater
             .as_ref()
-            .and_then(|repeater| (offset < repeater.duration).then(|| {
-                let period = r32(self.anchors.last().unwrap().point.x);
-                let period_offset = offset % period;
+            .and_then(|Repeater { duration, floor, ceil, repeat_bounds }| {
+                (offset < *duration).then(|| {
+                    let period = r32(self.anchors.last().unwrap().point.x);
+                    let period_offset = offset % period;
 
-                self.anchors.lerp(self.start + period_offset).map(|lerp_amount| {
-                    let clamp_offset = (offset / period)
-                        .trunc()
-                        .unit_interval(r32(0.), repeater.duration);
+                    self.anchors.lerp(self.start + period_offset).map(|lerp_amount| {
+                        let clamp_offset = (offset / period)
+                            .trunc()
+                            .unit_interval(r32(0.), *duration);
+                        let lerp_amount = floor
+                            .eval(clamp_offset)
+                            .lerp(&ceil.eval(clamp_offset), lerp_amount);
 
-                    let bound_offset = if repeater.repeat_bounds { period_offset } else { offset };
-                    let lerp_amount = repeater
-                        .floor
-                        .eval(clamp_offset)
-                        .lerp(&repeater.ceil.eval(clamp_offset), lerp_amount);
-
-                    (bound_offset, lerp_amount)
+                        (if *repeat_bounds { period_offset } else { offset }, lerp_amount)
+                    })
                 })
-            }))
+            })
             .unwrap_or_else(|| self
                 .anchors
                 .lerp(offset)
@@ -194,8 +193,8 @@ fn eval_channels<T>(
     hits: Res<HitRegister>,
     mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
 ) where
-    T: Default + Copy + Component + Quantify + Sample,
-    <T as Sample>::Output: Lerp,
+    T: Default + Component + Quantify + Lerp,
+    <T as Lerp>::Output: Lerp<Output = <T as Lerp>::Output>,
     AutomationOutput<T>: Component,
 {
     //
@@ -312,21 +311,21 @@ mod tests {
         })
     }
 
-    fn automation() -> Automation<R32> {
+    fn automation() -> Automation<ScalarBound<R32>> {
         Automation {
             start: r32(0.),
             reaction: None,
             repeater: None,
             upper_bounds: tiny_vec![
-                Bound {
+                ScalarBound {
                     value: r32(0.),
                     offset: r32(0.),
                 },
-                Bound {
+                ScalarBound {
                     value: r32(1.),
                     offset: r32(1.),
                 },
-                Bound {
+                ScalarBound {
                     value: r32(2.),
                     offset: r32(2.),
                 }
@@ -350,11 +349,11 @@ mod tests {
                 }
             ],
             lower_bounds: tiny_vec![
-                Bound {
+                ScalarBound {
                     value: r32(0.),
                     offset: r32(0.),
                 },
-                Bound {
+                ScalarBound {
                     value: r32(1.),
                     offset: r32(1.),
                 }
