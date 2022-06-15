@@ -22,6 +22,16 @@ pub fn t32(value: f32) -> T32 {
     T32::new(value)
 }
 
+pub trait UnitIntervalExt {
+    fn inv(self) -> Self;
+}
+
+impl UnitIntervalExt for T32 {
+    fn inv(self) -> Self {
+        t32(1. - self.raw())
+    }
+}
+
 pub trait Quantify {
     fn quantify(&self) -> R32;
 }

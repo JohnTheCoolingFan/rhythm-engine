@@ -318,15 +318,15 @@ mod tests {
             repeater: None,
             upper_bounds: tiny_vec![
                 ScalarBound {
-                    value: r32(0.),
+                    scalar: r32(0.),
                     offset: r32(0.),
                 },
                 ScalarBound {
-                    value: r32(1.),
+                    scalar: r32(1.),
                     offset: r32(1.),
                 },
                 ScalarBound {
-                    value: r32(2.),
+                    scalar: r32(2.),
                     offset: r32(2.),
                 }
             ],
@@ -350,11 +350,11 @@ mod tests {
             ],
             lower_bounds: tiny_vec![
                 ScalarBound {
-                    value: r32(0.),
+                    scalar: r32(0.),
                     offset: r32(0.),
                 },
                 ScalarBound {
-                    value: r32(1.),
+                    scalar: r32(1.),
                     offset: r32(1.),
                 }
             ],

@@ -1,4 +1,3 @@
-use bevy::prelude::*;
 use derive_more::{Deref, DerefMut};
 use noisy_float::prelude::*;
 
@@ -10,7 +9,7 @@ use crate::utils::*;
 #[derive(Default)]
 pub struct ScalarBound<T> {
     pub offset: R32,
-    pub value: T,
+    pub scalar: T,
 }
 
 impl<T> Quantify for ScalarBound<T> {
@@ -25,24 +24,24 @@ where
 {
     type Output = <T as Lerp>::Output;
     fn lerp(&self, other: &Self, _t: T32) -> Self::Output {
-        other.value
+        other.scalar
     }
 }
 
-struct TransBound<T> {
+struct SpannedBound<T> {
     weight: Weight,
     bound: ScalarBound<T>,
 }
 
-impl<T> Lerp for TransBound<T>
+impl<T> Lerp for SpannedBound<T>
 where
     T: Copy + Lerp<Output = T>,
 {
     type Output = <T as Lerp>::Output;
     fn lerp(&self, other: &Self, t: T32) -> Self::Output {
         self.bound
-            .value
-            .lerp(&other.bound.value, self.weight.eval(t))
+            .scalar
+            .lerp(&other.bound.scalar, self.weight.eval(t.inv()))
     }
 }
 
@@ -75,11 +74,11 @@ mod tests {
     fn bounds() -> Vec<ScalarBound<R32>> {
         vec![
             ScalarBound {
-                value: r32(0.),
+                scalar: r32(0.),
                 offset: r32(0.),
             },
             ScalarBound {
-                value: r32(1.),
+                scalar: r32(1.),
                 offset: r32(1.),
             },
         ]
