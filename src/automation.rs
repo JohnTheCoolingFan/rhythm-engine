@@ -104,7 +104,7 @@ where
                     let period = r32(self.anchors.last().unwrap().point.x);
                     let period_offset = offset % period;
 
-                    self.anchors.lerp(self.start + period_offset).map(|lerp_amount| {
+                    self.anchors.interp(self.start + period_offset).map(|lerp_amount| {
                         let clamp_offset = (offset / period)
                             .trunc()
                             .unit_interval(r32(0.), *duration);
@@ -118,13 +118,13 @@ where
             })
             .unwrap_or_else(|| self
                 .anchors
-                .lerp(offset)
+                .interp(offset)
                 .map(|lerp_amount| (offset, lerp_amount))
             )
             .map(|(bound_offset, lerp_amount)| self
                 .lower_bounds
-                .sample(bound_offset)
-                .lerp(&self.upper_bounds.sample(bound_offset), lerp_amount)
+                .interp_or_last(bound_offset)
+                .lerp(&self.upper_bounds.interp_or_last(bound_offset), lerp_amount)
             )
     }
 }
@@ -377,7 +377,7 @@ mod tests {
         co_vals
             .iter()
             .map(|&(input, output)| (r32(input), output.map(t32)))
-            .for_each(|(input, output)| assert_eq!(automation().anchors.lerp(input), output));
+            .for_each(|(input, output)| assert_eq!(automation().anchors.interp(input), output));
     }
 
     #[test]

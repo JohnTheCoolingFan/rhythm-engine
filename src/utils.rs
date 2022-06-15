@@ -43,10 +43,10 @@ pub trait SliceExt<'a, T> {
     fn seek(self, by: impl Quantify) -> usize;
     fn before_or_at(self, offset: R32) -> &'a [T];
     fn after(self, offset: R32) -> &'a [T];
-    fn lerp(self, offset: R32) -> Option<<T as Lerp>::Output>
+    fn interp(self, offset: R32) -> Option<<T as Lerp>::Output>
     where
         T: Lerp;
-    fn sample(self, offset: R32) -> <T as Lerp>::Output
+    fn interp_or_last(self, offset: R32) -> <T as Lerp>::Output
     where
         T: Lerp;
 }
@@ -134,7 +134,7 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
         &self[self.len() - keep_size..]
     }
 
-    fn lerp(self, offset: R32) -> Option<<T as Lerp>::Output>
+    fn interp(self, offset: R32) -> Option<<T as Lerp>::Output>
     where
         T: Lerp,
     {
@@ -148,20 +148,13 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
         })
     }
 
-    fn sample(self, offset: R32) -> <T as Lerp>::Output
+    fn interp_or_last(self, offset: R32) -> <T as Lerp>::Output
     where
         T: Lerp,
     {
-        let (control, follow) = (
-            self.before_or_at(offset).last().unwrap(),
-            self.after(offset).first(),
-        );
-
-        follow.map_or(control.lerp(control, t32(0.)), |follow| {
-            control.lerp(
-                follow,
-                offset.unit_interval(control.quantify(), follow.quantify()),
-            )
+        self.interp(offset).unwrap_or_else(|| {
+            let last = self.last().unwrap();
+            last.lerp(last, t32(0.))
         })
     }
 }

@@ -24,8 +24,8 @@ where
     T: Copy + Lerp<Output = T>,
 {
     type Output = <T as Lerp>::Output;
-    fn lerp(&self, _other: &Self, _t: T32) -> Self::Output {
-        self.value
+    fn lerp(&self, other: &Self, _t: T32) -> Self::Output {
+        other.value
     }
 }
 
@@ -42,7 +42,7 @@ where
     fn lerp(&self, other: &Self, t: T32) -> Self::Output {
         self.bound
             .value
-            .lerp(&other.bound.value, other.weight.eval(t))
+            .lerp(&other.bound.value, self.weight.eval(t))
     }
 }
 
@@ -92,6 +92,6 @@ mod tests {
         co_vals
             .iter()
             .map(|&(input, output)| (r32(input), r32(output)))
-            .for_each(|(input, output)| assert_eq!(bounds().sample(input), output));
+            .for_each(|(input, output)| assert_eq!(bounds().interp_or_last(input), output));
     }
 }
