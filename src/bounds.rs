@@ -28,7 +28,7 @@ where
     }
 }
 
-struct SpannedBound<T> {
+pub struct SpannedBound<T> {
     weight: Weight,
     bound: ScalarBound<T>,
 }
@@ -46,14 +46,16 @@ where
 }
 
 #[derive(Clone, Copy, Deref, DerefMut, Lerp)]
-struct Scale(R32);
+pub struct Scale(R32);
 #[derive(Clone, Copy, Deref, DerefMut, Lerp)]
-struct Rotation(R32);
+pub struct Rotation(R32);
 #[derive(Clone, Copy, Deref, DerefMut, Lerp)]
-struct Luminosity(T32);
+pub struct Luminosity(T32);
+#[derive(Clone, Copy, Deref, DerefMut, Lerp)]
+pub struct Displacement(R32);
 
 #[derive(Clone, Copy, Deref, DerefMut)]
-struct Rgba([T32; 4]);
+pub struct Rgba([T32; 4]);
 
 impl Lerp for Rgba {
     type Output = Self;

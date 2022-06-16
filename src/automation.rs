@@ -4,7 +4,6 @@ use itertools::Itertools;
 use noisy_float::prelude::*;
 use tinyvec::TinyVec;
 
-use crate::bounds::*;
 use crate::hit::*;
 use crate::resources::*;
 use crate::utils::*;
@@ -74,7 +73,7 @@ struct Repeater {
     repeat_bounds: bool,
 }
 
-struct Automation<T: Default> {
+pub struct Automation<T: Default> {
     start: R32,
     reaction: Option<(u8, HitReaction)>,
     repeater: Option<Repeater>,
@@ -141,54 +140,20 @@ pub struct Channel<T: Default> {
     clips: Vec<Automation<T>>,
 }
 
-impl<T: Default> Channel<T> {
-    fn can_skip_seeking(&self, song_time: R32) -> bool {
-        self.clips
-            .last()
-            .map_or(true, |clip| clip.start < song_time)
+impl<T: Default + Quantify> ControllerTable for Channel<T> {
+    type Item = Automation<T>;
+    fn table(&self) -> &[Self::Item] {
+        self.clips.as_slice()
     }
 }
 
 #[derive(Component, Deref, DerefMut)]
 pub struct IndexCache(usize);
 
-/// Find each clip we want to evaluate on in each channel
-#[rustfmt::skip]
-fn seek_channels<T: Default + Component>(
-    mut channel_table: Query<(&Channel<T>, &mut IndexCache)>,
-    song_time: Res<SongTime>,
-) {
-    //
-    //  TODO: Parallel system
-    //
-    channel_table
-        .iter_mut()
-        .filter(|(channel, _)| !channel.can_skip_seeking(song_time.0))
-        .for_each(|(channel, mut index_cache)| {
-            **index_cache = channel
-                .clips
-                .iter()
-                .enumerate()
-                .skip(**index_cache)
-                .coalesce(|prev, curr| (prev.1.start == curr.1.start)
-                    .then(|| curr)
-                    .ok_or((prev, curr))
-                )
-                .take(4)
-                .take_while(|(_, clip)| clip.start < **song_time)
-                .last()
-                .map(|(index, _)| index)
-                .unwrap_or_else(|| channel
-                    .clips
-                    .as_slice()
-                    .seek(**song_time)
-                )
-        })
-}
-
 /// Envoke eval functions for each clip and juggle hit responses
+#[rustfmt::skip]
 fn eval_channels<T>(
-    mut channel_table: Query<(&mut Channel<T>, &IndexCache)>,
+    mut channel_table: Query<(&mut Channel<T>, &mut IndexCache)>,
     song_time: Res<SongTime>,
     hits: Res<HitRegister>,
     mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
@@ -200,37 +165,36 @@ fn eval_channels<T>(
     //
     //  TODO: Parallel system
     //
-    channel_table
-        .iter_mut()
-        .filter(|(channel, _)| !channel.clips.is_empty())
-        .for_each(|(mut channel, cache)| {
-            let (slot, clip) = (
-                &mut output_table[channel.id as usize],
-                &mut channel.clips[**cache],
-            );
+    channel_table.iter_mut().for_each(|(mut channel, mut cache)| {
+        channel.recache(**song_time, &mut *cache);
 
-            if let Some((layer, reaction)) = clip.reaction.as_mut() {
-                hits.iter()
-                    .filter_map(Option::as_ref)
-                    .filter(|hit| hit.layer == *layer)
-                    .for_each(|hit| reaction.react(hit));
-            }
+        let (slot, clip) = (
+            &mut output_table[channel.id as usize],
+            &mut channel.clips[**cache],
+        );
 
-            let offset = **song_time - clip.start;
+        if let Some((layer, reaction)) = clip.reaction.as_mut() {
+            hits.iter()
+                .filter_map(Option::as_ref)
+                .filter(|hit| hit.layer == *layer)
+                .for_each(|hit| reaction.react(hit));
+        }
 
-            slot.output = clip.eval(
-                clip.reaction
-                    .as_ref()
-                    .map(|(_, reaction)| reaction.translate(offset))
-                    .unwrap_or(offset),
-            );
+        let offset = **song_time - clip.start;
 
-            slot.redirect = clip
-                .reaction
+        slot.output = clip.eval(
+            clip.reaction
                 .as_ref()
-                .and_then(|(_, reaction)| reaction.delegate())
-                .map(From::from)
-        })
+                .map(|(_, reaction)| reaction.translate(offset))
+                .unwrap_or(offset),
+        );
+
+        slot.redirect = clip
+            .reaction
+            .as_ref()
+            .and_then(|(_, reaction)| reaction.delegate())
+            .map(From::from)
+    })
 }
 
 struct AutomationPlugin;
@@ -247,6 +211,7 @@ mod tests {
     //          - Test HitReactions
     //
     use super::*;
+    use crate::bounds::*;
     use tinyvec::tiny_vec;
 
     #[test]

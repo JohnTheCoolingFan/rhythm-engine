@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
 
 #[derive(Debug, Clone, Copy)]
@@ -166,6 +167,35 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
             let last = self.last().unwrap();
             last.lerp(last, t32(0.))
         })
+    }
+}
+
+pub trait ControllerTable {
+    type Item: Quantify;
+    fn table(&self) -> &[Self::Item];
+
+    #[rustfmt::skip]
+    fn recache(&self, offset: R32, cache: &mut usize) {
+        *cache = self
+            .table()
+            .last()
+            .map_or(true, |item| item.quantify() < offset)
+            .then(|| self.table().len() - 1)
+            .unwrap_or_else(|| self
+                .table()
+                .iter()
+                .enumerate()
+                .skip(*cache)
+                .coalesce(|prev, curr| (prev.1.quantify() == curr.1.quantify())
+                    .then(|| curr)
+                    .ok_or((prev, curr))
+                )
+                .take(4)
+                .take_while(|(_, item)| item.quantify() < offset)
+                .last()
+                .map(|(index, _)| index)
+                .unwrap_or_else(|| self.table().seek(offset))
+            )
     }
 }
 
