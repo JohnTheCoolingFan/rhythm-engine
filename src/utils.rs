@@ -1,5 +1,10 @@
+use bevy::prelude::*;
+use derive_more::{Deref, DerefMut};
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
+
+#[derive(Component, Deref, DerefMut)]
+pub struct IndexCache(usize);
 
 #[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;
@@ -170,6 +175,7 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
     }
 }
 
+/// Must be non-empty and sorted
 pub trait ControllerTable {
     type Item: Quantify;
     fn table(&self) -> &[Self::Item];
@@ -178,24 +184,18 @@ pub trait ControllerTable {
     fn recache(&self, offset: R32, cache: &mut usize) {
         *cache = self
             .table()
-            .last()
-            .map_or(true, |item| item.quantify() < offset)
-            .then(|| self.table().len() - 1)
-            .unwrap_or_else(|| self
-                .table()
-                .iter()
-                .enumerate()
-                .skip(*cache)
-                .coalesce(|prev, curr| (prev.1.quantify() == curr.1.quantify())
-                    .then(|| curr)
-                    .ok_or((prev, curr))
-                )
-                .take(4)
-                .take_while(|(_, item)| item.quantify() < offset)
-                .last()
-                .map(|(index, _)| index)
-                .unwrap_or_else(|| self.table().seek(offset))
+            .iter()
+            .enumerate()
+            .skip(*cache)
+            .coalesce(|prev, curr| (prev.1.quantify() == curr.1.quantify())
+                .then(|| curr)
+                .ok_or((prev, curr))
             )
+            .take(4)
+            .take_while(|(_, item)| item.quantify() < offset)
+            .last()
+            .map(|(index, _)| index)
+            .unwrap_or_else(|| self.table().seek(offset))
     }
 }
 

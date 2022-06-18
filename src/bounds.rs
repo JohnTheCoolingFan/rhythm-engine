@@ -52,7 +52,7 @@ pub struct Rotation(R32);
 #[derive(Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Luminosity(T32);
 #[derive(Clone, Copy, Deref, DerefMut, Lerp)]
-pub struct Displacement(R32);
+pub struct Displacement(T32);
 
 #[derive(Clone, Copy, Deref, DerefMut)]
 pub struct Rgba([T32; 4]);

@@ -1,7 +1,5 @@
 use noisy_float::prelude::*;
 
-use crate::resources::HitRegister;
-
 enum PressKind {
     Press(N32),
     Hold(N32, N32),
@@ -29,7 +27,6 @@ pub struct HitInfo {
     pub layer: u8,
 }
 
-#[derive(Clone)]
 pub enum HitReaction {
     /// Stays at 0 state until hit, once hit which it will commece from the current time
     Commence {

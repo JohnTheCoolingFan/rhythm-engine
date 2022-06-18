@@ -1,6 +1,4 @@
 use bevy::prelude::*;
-use derive_more::{Deref, DerefMut};
-use itertools::Itertools;
 use noisy_float::prelude::*;
 use tinyvec::TinyVec;
 
@@ -8,7 +6,6 @@ use crate::hit::*;
 use crate::resources::*;
 use crate::utils::*;
 
-#[derive(Debug, Clone, Copy)]
 pub enum Weight {
     Constant,
     Quadratic(R32),
@@ -140,15 +137,20 @@ pub struct Channel<T: Default> {
     clips: Vec<Automation<T>>,
 }
 
+impl<T: Default> Channel<T> {
+    fn can_skip(&self, offset: R32) -> bool {
+        self.clips
+            .last()
+            .map_or(true, |item| item.quantify() < offset)
+    }
+}
+
 impl<T: Default + Quantify> ControllerTable for Channel<T> {
     type Item = Automation<T>;
     fn table(&self) -> &[Self::Item] {
         self.clips.as_slice()
     }
 }
-
-#[derive(Component, Deref, DerefMut)]
-pub struct IndexCache(usize);
 
 /// Envoke eval functions for each clip and juggle hit responses
 #[rustfmt::skip]
@@ -165,36 +167,39 @@ fn eval_channels<T>(
     //
     //  TODO: Parallel system
     //
-    channel_table.iter_mut().for_each(|(mut channel, mut cache)| {
-        channel.recache(**song_time, &mut *cache);
+    channel_table
+        .iter_mut()
+        .filter(|(channel, _)| channel.can_skip(**song_time))
+        .for_each(|(mut channel, mut cache)| {
+            channel.recache(**song_time, &mut *cache);
 
-        let (slot, clip) = (
-            &mut output_table[channel.id as usize],
-            &mut channel.clips[**cache],
-        );
+            let (slot, clip) = (
+                &mut output_table[channel.id as usize],
+                &mut channel.clips[**cache],
+            );
 
-        if let Some((layer, reaction)) = clip.reaction.as_mut() {
-            hits.iter()
-                .filter_map(Option::as_ref)
-                .filter(|hit| hit.layer == *layer)
-                .for_each(|hit| reaction.react(hit));
-        }
+            if let Some((layer, reaction)) = clip.reaction.as_mut() {
+                hits.iter()
+                    .filter_map(Option::as_ref)
+                    .filter(|hit| hit.layer == *layer)
+                    .for_each(|hit| reaction.react(hit));
+            }
 
-        let offset = **song_time - clip.start;
+            let offset = **song_time - clip.start;
 
-        slot.output = clip.eval(
-            clip.reaction
+            slot.output = clip.eval(
+                clip.reaction
+                    .as_ref()
+                    .map(|(_, reaction)| reaction.translate(offset))
+                    .unwrap_or(offset),
+            );
+
+            slot.redirect = clip
+                .reaction
                 .as_ref()
-                .map(|(_, reaction)| reaction.translate(offset))
-                .unwrap_or(offset),
-        );
-
-        slot.redirect = clip
-            .reaction
-            .as_ref()
-            .and_then(|(_, reaction)| reaction.delegate())
-            .map(From::from)
-    })
+                .and_then(|(_, reaction)| reaction.delegate())
+                .map(From::from)
+        })
 }
 
 struct AutomationPlugin;
