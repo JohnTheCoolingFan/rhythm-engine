@@ -1,10 +1,5 @@
-use bevy::prelude::*;
-use derive_more::{Deref, DerefMut};
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
-
-#[derive(Component, Deref, DerefMut)]
-pub struct IndexCache(usize);
 
 #[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;

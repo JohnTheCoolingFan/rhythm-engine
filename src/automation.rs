@@ -152,10 +152,13 @@ impl<T: Default + Quantify> ControllerTable for Channel<T> {
     }
 }
 
+#[derive(Component, Deref, DerefMut)]
+pub struct ChannelIndexCache(usize);
+
 /// Envoke eval functions for each clip and juggle hit responses
 #[rustfmt::skip]
 fn eval_channels<T>(
-    mut channel_table: Query<(&mut Channel<T>, &mut IndexCache)>,
+    mut channel_table: Query<(&mut Channel<T>, &mut ChannelIndexCache)>,
     song_time: Res<SongTime>,
     hits: Res<HitRegister>,
     mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
