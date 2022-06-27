@@ -1,3 +1,4 @@
+use bevy::prelude::*;
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
 
@@ -37,15 +38,25 @@ pub trait Quantify {
     fn quantify(&self) -> R32;
 }
 
+pub trait Lerp {
+    type Output;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output;
+}
+
 pub trait FloatExt {
     fn quantized_floor(self, period: Self, offset: Self) -> Self;
     fn quantized_remainder(self, period: Self, offset: Self) -> Self;
     fn unit_interval(self, control: Self, follow: Self) -> T32;
 }
 
-pub trait Lerp {
-    type Output;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output;
+pub trait Vec2Ext {
+    fn is_left(&self, start: &Self, end: &Self) -> bool;
+    /// Returns vec rotated about self
+    fn rotate(&self, vec: &Self, theta: R32) -> Self;
+}
+
+pub trait MatExt {
+    fn to_matrix(self) -> Mat3;
 }
 
 /// Requires underlying dataset to be sorted
@@ -60,6 +71,26 @@ pub trait SliceExt<'a, T> {
     fn interp_or_last(self, offset: R32) -> <T as Lerp>::Output
     where
         T: Lerp;
+}
+
+impl Quantify for R32 {
+    fn quantify(&self) -> R32 {
+        *self
+    }
+}
+
+impl Lerp for R32 {
+    type Output = Self;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
+        *self + (*other - *self) * t.raw()
+    }
+}
+
+impl Lerp for T32 {
+    type Output = Self;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
+        *self + (other.raw() - self.raw()) * t.raw()
+    }
 }
 
 impl FloatExt for R32 {
@@ -85,23 +116,25 @@ impl FloatExt for R32 {
     }
 }
 
-impl Quantify for R32 {
-    fn quantify(&self) -> R32 {
-        *self
+impl Vec2Ext for Vec2 {
+    fn is_left(&self, start: &Self, end: &Self) -> bool {
+        ((end.x - start.x) * (self.y - start.y) - (end.y - start.y) * (self.x - start.x)) > 0.
+    }
+
+    fn rotate(&self, vec: &Self, theta: R32) -> Self {
+        let c = theta.raw().to_radians().cos();
+        let s = theta.raw().to_radians().sin();
+
+        Self::new(
+            c * (vec.x - self.x) - s * (vec.y - self.y) + self.x,
+            s * (vec.x - self.x) + c * (vec.y - self.y) + self.y,
+        )
     }
 }
 
-impl Lerp for R32 {
-    type Output = Self;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        *self + (*other - *self) * t.raw()
-    }
-}
-
-impl Lerp for T32 {
-    type Output = Self;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        *self + (other.raw() - self.raw()) * t.raw()
+impl MatExt for [[f32; 3]; 3] {
+    fn to_matrix(self) -> Mat3 {
+        Mat3::from_cols_array_2d(&self).transpose()
     }
 }
 
@@ -176,12 +209,11 @@ pub trait ControllerTable {
     fn table(&self) -> &[Self::Item];
 
     #[rustfmt::skip]
-    fn recache(&self, offset: R32, cache: &mut usize) {
-        *cache = self
-            .table()
+    fn new_cache(&self, offset: R32, old: usize) -> usize {
+        self.table()
             .iter()
             .enumerate()
-            .skip(*cache)
+            .skip(old)
             .coalesce(|prev, curr| (prev.1.quantify() == curr.1.quantify())
                 .then(|| curr)
                 .ok_or((prev, curr))

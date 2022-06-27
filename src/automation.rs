@@ -174,7 +174,7 @@ fn eval_channels<T>(
         .iter_mut()
         .filter(|(channel, _)| channel.can_skip(**song_time))
         .for_each(|(mut channel, mut cache)| {
-            channel.recache(**song_time, &mut *cache);
+            **cache = channel.new_cache(**song_time, **cache);
 
             let (slot, clip) = (
                 &mut output_table[channel.id as usize],

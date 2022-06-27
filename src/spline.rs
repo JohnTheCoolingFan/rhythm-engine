@@ -48,20 +48,20 @@ pub struct SplineLut(pub Vec<SampledSegment>);
 
 impl Spline {
     fn sample_bezier(start: Vec2, flattened: impl Iterator<Item = Point<f32>>) -> Vec<(Vec2, R32)> {
-        [start]
+        let tail = [start]
             .into_iter()
             .chain(flattened.map(|p| Vec2::new(p.x, p.y)))
             .tuple_windows::<(_, _)>()
             .scan(r32(0.), |segment_length, (prev, current)| {
                 *segment_length += r32(prev.distance(current));
                 Some((current, *segment_length))
-            })
-            .collect()
+            });
+
+        [(start, r32(0.))].into_iter().chain(tail).collect()
     }
 
     #[rustfmt::skip]
     fn sample(&self) -> SplineLut {
-
         [Segment { curvature: Curvature::Linear, end: Vec2::new(0., 0.) }]
             .iter()
             .chain(self.iter())
@@ -79,8 +79,31 @@ impl Spline {
                                 (*end, segment_length)
                             ])
                         }
-                        Curvature::Circular(ctrl) => {
-                            unimplemented!()
+                        Curvature::Circular(ctrl) => { //https://math.stackexchange.com/a/1460096
+                            let m11_determinant = [start, ctrl, end]
+                                .map(|point| [point.x, point.y, 1.])
+                                .to_matrix()
+                                .determinant();
+
+                            if f32::EPSILON < m11_determinant.abs() {
+                                let m12 = [start, ctrl, end]
+                                    .map(|point| [point.x.powi(2) + point.y.powi(2), point.y, 1.])
+                                    .to_matrix();
+
+                                let m13 = [start, ctrl, end]
+                                    .map(|point| [point.x.powi(2) + point.y.powi(2), point.x, 1.])
+                                    .to_matrix();
+
+                                let center = Vec2::new(
+                                    0.5 * (m12.determinant() / m11_determinant),
+                                    -0.5 * (m13.determinant() / m11_determinant)
+                                );
+
+                                let (center_to_start, center_to_end) = (
+                                    *start - center, *end - center
+                                );
+                            }
+                            unimplemented!();
                         }
                         Curvature::Quadratic(ctrl) => {
                             let bezier = QuadraticBezierSegment {
@@ -121,4 +144,19 @@ struct SplineIndexCache {
 
 fn sync_spline_luts(splines: Query<Changed<Spline>>, mut luts: ResMut<SplineLuts>) {
     unimplemented!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn geom() {
+        let bezier = QuadraticBezierSegment::<f32> {
+            from: Point::new(0.0, 0.0),
+            ctrl: Point::new(0.0, 1.0),
+            to: Point::new(1.0, 1.0),
+        };
+
+        println!("{:#?}", bezier.flattened(0.05).collect::<Vec<_>>())
+    }
 }
