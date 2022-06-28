@@ -82,17 +82,17 @@ impl Spline {
                         Curvature::Circular(ctrl) => { //https://math.stackexchange.com/a/1460096
                             let m11_determinant = [start, ctrl, end]
                                 .map(|point| [point.x, point.y, 1.])
-                                .to_matrix()
+                                .into_matrix()
                                 .determinant();
 
                             if f32::EPSILON < m11_determinant.abs() {
                                 let m12 = [start, ctrl, end]
                                     .map(|point| [point.x.powi(2) + point.y.powi(2), point.y, 1.])
-                                    .to_matrix();
+                                    .into_matrix();
 
                                 let m13 = [start, ctrl, end]
                                     .map(|point| [point.x.powi(2) + point.y.powi(2), point.x, 1.])
-                                    .to_matrix();
+                                    .into_matrix();
 
                                 let center = Vec2::new(
                                     0.5 * (m12.determinant() / m11_determinant),
@@ -102,8 +102,17 @@ impl Spline {
                                 let (center_to_start, center_to_end) = (
                                     *start - center, *end - center
                                 );
+                                unimplemented!();
                             }
-                            unimplemented!();
+                            else {
+                                let segment_length = r32(start.distance(*end));
+                                *path_length += segment_length;
+
+                                SampledCurve::Points(vec![
+                                    (*start, r32(0.)),
+                                    (*end, segment_length)
+                                ])
+                            }
                         }
                         Curvature::Quadratic(ctrl) => {
                             let bezier = QuadraticBezierSegment {

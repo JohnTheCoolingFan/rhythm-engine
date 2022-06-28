@@ -56,7 +56,7 @@ pub trait Vec2Ext {
 }
 
 pub trait MatExt {
-    fn to_matrix(self) -> Mat3;
+    fn into_matrix(self) -> Mat3;
 }
 
 /// Requires underlying dataset to be sorted
@@ -133,7 +133,7 @@ impl Vec2Ext for Vec2 {
 }
 
 impl MatExt for [[f32; 3]; 3] {
-    fn to_matrix(self) -> Mat3 {
+    fn into_matrix(self) -> Mat3 {
         Mat3::from_cols_array_2d(&self).transpose()
     }
 }
@@ -225,6 +225,31 @@ pub trait ControllerTable {
             .unwrap_or_else(|| self.table().seek(offset))
     }
 }
+
+pub enum Orientation {
+    CounterClockWise,
+    CoLinear,
+    ClockWise,
+}
+
+pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
+    fn orientation(self) -> Orientation {
+        match self
+            .clone()
+            .chain(self.take(1))
+            .tuple_windows::<(_, _)>()
+            .map(|(p, q)| (q.x - p.x) * (q.y + p.y))
+            .sum::<f32>()
+        {
+            sum if sum < 0. => Orientation::CounterClockWise,
+            sum if sum == 0. => Orientation::CoLinear,
+            sum if 0. < sum => Orientation::ClockWise,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<T: Iterator<Item = Vec2> + Clone> OrientationExt for T {}
 
 #[cfg(test)]
 mod tests {
