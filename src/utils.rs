@@ -111,7 +111,6 @@ impl FloatExt for R32 {
     }
 
     fn unit_interval(self, first: Self, second: Self) -> T32 {
-        println!("{} {}", first, second);
         t32(((self - first) / (second - first)).raw())
     }
 }
@@ -226,6 +225,7 @@ pub trait ControllerTable {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum Orientation {
     CounterClockWise,
     CoLinear,
