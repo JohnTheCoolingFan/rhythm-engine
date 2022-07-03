@@ -6,7 +6,12 @@ use itertools::Itertools;
 use lyon_geom::*;
 use noisy_float::prelude::*;
 
-use crate::{resources::*, utils::*};
+use crate::{
+    automation::{Channel, ChannelSeeker},
+    bounds::*,
+    resources::*,
+    utils::*,
+};
 
 #[derive(Clone, Copy)]
 pub enum Curvature {
@@ -46,6 +51,13 @@ pub struct Spline(Vec<Segment>);
 
 #[derive(Component, Deref, DerefMut, From)]
 pub struct SplineLut(pub Vec<SampledSegment>);
+
+impl ControllerTable for SplineLut {
+    type Item = SampledSegment;
+    fn table(&self) -> &[Self::Item] {
+        self.as_slice()
+    }
+}
 
 impl Spline {
     fn create_line(spline_length: &mut R32, start: Vec2, end: Vec2) -> SampledCurve {
@@ -175,12 +187,15 @@ struct SplineLutIndexCache {
     path: usize,
 }
 
-fn sync_spline_luts(mut splines: ResMut<SplineTable>) {
-    splines.iter_mut().for_each(|entry| {
-        if let Some((spline, lut)) = entry {
-            *lut = spline.sample()
-        }
-    })
+// Reuse automation system
+// Use only 1 bound array
+
+fn eval_splines(
+    spline_luts: Query<(&Channel<Displacement, (Spline, SplineLut)>, &ChannelSeeker)>,
+    displacements: Res<AutomationOutputTable<Displacement>>,
+    mut points: ResMut<AutomationOutputTable<Vec2>>,
+) {
+    unimplemented!()
 }
 
 #[cfg(test)]

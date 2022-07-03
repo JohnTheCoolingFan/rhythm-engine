@@ -45,16 +45,16 @@ where
     }
 }
 
-#[derive(Clone, Copy, Deref, DerefMut, Lerp)]
+#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Scale(R32);
-#[derive(Clone, Copy, Deref, DerefMut, Lerp)]
+#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Rotation(R32);
-#[derive(Clone, Copy, Deref, DerefMut, Lerp)]
+#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Luminosity(T32);
-#[derive(Clone, Copy, Deref, DerefMut, Lerp)]
+#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Displacement(T32);
 
-#[derive(Clone, Copy, Deref, DerefMut)]
+#[derive(Default, Clone, Copy, Deref, DerefMut)]
 pub struct Rgba([T32; 4]);
 
 impl Lerp for Rgba {
@@ -87,7 +87,7 @@ mod tests {
     }
 
     #[test]
-    fn bound_sample() {
+    fn scalar_bound_sample() {
         let co_vals = [(0., 0.), (0.5, 0.), (1., 1.), (2., 1.), (3., 1.), (4., 1.)];
 
         co_vals

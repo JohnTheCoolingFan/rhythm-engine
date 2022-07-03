@@ -71,13 +71,14 @@ struct Repeater {
     repeat_bounds: bool,
 }
 
-pub struct Automation<T: Default> {
+pub struct Automation<PrimaryCtrl: Default, SubCtrls = ()> {
     start: R32,
     reaction: Option<(u8, HitReaction)>,
     repeater: Option<Repeater>,
-    upper_bounds: TinyVec<[T; 4]>,
+    upper_bounds: TinyVec<[PrimaryCtrl; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[T; 4]>,
+    lower_bounds: TinyVec<[PrimaryCtrl; 4]>,
+    sub_ctrls: SubCtrls,
 }
 
 type AutomationOutput<T> = <<T as Lerp>::Output as Lerp>::Output;
@@ -87,13 +88,13 @@ pub struct ChannelOutput<T> {
     pub redirect: Option<usize>,
 }
 
-impl<T> Automation<T>
+impl<PrimaryCtrl, SubCtrls> Automation<PrimaryCtrl, SubCtrls>
 where
-    T: Default + Quantify + Lerp,
-    <T as Lerp>::Output: Lerp<Output = <T as Lerp>::Output>,
+    PrimaryCtrl: Default + Quantify + Lerp,
+    <PrimaryCtrl as Lerp>::Output: Lerp<Output = <PrimaryCtrl as Lerp>::Output>,
 {
     #[rustfmt::skip]
-    fn eval(&self, offset: R32) -> Option<AutomationOutput<T>> {
+    fn eval(&self, offset: R32) -> Option<AutomationOutput<PrimaryCtrl>> {
         self.repeater
             .as_ref()
             .and_then(|Repeater { duration, floor, ceil, repeat_bounds }| {
@@ -126,19 +127,19 @@ where
     }
 }
 
-impl<T: Default> Quantify for Automation<T> {
+impl<PrimaryCtrl: Default, SubCtrls> Quantify for Automation<PrimaryCtrl, SubCtrls> {
     fn quantify(&self) -> R32 {
         self.start
     }
 }
 
 #[derive(Component)]
-pub struct Channel<T: Default> {
+pub struct Channel<PrimaryCtrl: Default, SubCtrls = ()> {
     id: u8,
-    clips: Vec<Automation<T>>,
+    clips: Vec<Automation<PrimaryCtrl, SubCtrls>>,
 }
 
-impl<T: Default> Channel<T> {
+impl<PrimaryCtrl: Default, SubCtrls> Channel<PrimaryCtrl, SubCtrls> {
     fn can_skip(&self, offset: R32) -> bool {
         self.clips
             .last()
@@ -146,8 +147,8 @@ impl<T: Default> Channel<T> {
     }
 }
 
-impl<T: Default + Quantify> ControllerTable for Channel<T> {
-    type Item = Automation<T>;
+impl<PrimaryCtrl: Default + Quantify, SubCtrls> ControllerTable for Channel<PrimaryCtrl, SubCtrls> {
+    type Item = Automation<PrimaryCtrl, SubCtrls>;
     fn table(&self) -> &[Self::Item] {
         self.clips.as_slice()
     }
@@ -161,15 +162,16 @@ pub struct ChannelSeeker {
 
 /// Envoke eval functions for each clip and juggle hit responses
 #[rustfmt::skip]
-fn eval_channels<T>(
-    mut channel_table: Query<(&mut Channel<T>, &mut ChannelSeeker)>,
+fn eval_channel_primaries<PrimaryCtrl, SubCtrls>(
+    mut channel_table: Query<(&mut Channel<PrimaryCtrl, SubCtrls>, &mut ChannelSeeker)>,
     song_time: Res<SongTime>,
     hit_reg: Res<HitRegister>,
-    mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
+    mut primary_output_table: ResMut<AutomationOutputTable<AutomationOutput<PrimaryCtrl>>>,
 ) where
-    T: Default + Component + Quantify + Lerp,
-    <T as Lerp>::Output: Lerp<Output = <T as Lerp>::Output>,
-    AutomationOutput<T>: Component,
+    PrimaryCtrl: Default + Component + Quantify + Lerp,
+    SubCtrls: Send + Sync + 'static,
+    <PrimaryCtrl as Lerp>::Output: Lerp<Output = <PrimaryCtrl as Lerp>::Output>,
+    AutomationOutput<PrimaryCtrl>: Component,
 {
     //
     //  TODO: Parallel system
@@ -184,13 +186,13 @@ fn eval_channels<T>(
             if new_index != seeker.index_cache {
                 seeker.index_cache = new_index;
                 seeker.reaction_state = Empty;
-                hits = &[None];
+                hits = &[];
             } else {
                 hits = &**hit_reg;
             }
 
             let (slot, clip, reaction_state) = (
-                &mut output_table[channel.id as usize],
+                &mut primary_output_table[channel.id as usize],
                 &mut channel.clips[seeker.index_cache],
                 &mut seeker.reaction_state
             );
@@ -314,6 +316,7 @@ mod tests {
             start: r32(0.),
             reaction: None,
             repeater: None,
+            sub_ctrls: (),
             upper_bounds: tiny_vec![
                 ScalarBound {
                     scalar: r32(0.),
