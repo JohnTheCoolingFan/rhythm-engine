@@ -164,7 +164,7 @@ pub struct ChannelSeeker {
 fn eval_channels<T>(
     mut channel_table: Query<(&mut Channel<T>, &mut ChannelSeeker)>,
     song_time: Res<SongTime>,
-    hits: Res<HitRegister>,
+    hit_reg: Res<HitRegister>,
     mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
 ) where
     T: Default + Component + Quantify + Lerp,
@@ -178,9 +178,15 @@ fn eval_channels<T>(
         .iter_mut()
         .filter(|(channel, _)| channel.can_skip(**song_time))
         .for_each(|(mut channel, mut seeker)| {
-            if let new_index = channel.find_index_through(**song_time, seeker.index_cache) {
-                if new_index != seeker.index_cache { seeker.reaction_state = Empty };
+            let hits: &[Option<HitInfo>];
+            let new_index = channel.find_index_through(**song_time, seeker.index_cache);
+
+            if new_index != seeker.index_cache {
                 seeker.index_cache = new_index;
+                seeker.reaction_state = Empty;
+                hits = &[None];
+            } else {
+                hits = &**hit_reg;
             }
 
             let (slot, clip, reaction_state) = (
@@ -196,7 +202,7 @@ fn eval_channels<T>(
                 hits.iter().flatten().filter(|hit| hit.layer == *layer).for_each(|hit|
                     match (reaction, &mut *reaction_state) {
                         (Commence | Switch(_), state) => *state = Delegated(true),
-                        (Toggle(_), Delegated(delegated)) => *delegated = !*delegated,
+                        (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
                         (Toggle(_), state) => *state = Delegated(true),
                         (Follow(_), last_hit) => *last_hit = Hit(hit.object_time)
                     }
@@ -208,8 +214,7 @@ fn eval_channels<T>(
             slot.output = clip.eval(
                 clip.reaction.as_ref().map_or(offset, |(_, reaction)|
                     match (reaction, &mut *reaction_state) {
-                        (Commence, Delegated(true)) => offset,
-                        (Commence, _) => r32(0.),
+                        (Commence, Delegated(delegate)) => if *delegate { offset } else { r32(0.) },
                         (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&offset) => *hit + ex,
                         _ => offset
                     }
