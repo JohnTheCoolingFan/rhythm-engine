@@ -9,14 +9,14 @@ use noisy_float::prelude::*;
 use crate::{resources::*, utils::*};
 
 #[derive(Clone, Copy)]
-enum Curvature {
+pub enum Curvature {
     Linear,
     Circular(Vec2),
     Quadratic(Vec2),
     Cubic(Vec2, Vec2),
 }
 
-struct Segment {
+pub struct Segment {
     curvature: Curvature,
     end: Vec2,
 }
@@ -42,7 +42,7 @@ impl Quantify for SampledSegment {
 }
 
 #[derive(Component, Deref, DerefMut, From)]
-struct Spline(Vec<Segment>);
+pub struct Spline(Vec<Segment>);
 
 #[derive(Component, Deref, DerefMut, From)]
 pub struct SplineLut(pub Vec<SampledSegment>);
@@ -71,7 +71,11 @@ impl Spline {
                 Some((current, *segment_length))
             });
 
-        let sampled = [(start, r32(0.))].into_iter().chain(tail).collect::<Vec<_>>();
+        let sampled = [(start, r32(0.))]
+            .into_iter()
+            .chain(tail)
+            .collect::<Vec<_>>();
+
         *spline_length += sampled.last().unwrap().1;
         SampledCurve::Points(sampled)
     }
@@ -166,13 +170,17 @@ impl Spline {
 }
 
 #[derive(Component)]
-struct SplineIndexCache {
+struct SplineLutIndexCache {
     segment: usize,
-    path: Option<usize>,
+    path: usize,
 }
 
-fn sync_spline_luts(splines: Query<Changed<Spline>>, mut luts: ResMut<SplineLuts>) {
-    unimplemented!()
+fn sync_spline_luts(mut splines: ResMut<SplineTable>) {
+    splines.iter_mut().for_each(|entry| {
+        if let Some((spline, lut)) = entry {
+            *lut = spline.sample()
+        }
+    })
 }
 
 #[cfg(test)]

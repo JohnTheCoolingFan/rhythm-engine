@@ -208,7 +208,7 @@ pub trait ControllerTable {
     fn table(&self) -> &[Self::Item];
 
     #[rustfmt::skip]
-    fn new_cache(&self, offset: R32, old: usize) -> usize {
+    fn find_index_through(&self, offset: R32, old: usize) -> usize {
         self.table()
             .iter()
             .enumerate()

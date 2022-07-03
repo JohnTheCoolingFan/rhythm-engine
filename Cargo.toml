@@ -20,6 +20,8 @@ noisy_float = "0.2.0"
 tinyvec = "1.5.1"
 itertools = "0.10.3"
 lyon_geom = "0.17"
+pretty_assertions = "1.2.1"
+tap = "1.0.1"
 
 [profile.dev.package."*"]
 opt-level = 3

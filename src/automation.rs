@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use noisy_float::prelude::*;
+use tap::prelude::*;
 use tinyvec::TinyVec;
 
 use crate::hit::*;
@@ -152,13 +153,16 @@ impl<T: Default + Quantify> ControllerTable for Channel<T> {
     }
 }
 
-#[derive(Component, Deref, DerefMut)]
-pub struct ChannelIndexCache(usize);
+#[derive(Component)]
+pub struct ChannelSeeker {
+    index_cache: usize,
+    reaction_state: ReactionState,
+}
 
 /// Envoke eval functions for each clip and juggle hit responses
 #[rustfmt::skip]
 fn eval_channels<T>(
-    mut channel_table: Query<(&mut Channel<T>, &mut ChannelIndexCache)>,
+    mut channel_table: Query<(&mut Channel<T>, &mut ChannelSeeker)>,
     song_time: Res<SongTime>,
     hits: Res<HitRegister>,
     mut output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
@@ -173,35 +177,51 @@ fn eval_channels<T>(
     channel_table
         .iter_mut()
         .filter(|(channel, _)| channel.can_skip(**song_time))
-        .for_each(|(mut channel, mut cache)| {
-            **cache = channel.new_cache(**song_time, **cache);
+        .for_each(|(mut channel, mut seeker)| {
+            if let new_index = channel.find_index_through(**song_time, seeker.index_cache) {
+                if new_index != seeker.index_cache { seeker.reaction_state = Empty };
+                seeker.index_cache = new_index;
+            }
 
-            let (slot, clip) = (
+            let (slot, clip, reaction_state) = (
                 &mut output_table[channel.id as usize],
-                &mut channel.clips[**cache],
+                &mut channel.clips[seeker.index_cache],
+                &mut seeker.reaction_state
             );
 
-            if let Some((layer, reaction)) = clip.reaction.as_mut() {
-                hits.iter()
-                    .filter_map(Option::as_ref)
-                    .filter(|hit| hit.layer == *layer)
-                    .for_each(|hit| reaction.react(hit));
+            use HitReaction::*;
+            use ReactionState::*;
+
+            if let Some((layer, reaction)) = clip.reaction.as_ref() {
+                hits.iter().flatten().filter(|hit| hit.layer == *layer).for_each(|hit|
+                    match (reaction, &mut *reaction_state) {
+                        (Commence | Switch(_), state) => *state = Delegated(true),
+                        (Toggle(_), Delegated(delegated)) => *delegated = !*delegated,
+                        (Toggle(_), state) => *state = Delegated(true),
+                        (Follow(_), last_hit) => *last_hit = Hit(hit.object_time)
+                    }
+                )
             }
 
             let offset = **song_time - clip.start;
 
             slot.output = clip.eval(
-                clip.reaction
-                    .as_ref()
-                    .map(|(_, reaction)| reaction.translate(offset))
-                    .unwrap_or(offset),
+                clip.reaction.as_ref().map_or(offset, |(_, reaction)|
+                    match (reaction, &mut *reaction_state) {
+                        (Commence, Delegated(true)) => offset,
+                        (Commence, _) => r32(0.),
+                        (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&offset) => *hit + ex,
+                        _ => offset
+                    }
+                )
             );
 
-            slot.redirect = clip
-                .reaction
-                .as_ref()
-                .and_then(|(_, reaction)| reaction.delegate())
-                .map(From::from)
+            slot.redirect = clip.reaction.as_ref().and_then(|(_, reaction)|
+                match (reaction, &mut *reaction_state) {
+                    (Switch(target) | Toggle(target), Delegated(true)) => Some(*target as usize),
+                    _ => None
+                }
+            )
         })
 }
 
