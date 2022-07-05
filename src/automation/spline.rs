@@ -1,17 +1,11 @@
 use std::hint::unreachable_unchecked;
 
 use bevy::prelude::*;
-use derive_more::{Deref, DerefMut, From};
 use itertools::Itertools;
 use lyon_geom::*;
 use noisy_float::prelude::*;
 
-use crate::{
-    automation::{Channel, ChannelSeeker},
-    bounds::*,
-    resources::*,
-    utils::*,
-};
+use crate::utils::*;
 
 #[derive(Clone, Copy)]
 pub enum Curvature {
@@ -26,41 +20,50 @@ pub struct Segment {
     end: Vec2,
 }
 
-pub enum SampledCurve {
-    Points(Vec<(Vec2, R32)>),
-    CircleArc {
-        start: Vec2,
+pub enum Sample {
+    Point {
+        path_offset: R32,
+        point: Vec2,
+    },
+    Arc {
+        path_offset: R32,
         center: Vec2,
         theta: R32,
+        end: Vec2,
     },
 }
 
-pub struct SampledSegment {
-    path_offset: R32,
-    sample: SampledCurve,
-}
-
-impl Quantify for SampledSegment {
-    fn quantify(&self) -> R32 {
-        self.path_offset
+impl Sample {
+    fn position(&self) -> Vec2 {
+        match self {
+            Self::Point { point: pos, .. } | Self::Arc { end: pos, .. } => *pos,
+        }
     }
 }
 
-#[derive(Component, Deref, DerefMut, From)]
-pub struct Spline(Vec<Segment>);
+impl Quantify for Sample {
+    fn quantify(&self) -> R32 {
+        match self {
+            Self::Point { path_offset, .. } | Self::Arc { path_offset, .. } => *path_offset,
+        }
+    }
+}
 
-#[derive(Component, Deref, DerefMut, From)]
-pub struct SplineLut(pub Vec<SampledSegment>);
+#[derive(Component)]
+pub struct Spline {
+    pub path: Vec<Segment>,
+    pub lut: Vec<Sample>,
+}
 
-impl ControllerTable for SplineLut {
-    type Item = SampledSegment;
+impl ControllerTable for Spline {
+    type Item = Sample;
     fn table(&self) -> &[Self::Item] {
-        self.as_slice()
+        self.lut.as_slice()
     }
 }
 
 impl Spline {
-    fn create_line(spline_length: &mut R32, start: Vec2, end: Vec2) -> SampledCurve {
+    /*fn create_line(spline_length: &mut R32, start: Vec2, end: Vec2) -> SampledCurve {
         let segment_length = r32(start.distance(end));
         *spline_length += segment_length;
         SampledCurve::Points(vec![(start, r32(0.)), (end, segment_length)])
@@ -170,32 +173,20 @@ impl Spline {
     }
 
     #[rustfmt::skip]
-    pub fn sample(&self) -> SplineLut {
-        [Segment { curvature: Curvature::Linear, end: Vec2::new(0., 0.) }]
+    pub fn resample(&mut self) {
+        self.lut = [Segment { curvature: Curvature::Linear, end: Vec2::new(0., 0.) }]
             .iter()
-            .chain(self.iter())
+            .chain(self.path.iter())
             .tuple_windows::<(_, _)>()
             .scan(r32(0.), Self::sample_segment)
             .collect::<Vec<_>>()
-            .into()
-    }
+    }*/
 }
 
 #[derive(Component)]
 struct SplineLutIndexCache {
     segment: usize,
     path: usize,
-}
-
-// Reuse automation system
-// Use only 1 bound array
-
-fn eval_splines(
-    spline_luts: Query<(&Channel<Displacement, (Spline, SplineLut)>, &ChannelSeeker)>,
-    displacements: Res<AutomationOutputTable<Displacement>>,
-    mut points: ResMut<AutomationOutputTable<Vec2>>,
-) {
-    unimplemented!()
 }
 
 #[cfg(test)]

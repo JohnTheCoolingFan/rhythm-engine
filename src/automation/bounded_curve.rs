@@ -1,10 +1,11 @@
+use bevy::prelude::*;
 use derive_more::{Deref, DerefMut};
 use noisy_float::prelude::*;
+use tinyvec::TinyVec;
 
 use macros::*;
 
-use crate::automation::Weight;
-use crate::utils::*;
+use crate::{automation::Weight, utils::*};
 
 #[derive(Default)]
 pub struct ScalarBound<T> {
@@ -28,6 +29,7 @@ where
     }
 }
 
+#[derive(Default)]
 pub struct SpannedBound<T> {
     weight: Weight,
     bound: ScalarBound<T>,
@@ -51,8 +53,6 @@ pub struct Scale(R32);
 pub struct Rotation(R32);
 #[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Luminosity(T32);
-#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
-pub struct Displacement(T32);
 
 #[derive(Default, Clone, Copy, Deref, DerefMut)]
 pub struct Rgba([T32; 4]);
@@ -67,6 +67,32 @@ impl Lerp for Rgba {
 
         Rgba([(); 4].map(|_| iter.next().unwrap()))
     }
+}
+
+#[derive(Default)]
+struct Anchor {
+    point: Vec2,
+    weight: Weight,
+}
+
+impl Quantify for Anchor {
+    fn quantify(&self) -> R32 {
+        r32(self.point.x)
+    }
+}
+
+impl Lerp for Anchor {
+    type Output = T32;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
+        t32(other.point.y).lerp(&t32(self.point.y), self.weight.eval(t))
+    }
+}
+
+#[derive(Component)]
+pub struct BoundedCurve<T: Default> {
+    upper_bounds: TinyVec<[T; 4]>,
+    anchors: TinyVec<[Anchor; 8]>,
+    lower_bounds: TinyVec<[T; 4]>,
 }
 
 #[cfg(test)]

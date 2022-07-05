@@ -1,11 +1,14 @@
-use bevy::prelude::*;
-use noisy_float::prelude::*;
-use tap::prelude::*;
-use tinyvec::TinyVec;
+mod bounded_curve;
+mod hit_response;
+mod spline;
 
-use crate::hit::*;
-use crate::resources::*;
-use crate::utils::*;
+use std::marker::PhantomData;
+
+use bevy::prelude::*;
+use derive_more::From;
+use noisy_float::prelude::*;
+
+use crate::{resources::*, utils::*};
 
 pub enum Weight {
     Constant,
@@ -25,30 +28,9 @@ impl Weight {
     }
 }
 
-struct Anchor {
-    point: Vec2,
-    weight: Weight,
-}
-
-impl Default for Anchor {
+impl Default for Weight {
     fn default() -> Self {
-        Anchor {
-            point: Vec2::default(),
-            weight: Weight::Quadratic(r32(0.)),
-        }
-    }
-}
-
-impl Quantify for Anchor {
-    fn quantify(&self) -> R32 {
-        r32(self.point.x)
-    }
-}
-
-impl Lerp for Anchor {
-    type Output = T32;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        t32(other.point.y).lerp(&t32(self.point.y), self.weight.eval(t))
+        Self::Quadratic(r32(0.))
     }
 }
 
@@ -64,37 +46,85 @@ impl RepeaterClamp {
     }
 }
 
-struct Repeater {
+#[derive(Component)]
+pub struct Repeater {
     duration: R32,
     ceil: RepeaterClamp,
     floor: RepeaterClamp,
     repeat_bounds: bool,
 }
 
-pub struct Automation<PrimaryCtrl: Default, SubCtrls = ()> {
-    start: R32,
-    reaction: Option<(u8, HitReaction)>,
-    repeater: Option<Repeater>,
-    upper_bounds: TinyVec<[PrimaryCtrl; 4]>,
-    anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[PrimaryCtrl; 4]>,
-    sub_ctrls: SubCtrls,
+#[derive(Component, Deref, DerefMut)]
+pub struct ClipID(u32);
+
+#[derive(Clone, Copy)]
+pub struct ClipInstance {
+    offset: R32,
+    entity: Entity,
 }
 
-type AutomationOutput<T> = <<T as Lerp>::Output as Lerp>::Output;
+impl Quantify for ClipInstance {
+    fn quantify(&self) -> R32 {
+        self.offset
+    }
+}
+
+#[derive(Component, Default)]
+pub struct Channel<T> {
+    pub data: Vec<ClipInstance>,
+    pub id: u8,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> ControllerTable for Channel<T> {
+    type Item = ClipInstance;
+    fn table(&self) -> &[Self::Item] {
+        self.data.as_slice()
+    }
+}
+
+#[derive(Component, Clone, Copy)]
+pub enum IndexCache {
+    Clean(usize),
+    Dirty(usize),
+}
+
+impl IndexCache {
+    fn get(self) -> usize {
+        match self {
+            IndexCache::Clean(index) | IndexCache::Dirty(index) => index,
+        }
+    }
+}
+
+pub const CHANNELS_PER_TABLE: usize = u8::MAX as usize + 1;
+
+fn seek_channels<T: Component>(
+    mut channels: Query<(&Channel<T>, &mut IndexCache)>,
+    song_time: Res<SongTime>,
+) {
+    channels.iter_mut().for_each(|(channel, mut index_cache)| {
+        *index_cache = match channel.find_index_through(**song_time, index_cache.get()) {
+            new_index if new_index != index_cache.get() => IndexCache::Dirty(new_index),
+            _ => IndexCache::Clean(index_cache.get()),
+        }
+    })
+}
+
+/*type AutomationOutput<T> = <<T as Lerp>::Output as Lerp>::Output;
 
 pub struct ChannelOutput<T> {
     pub output: Option<T>,
     pub redirect: Option<usize>,
 }
 
-impl<PrimaryCtrl, SubCtrls> Automation<PrimaryCtrl, SubCtrls>
+impl<T> Automation<T>
 where
-    PrimaryCtrl: Default + Quantify + Lerp,
-    <PrimaryCtrl as Lerp>::Output: Lerp<Output = <PrimaryCtrl as Lerp>::Output>,
+    T: Default + Quantify + Lerp,
+    <T as Lerp>::Output: Lerp<Output = <T as Lerp>::Output>,
 {
     #[rustfmt::skip]
-    fn eval(&self, offset: R32) -> Option<AutomationOutput<PrimaryCtrl>> {
+    fn eval(&self, offset: R32) -> Option<AutomationOutput<T>> {
         self.repeater
             .as_ref()
             .and_then(|Repeater { duration, floor, ceil, repeat_bounds }| {
@@ -127,19 +157,19 @@ where
     }
 }
 
-impl<PrimaryCtrl: Default, SubCtrls> Quantify for Automation<PrimaryCtrl, SubCtrls> {
+impl<T: Default> Quantify for Automation<T> {
     fn quantify(&self) -> R32 {
         self.start
     }
 }
 
 #[derive(Component)]
-pub struct Channel<PrimaryCtrl: Default, SubCtrls = ()> {
+pub struct Channel<T: Default> {
     id: u8,
-    clips: Vec<Automation<PrimaryCtrl, SubCtrls>>,
+    clips: Vec<Automation<T>>,
 }
 
-impl<PrimaryCtrl: Default, SubCtrls> Channel<PrimaryCtrl, SubCtrls> {
+impl<T: Default> Channel<T> {
     fn can_skip(&self, offset: R32) -> bool {
         self.clips
             .last()
@@ -147,8 +177,8 @@ impl<PrimaryCtrl: Default, SubCtrls> Channel<PrimaryCtrl, SubCtrls> {
     }
 }
 
-impl<PrimaryCtrl: Default + Quantify, SubCtrls> ControllerTable for Channel<PrimaryCtrl, SubCtrls> {
-    type Item = Automation<PrimaryCtrl, SubCtrls>;
+impl<T: Default + Quantify> ControllerTable for Channel<T> {
+    type Item = Automation<T>;
     fn table(&self) -> &[Self::Item] {
         self.clips.as_slice()
     }
@@ -162,16 +192,15 @@ pub struct ChannelSeeker {
 
 /// Envoke eval functions for each clip and juggle hit responses
 #[rustfmt::skip]
-fn eval_channel_primaries<PrimaryCtrl, SubCtrls>(
-    mut channel_table: Query<(&mut Channel<PrimaryCtrl, SubCtrls>, &mut ChannelSeeker)>,
+fn eval_channel_primaries<T>(
+    mut channel_table: Query<(&mut Channel<T>, &mut ChannelSeeker)>,
     song_time: Res<SongTime>,
     hit_reg: Res<HitRegister>,
-    mut primary_output_table: ResMut<AutomationOutputTable<AutomationOutput<PrimaryCtrl>>>,
+    mut primary_output_table: ResMut<AutomationOutputTable<AutomationOutput<T>>>,
 ) where
-    PrimaryCtrl: Default + Component + Quantify + Lerp,
-    SubCtrls: Send + Sync + 'static,
-    <PrimaryCtrl as Lerp>::Output: Lerp<Output = <PrimaryCtrl as Lerp>::Output>,
-    AutomationOutput<PrimaryCtrl>: Component,
+    T: Default + Component + Quantify + Lerp,
+    <T as Lerp>::Output: Lerp<Output = <T as Lerp>::Output>,
+    AutomationOutput<T>: Component,
 {
     //
     //  TODO: Parallel system
@@ -185,7 +214,7 @@ fn eval_channel_primaries<PrimaryCtrl, SubCtrls>(
 
             if new_index != seeker.index_cache {
                 seeker.index_cache = new_index;
-                seeker.reaction_state = Empty;
+                seeker.reaction_state = ReactionState::Empty;
                 hits = &[];
             } else {
                 hits = &**hit_reg;
@@ -316,7 +345,6 @@ mod tests {
             start: r32(0.),
             reaction: None,
             repeater: None,
-            sub_ctrls: (),
             upper_bounds: tiny_vec![
                 ScalarBound {
                     scalar: r32(0.),
@@ -396,4 +424,4 @@ mod tests {
             .map(|&(input, output)| (r32(input), output.map(r32)))
             .for_each(|(input, output)| assert_eq!(automation().eval(input), output));
     }
-}
+}*/

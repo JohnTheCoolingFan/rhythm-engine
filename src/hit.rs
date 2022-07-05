@@ -1,3 +1,4 @@
+use bevy::prelude::*;
 use noisy_float::prelude::*;
 
 enum PressKind {
@@ -25,24 +26,4 @@ pub struct HitInfo {
     pub object_time: R32,
     pub hit_time: R32,
     pub layer: u8,
-}
-
-pub enum HitReaction {
-    /// Stays at 0 state until hit, once hit which it will commece from the current time
-    Commence,
-    /// Switches to a different automation permenantly with a start from the current time
-    Switch(u8),
-    /// Switches to a different automation but will switch back to the original
-    /// automation on another hit. This can be repeated indefinetly
-    Toggle(u8),
-    /// Will stay at 0 state with no hit, for each hit it will play the automation
-    /// from the hit time to hit time + excess.
-    Follow(R32),
-}
-
-#[derive(Clone, Copy)]
-pub enum ReactionState {
-    Delegated(bool),
-    Hit(R32),
-    Empty,
 }
