@@ -1,14 +1,17 @@
-mod bounded_curve;
+mod bound_sequence;
 mod hit_response;
+mod repeater;
 mod spline;
+
+use hit_response::*;
+use repeater::*;
 
 use std::marker::PhantomData;
 
 use bevy::prelude::*;
-use derive_more::From;
 use noisy_float::prelude::*;
 
-use crate::{resources::*, utils::*};
+use crate::{hit::*, resources::*, utils::*};
 
 pub enum Weight {
     Constant,
@@ -34,26 +37,6 @@ impl Default for Weight {
     }
 }
 
-struct RepeaterClamp {
-    start: T32,
-    end: T32,
-    weight: Weight,
-}
-
-impl RepeaterClamp {
-    fn eval(&self, t: T32) -> T32 {
-        self.start.lerp(&self.end, self.weight.eval(t))
-    }
-}
-
-#[derive(Component)]
-pub struct Repeater {
-    duration: R32,
-    ceil: RepeaterClamp,
-    floor: RepeaterClamp,
-    repeat_bounds: bool,
-}
-
 #[derive(Component, Deref, DerefMut)]
 pub struct ClipID(u32);
 
@@ -69,10 +52,12 @@ impl Quantify for ClipInstance {
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Default, Clone, Copy, Component)]
+pub struct ChannelID(u8);
+
+#[derive(Default, Component)]
 pub struct Channel<T> {
     pub data: Vec<ClipInstance>,
-    pub id: u8,
     _phantom: PhantomData<T>,
 }
 
@@ -83,31 +68,88 @@ impl<T> ControllerTable for Channel<T> {
     }
 }
 
-#[derive(Component, Clone, Copy)]
-pub enum IndexCache {
-    Clean(usize),
-    Dirty(usize),
+#[derive(Component, Deref, DerefMut)]
+struct IndexCache(usize);
+
+pub trait AutomationClip {
+    type Output;
+    fn eval(&self, offset: R32) -> Self::Output;
 }
 
-impl IndexCache {
-    fn get(self) -> usize {
-        match self {
-            IndexCache::Clean(index) | IndexCache::Dirty(index) => index,
-        }
-    }
+#[derive(Component)]
+pub struct OutputSlot<T> {
+    output: T,
+    redirect: Option<u8>,
 }
 
-pub const CHANNELS_PER_TABLE: usize = u8::MAX as usize + 1;
-
-fn seek_channels<T: Component>(
-    mut channels: Query<(&Channel<T>, &mut IndexCache)>,
+#[rustfmt::skip]
+fn eval_automation_table<T>(
     song_time: Res<SongTime>,
-) {
-    channels.iter_mut().for_each(|(channel, mut index_cache)| {
-        *index_cache = match channel.find_index_through(**song_time, index_cache.get()) {
-            new_index if new_index != index_cache.get() => IndexCache::Dirty(new_index),
-            _ => IndexCache::Clean(index_cache.get()),
+    hit_reg: Res<HitRegister>,
+    mut table: Query<(
+        &ChannelID,
+        &Channel<T>,
+        &mut IndexCache,
+        &mut ResponseState,
+        &mut OutputSlot<<T as AutomationClip>::Output>
+    )>,
+    clips: Query<(
+        &T,
+        &HitResponse,
+        &ResponseLayer,
+        &Repeater
+    )>,
+)
+where
+    T: Default + Component + AutomationClip,
+    <T as AutomationClip>::Output: Send + Sync
+{
+    table.iter_mut().for_each(|(channel_id, channel, mut index, mut response_state, mut slot)| {
+        let hits: &[Option<HitInfo>];
+        let old_index = **index;
+
+        if !channel.can_skip_reindex(**song_time) {
+            **index = channel.reindex_through(**song_time, **index);
         }
+
+        if **index != old_index {
+            *response_state = ResponseState::Nil;
+            hits = &[];
+        } else {
+            hits = &**hit_reg;
+        }
+
+        let ((clip, response, layer, repeater), mut offset) = channel
+            .data
+            .get(**index)
+            .map(|instance| (clips.get(instance.entity).unwrap(), **song_time - instance.offset))
+            .unwrap();
+
+
+        slot.redirect = match (response, &mut *response_state) {
+            (Switch(target) | Toggle(target), Delegated(true)) => Some(*target),
+            _ => None
+        };
+
+        use HitResponse::*;
+        use ResponseState::*;
+
+        hits.iter().flatten().filter(|hit| hit.layer == **layer).for_each(|hit|
+            match (response, &mut *response_state) {
+                (Commence | Switch(_), state) => *state = Delegated(true),
+                (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
+                (Toggle(_), state) => *state = Delegated(true),
+                (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
+                _ => {}
+            }
+        );
+
+        offset = match (response, &mut *response_state) {
+            (Commence, Delegated(delegate)) => if *delegate { offset } else { r32(0.) },
+            (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&offset) => *hit + ex,
+            _ => offset
+        };
+
     })
 }
 

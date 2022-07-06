@@ -1,6 +1,50 @@
+use std::ops::{Deref, DerefMut};
+
 use bevy::prelude::*;
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
+
+pub enum Watched<T> {
+    Old(T),
+    New(T),
+}
+
+impl<T> Watched<T> {
+    pub fn watch(old: T, new: T) -> Self
+    where
+        T: Eq,
+    {
+        if old != new {
+            Self::New(new)
+        } else {
+            Self::Old(old)
+        }
+    }
+
+    pub fn map<U>(self, f: impl Fn(T) -> U) -> Watched<U> {
+        match self {
+            Self::New(val) => Watched::New(f(val)),
+            Self::Old(val) => Watched::Old(f(val)),
+        }
+    }
+}
+
+impl<T> Deref for Watched<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Old(val) | Self::New(val) => val,
+        }
+    }
+}
+
+impl<T> DerefMut for Watched<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Self::Old(val) | Self::New(val) => val,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;
@@ -207,8 +251,14 @@ pub trait ControllerTable {
     type Item: Quantify;
     fn table(&self) -> &[Self::Item];
 
+    fn can_skip_reindex(&self, offset: R32) -> bool {
+        self.table()
+            .last()
+            .map_or(true, |item| item.quantify() < offset)
+    }
+
     #[rustfmt::skip]
-    fn find_index_through(&self, offset: R32, old: usize) -> usize {
+    fn reindex_through(&self, offset: R32, old: usize) -> usize {
         self.table()
             .iter()
             .enumerate()

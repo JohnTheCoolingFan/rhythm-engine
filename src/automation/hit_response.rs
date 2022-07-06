@@ -6,6 +6,7 @@ use crate::resources::*;
 
 #[derive(Component)]
 pub enum HitResponse {
+    Nil,
     /// Stays at 0 state until hit, once hit which it will commece from the current time
     Commence,
     /// Switches to a different automation permenantly with a start from the current time
@@ -20,29 +21,68 @@ pub enum HitResponse {
 
 #[derive(Component)]
 pub enum ResponseState {
-    Delegated(bool),
+    Nil,
     Hit(R32),
-    Empty,
+    Delegated(bool),
 }
 
+#[derive(Component, Deref, DerefMut)]
+pub struct ResponseLayer(u8);
+
+#[rustfmt::skip]
 fn respond_to_hits<T: Component>(
-    mut channels: Query<(&Channel<T>, &IndexCache, &mut ResponseState)>,
-    clips: Query<&HitResponse>,
+    In(instances): In<impl Iterator<Item = (ChannelID, Watched<Entity>, R32)>>,
+    clips: Query<(&HitResponse, &ResponseLayer)>,
     song_time: Res<SongTime>,
     hits: Res<HitRegister>,
 ) {
-    channels
+    /*channels
         .iter_mut()
-        .filter(|(_, index_cache, _)| matches!(index_cache, IndexCache::Dirty(_)))
-        .for_each(|(_, _, mut response_state)| *response_state = ResponseState::Empty);
+        .filter(|(_, channel, _)| channel.can_skip(**song_time))
+        .for_each(|(index_cache, channel, mut response_state)| {
+            if let IndexCache::Dirty(_) = index_cache {
+                *response_state = ResponseState::Empty
+            } else {
+                let instance = channel.data[**index_cache];
+                let (response, layer) = clips.get(instance.entity).unwrap();
 
-    channels
-        .iter_mut()
-        .filter(|(_, index_cache, _)| matches!(index_cache, IndexCache::Clean(_)))
-        .filter_map(|(channel, index_cache, response_state)| {
-            clips
-                .get(channel.data[index_cache.get()].entity)
-                .ok()
-                .map(|clip| (clip, response_state))
-        });
+                use HitResponse::*;
+                use ResponseState::*;
+
+                hits.iter().flatten().filter(|hit| hit.layer == **layer).for_each(|hit|
+                    match (response, &mut *response_state) {
+                        (Commence | Switch(_), state) => *state = Delegated(true),
+                        (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
+                        (Toggle(_), state) => *state = Delegated(true),
+                        (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
+                    }
+                )
+            }
+        }
+    )*/
 }
+
+/*#[rustfmt::skip]
+fn process_hits<'a>(
+    hits: Res<'a, HitRegister>,
+    clips: Query<'a, 'a, (&HitResponse, &ResponseLayer)>
+)
+    -> impl Fn((Watched<Entity>, R32), &mut ResponseState) -> (Entity, R32, Redirect) + 'a
+{
+    move |(instance, offset), response_state| {
+        let (response, layer) = clips.get(*instance).unwrap();
+
+        use HitResponse::*;
+        use ResponseState::*;
+        hits.iter().flatten().filter(|hit| hit.layer == **layer).for_each(|hit| {
+            match (response, &mut *response_state) {
+                (Commence | Switch(_), state) => *state = Delegated(true),
+                (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
+                (Toggle(_), state) => *state = Delegated(true),
+                (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
+            }
+        });
+
+        todo!()
+    }
+}*/

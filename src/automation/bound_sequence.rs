@@ -5,9 +5,9 @@ use tinyvec::TinyVec;
 
 use macros::*;
 
-use crate::{automation::Weight, utils::*};
+use crate::{automation::*, utils::*};
 
-#[derive(Default)]
+#[derive(Default, Component)]
 pub struct ScalarBound<T> {
     pub offset: R32,
     pub scalar: T,
@@ -29,7 +29,7 @@ where
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Component)]
 pub struct SpannedBound<T> {
     weight: Weight,
     bound: ScalarBound<T>,
@@ -89,11 +89,13 @@ impl Lerp for Anchor {
 }
 
 #[derive(Component)]
-pub struct BoundedCurve<T: Default> {
+pub struct BoundSequence<T: Default> {
     upper_bounds: TinyVec<[T; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
     lower_bounds: TinyVec<[T; 4]>,
 }
+
+//impl<T: Default> AutomationClip for BoundSequence<T> {}
 
 #[cfg(test)]
 mod tests {
