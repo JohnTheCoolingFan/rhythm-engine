@@ -5,7 +5,7 @@ use crate::automation::*;
 use crate::resources::*;
 
 #[derive(Component)]
-pub enum HitResponse {
+pub enum ResponseKind {
     Nil,
     /// Stays at 0 state until hit, once hit which it will commece from the current time
     Commence,
@@ -20,19 +20,22 @@ pub enum HitResponse {
 }
 
 #[derive(Component)]
+pub struct HitResponse {
+    pub kind: ResponseKind,
+    pub layer: u8,
+}
+
+#[derive(Component)]
 pub enum ResponseState {
     Nil,
     Hit(R32),
     Delegated(bool),
 }
 
-#[derive(Component, Deref, DerefMut)]
-pub struct ResponseLayer(u8);
-
 #[rustfmt::skip]
 fn respond_to_hits<T: Component>(
     In(instances): In<impl Iterator<Item = (ChannelID, Watched<Entity>, R32)>>,
-    clips: Query<(&HitResponse, &ResponseLayer)>,
+    //clips: Query<(&HitResponse, &ResponseLayer)>,
     song_time: Res<SongTime>,
     hits: Res<HitRegister>,
 ) {

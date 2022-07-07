@@ -73,7 +73,8 @@ struct IndexCache(usize);
 
 pub trait AutomationClip {
     type Output;
-    fn eval(&self, offset: R32) -> Self::Output;
+    fn play(&self, clip_time: R32, repeat_time: R32, floor: T32, ceil: T32) -> Self::Output;
+    fn runtime(&self) -> R32;
 }
 
 #[derive(Component)]
@@ -87,7 +88,6 @@ fn eval_automation_table<T>(
     song_time: Res<SongTime>,
     hit_reg: Res<HitRegister>,
     mut table: Query<(
-        &ChannelID,
         &Channel<T>,
         &mut IndexCache,
         &mut ResponseState,
@@ -95,16 +95,15 @@ fn eval_automation_table<T>(
     )>,
     clips: Query<(
         &T,
-        &HitResponse,
-        &ResponseLayer,
-        &Repeater
+        Option<&HitResponse>,
+        Option<&Repeater>
     )>,
 )
 where
     T: Default + Component + AutomationClip,
     <T as AutomationClip>::Output: Send + Sync
 {
-    table.iter_mut().for_each(|(channel_id, channel, mut index, mut response_state, mut slot)| {
+    table.iter_mut().for_each(|(channel, mut index, mut response_state, mut slot)| {
         let hits: &[Option<HitInfo>];
         let old_index = **index;
 
@@ -119,37 +118,55 @@ where
             hits = &**hit_reg;
         }
 
-        let ((clip, response, layer, repeater), mut offset) = channel
+        let ((clip, response, repeater), clip_start) = channel
             .data
             .get(**index)
-            .map(|instance| (clips.get(instance.entity).unwrap(), **song_time - instance.offset))
+            .map(|instance| (clips.get(instance.entity).unwrap(), instance.offset))
             .unwrap();
 
+        let clip_time: R32;
 
-        slot.redirect = match (response, &mut *response_state) {
-            (Switch(target) | Toggle(target), Delegated(true)) => Some(*target),
-            _ => None
-        };
+        if let Some(&HitResponse{ kind, layer }) = response.as_ref() {
+            use ResponseKind::*;
+            use ResponseState::*;
 
-        use HitResponse::*;
-        use ResponseState::*;
+            hits.iter().flatten().filter(|hit| hit.layer == *layer).for_each(|hit|
+                match (kind, &mut *response_state) {
+                    (Commence | Switch(_), state) => *state = Delegated(true),
+                    (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
+                    (Toggle(_), state) => *state = Delegated(true),
+                    (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
+                    _ => {}
+                }
+            );
 
-        hits.iter().flatten().filter(|hit| hit.layer == **layer).for_each(|hit|
-            match (response, &mut *response_state) {
-                (Commence | Switch(_), state) => *state = Delegated(true),
-                (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
-                (Toggle(_), state) => *state = Delegated(true),
-                (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
-                _ => {}
+            slot.redirect = match (kind, &mut *response_state) {
+                (Switch(target) | Toggle(target), Delegated(true)) => Some(*target),
+                _ => None
+            };
+
+            clip_time = (- clip_start) + match (kind, &mut *response_state) {
+                (Commence, Delegated(delegate)) if !*delegate => clip_start,
+                (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&**song_time) => *hit + ex,
+                _ => **song_time
+            };
+        } else {
+            slot.redirect = None;
+            clip_time = **song_time - clip_start;
+        }
+
+        slot.output = match repeater {
+            Some(Repeater { duration, floor, ceil }) if clip_time < *duration => {
+                let period = clip.runtime();
+                let (repeat_time, clamp_time) = (
+                    clip_time % period,
+                    t32((clip_time / duration).raw()),
+                );
+
+                clip.play(clip_time, repeat_time, floor.eval(clamp_time), ceil.eval(clamp_time))
             }
-        );
-
-        offset = match (response, &mut *response_state) {
-            (Commence, Delegated(delegate)) => if *delegate { offset } else { r32(0.) },
-            (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&offset) => *hit + ex,
-            _ => offset
-        };
-
+            _ => clip.play(clip_time, clip_time, t32(0.), t32(1.))
+        }
     })
 }
 

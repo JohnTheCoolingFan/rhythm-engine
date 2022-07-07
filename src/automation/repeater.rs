@@ -1,21 +1,20 @@
 use crate::automation::*;
 
-struct RepeaterClamp {
+pub struct RepeaterClamp {
     start: T32,
     end: T32,
     weight: Weight,
 }
 
 impl RepeaterClamp {
-    fn eval(&self, t: T32) -> T32 {
+    pub fn eval(&self, t: T32) -> T32 {
         self.start.lerp(&self.end, self.weight.eval(t))
     }
 }
 
 #[derive(Component)]
 pub struct Repeater {
-    duration: R32,
-    ceil: RepeaterClamp,
-    floor: RepeaterClamp,
-    repeat_bounds: bool,
+    pub duration: R32,
+    pub ceil: RepeaterClamp,
+    pub floor: RepeaterClamp,
 }
