@@ -88,11 +88,75 @@ impl Lerp for Anchor {
     }
 }
 
+struct RepeaterClamp {
+    start: T32,
+    end: T32,
+    weight: Weight,
+}
+
+impl RepeaterClamp {
+    pub fn eval(&self, t: T32) -> T32 {
+        self.start.lerp(&self.end, self.weight.eval(t))
+    }
+}
+
+#[derive(Component)]
+struct Repeater {
+    duration: R32,
+    repeat_bounds: bool,
+    ceil: RepeaterClamp,
+    floor: RepeaterClamp,
+}
+
 #[derive(Component)]
 pub struct BoundSequence<T: Default> {
     upper_bounds: TinyVec<[T; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
     lower_bounds: TinyVec<[T; 4]>,
+    repeater: Option<Repeater>,
+}
+
+type BoundSequenceOutput<T> = <<T as Lerp>::Output as Lerp>::Output;
+
+#[rustfmt::skip]
+impl<T> AutomationClip for BoundSequence<T>
+where
+    T: Default + Quantify + Lerp,
+    <T as Lerp>::Output: Lerp<Output = <T as Lerp>::Output>,
+{
+    type Output = Option<BoundSequenceOutput<T>>;
+
+    fn play(&self, offset: R32) -> Self::Output {
+        self.repeater
+            .as_ref()
+            .and_then(|Repeater { duration, floor, ceil, repeat_bounds }| {
+                (offset < *duration).then(|| {
+                    let period = r32(self.anchors.last().unwrap().point.x);
+                    let repeater_offset = offset % period;
+
+                    self.anchors.interp(repeater_offset).map(|lerp_amount| {
+                        let clamp_offset = (offset / period)
+                            .trunc()
+                            .unit_interval(r32(0.), *duration);
+                        let lerp_amount = floor
+                            .eval(clamp_offset)
+                            .lerp(&ceil.eval(clamp_offset), lerp_amount);
+
+                        (if *repeat_bounds { repeater_offset } else { offset }, lerp_amount)
+                    })
+                })
+            })
+            .unwrap_or_else(|| self
+                .anchors
+                .interp(offset)
+                .map(|lerp_amount| (offset, lerp_amount))
+            )
+            .map(|(bound_offset, lerp_amount)| self
+                .lower_bounds
+                .interp_or_last(bound_offset)
+                .lerp(&self.upper_bounds.interp_or_last(bound_offset), lerp_amount)
+            )
+    }
 }
 
 //impl<T: Default> AutomationClip for BoundSequence<T> {}

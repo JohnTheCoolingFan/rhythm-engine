@@ -1,10 +1,8 @@
 mod bound_sequence;
 mod hit_response;
-mod repeater;
 mod spline;
 
 use hit_response::*;
-use repeater::*;
 
 use std::marker::PhantomData;
 
@@ -73,8 +71,7 @@ struct IndexCache(usize);
 
 pub trait AutomationClip {
     type Output;
-    fn play(&self, clip_time: R32, repeat_time: R32, floor: T32, ceil: T32) -> Self::Output;
-    fn runtime(&self) -> R32;
+    fn play(&self, clip_time: R32) -> Self::Output;
 }
 
 #[derive(Component)]
@@ -96,7 +93,6 @@ fn eval_automation_table<T>(
     clips: Query<(
         &T,
         Option<&HitResponse>,
-        Option<&Repeater>
     )>,
 )
 where
@@ -118,7 +114,7 @@ where
             hits = &**hit_reg;
         }
 
-        let ((clip, response, repeater), clip_start) = channel
+        let ((clip, response), clip_start) = channel
             .data
             .get(**index)
             .map(|instance| (clips.get(instance.entity).unwrap(), instance.offset))
@@ -155,18 +151,7 @@ where
             clip_time = **song_time - clip_start;
         }
 
-        slot.output = match repeater {
-            Some(Repeater { duration, floor, ceil }) if clip_time < *duration => {
-                let period = clip.runtime();
-                let (repeat_time, clamp_time) = (
-                    clip_time % period,
-                    t32((clip_time / duration).raw()),
-                );
-
-                clip.play(clip_time, repeat_time, floor.eval(clamp_time), ceil.eval(clamp_time))
-            }
-            _ => clip.play(clip_time, clip_time, t32(0.), t32(1.))
-        }
+        slot.output = clip.play(clip_time);
     })
 }
 
