@@ -17,34 +17,102 @@ pub enum Curvature {
 
 pub struct Segment {
     curvature: Curvature,
-    end: Vec2,
+    position: Vec2,
+}
+
+#[rustfmt::skip]
+impl Segment {
+    fn sample(&self, path_length: &mut R32, start: Vec2) -> impl Iterator<Item = Sample> {
+        match self.curvature {
+            Curvature::Linear => {
+                *path_length += start.distance(self.position);
+                [Sample::Point { position: self.position, displacement: *path_length }].into_iter()
+            },
+            Curvature::Circular(ctrl) => {
+                let end = self.position;
+                //https://math.stackexchange.com/a/1460096
+                let m11_determinant = [start, ctrl, end]
+                    .map(|point| [point.x, point.y, 1.])
+                    .into_matrix()
+                    .determinant();
+
+                if m11_determinant.abs() <= f32::EPSILON {
+                    *path_length += start.distance(end);
+                    [Sample::Point { position: end, displacement: *path_length }].into_iter()
+                } else {
+                    let m12 = [start, ctrl, end]
+                        .map(|point| [point.x.powi(2) + point.y.powi(2), point.y, 1.])
+                        .into_matrix();
+
+                    let m13 = [start, ctrl, end]
+                        .map(|point| [point.x.powi(2) + point.y.powi(2), point.x, 1.])
+                        .into_matrix();
+
+                    let center = Vec2::new(
+                        0.5 * (m12.determinant() / m11_determinant),
+                        -0.5 * (m13.determinant() / m11_determinant),
+                    );
+
+                    let (a, b) = (center - start, center - end);
+
+                    let theta = match (
+                        [start, ctrl, end].into_iter().orientation(),
+                        [start, center, end].into_iter().orientation(),
+                        (a.dot(b) / (a.length() * b.length())).acos().to_degrees()
+                    ) {
+                        (ctrl_o, center_o, theta) if ctrl_o != center_o => theta,
+                        (_, _, theta) => theta.signum() * (360. - theta.abs()),
+                    };
+
+                    *path_length += theta.to_radians() * center.distance(start);
+
+                    let arc = Sample::Arc {
+                        position: end,
+                        displacement: *path_length,
+                        theta: r32(theta),
+                        center,
+                    };
+
+                    [arc].into_iter()
+                }
+            }
+        }
+    }
 }
 
 pub enum Sample {
     Point {
-        path_offset: R32,
-        point: Vec2,
+        position: Vec2,
+        displacement: R32,
     },
     Arc {
-        path_offset: R32,
+        position: Vec2,
+        displacement: R32,
         center: Vec2,
         theta: R32,
-        end: Vec2,
     },
-}
-
-impl Sample {
-    fn position(&self) -> Vec2 {
-        match self {
-            Self::Point { point: pos, .. } | Self::Arc { end: pos, .. } => *pos,
-        }
-    }
 }
 
 impl Quantify for Sample {
     fn quantify(&self) -> R32 {
         match self {
-            Self::Point { path_offset, .. } | Self::Arc { path_offset, .. } => *path_offset,
+            Self::Point { displacement, .. } | Self::Arc { displacement, .. } => *displacement,
+        }
+    }
+}
+
+impl Lerp for Sample {
+    type Output = Vec2;
+    #[rustfmt::skip]
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
+        match self {
+            Self::Arc { position, center, theta, .. } => {
+                center.rotate(position, r32(theta.raw() * t.raw()))
+            }
+            Self::Point { position, .. } => {
+                let (Self::Point { position: end, .. } | Self::Arc { position: end, .. }) = other;
+                position.lerp(*end, t.raw())
+            }
         }
     }
 }
@@ -53,13 +121,6 @@ impl Quantify for Sample {
 pub struct Spline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,
-}
-
-impl ControllerTable for Spline {
-    type Item = Sample;
-    fn table(&self) -> &[Self::Item] {
-        self.lut.as_slice()
-    }
 }
 
 impl Spline {

@@ -1,50 +1,6 @@
-use std::ops::{Deref, DerefMut};
-
 use bevy::prelude::*;
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
-
-pub enum Watched<T> {
-    Old(T),
-    New(T),
-}
-
-impl<T> Watched<T> {
-    pub fn watch(old: T, new: T) -> Self
-    where
-        T: Eq,
-    {
-        if old != new {
-            Self::New(new)
-        } else {
-            Self::Old(old)
-        }
-    }
-
-    pub fn map<U>(self, f: impl Fn(T) -> U) -> Watched<U> {
-        match self {
-            Self::New(val) => Watched::New(f(val)),
-            Self::Old(val) => Watched::Old(f(val)),
-        }
-    }
-}
-
-impl<T> Deref for Watched<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Self::Old(val) | Self::New(val) => val,
-        }
-    }
-}
-
-impl<T> DerefMut for Watched<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            Self::Old(val) | Self::New(val) => val,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;
@@ -84,13 +40,11 @@ pub trait Quantify {
 
 pub trait Lerp {
     type Output;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output;
+    fn lerp(&self, next: &Self, t: T32) -> Self::Output;
 }
 
 pub trait FloatExt {
-    fn quantized_floor(self, period: Self, offset: Self) -> Self;
-    fn quantized_remainder(self, period: Self, offset: Self) -> Self;
-    fn unit_interval(self, control: Self, follow: Self) -> T32;
+    fn unit_interval(self, befor: Self, after: Self) -> T32;
 }
 
 pub trait Vec2Ext {
@@ -101,20 +55,6 @@ pub trait Vec2Ext {
 
 pub trait MatExt {
     fn into_matrix(self) -> Mat3;
-}
-
-/// Requires underlying dataset to be sorted
-/// Dataset should be small (< 0.5KB) and trivially linear searchable
-pub trait SliceExt<'a, T> {
-    fn seek(self, by: impl Quantify) -> usize;
-    fn before_or_at(self, offset: R32) -> &'a [T];
-    fn after(self, offset: R32) -> &'a [T];
-    fn interp(self, offset: R32) -> Option<<T as Lerp>::Output>
-    where
-        T: Lerp;
-    fn interp_or_last(self, offset: R32) -> <T as Lerp>::Output
-    where
-        T: Lerp;
 }
 
 impl Quantify for R32 {
@@ -138,24 +78,8 @@ impl Lerp for T32 {
 }
 
 impl FloatExt for R32 {
-    fn quantized_floor(self, period: Self, offset: Self) -> Self {
-        if f32::EPSILON < period.raw().abs() {
-            ((self - offset) / period).floor() * period + offset
-        } else {
-            self
-        }
-    }
-
-    fn quantized_remainder(self, period: Self, offset: Self) -> Self {
-        if f32::EPSILON < period.raw().abs() {
-            (self - offset) % period
-        } else {
-            self
-        }
-    }
-
-    fn unit_interval(self, first: Self, second: Self) -> T32 {
-        t32(((self - first) / (second - first)).raw())
+    fn unit_interval(self, before: Self, after: Self) -> T32 {
+        t32(((self - before) / (after - before)).raw())
     }
 }
 
@@ -181,7 +105,20 @@ impl MatExt for [[f32; 3]; 3] {
     }
 }
 
-impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
+pub trait ControlTable<'a, T> {
+    fn seek(self, to: impl Quantify) -> usize;
+    fn can_skip_reindex(self, offset: R32) -> bool;
+    fn reindex_through(self, offset: R32, old: usize) -> usize;
+    fn interp_indexed(self, offset: R32, cache: usize) -> Result<<T as Lerp>::Output, &'a T>
+    where
+        T: Lerp;
+    fn interp(self, offset: R32) -> Result<<T as Lerp>::Output, &'a T>
+    where
+        T: Lerp;
+}
+
+/// Must be non-empty and sorted
+impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
     fn seek(self, to: impl Quantify) -> usize {
         let index = self
             .binary_search_by(|item| item.quantify().cmp(&to.quantify()))
@@ -202,65 +139,13 @@ impl<'a, T: Quantify> SliceExt<'a, T> for &'a [T] {
         index + to_skip
     }
 
-    fn before_or_at(self, offset: R32) -> Self {
-        let end = self
-            .iter()
-            .take_while(|item| item.quantify() <= offset)
-            .count();
-
-        &self[..end]
-    }
-
-    fn after(self, offset: R32) -> Self {
-        let keep_size = self
-            .iter()
-            .rev()
-            .take_while(|item| offset < item.quantify())
-            .count();
-
-        &self[self.len() - keep_size..]
-    }
-
-    fn interp(self, offset: R32) -> Option<<T as Lerp>::Output>
-    where
-        T: Lerp,
-    {
-        let (follow, control) = (self.before_or_at(offset).last(), self.after(offset).first());
-
-        follow.zip(control).map(|(follow, control)| {
-            control.lerp(
-                follow,
-                offset.unit_interval(follow.quantify(), control.quantify()),
-            )
-        })
-    }
-
-    fn interp_or_last(self, offset: R32) -> <T as Lerp>::Output
-    where
-        T: Lerp,
-    {
-        self.interp(offset).unwrap_or_else(|| {
-            let last = self.last().unwrap();
-            last.lerp(last, t32(0.))
-        })
-    }
-}
-
-/// Must be non-empty and sorted
-pub trait ControllerTable {
-    type Item: Quantify;
-    fn table(&self) -> &[Self::Item];
-
-    fn can_skip_reindex(&self, offset: R32) -> bool {
-        self.table()
-            .last()
-            .map_or(true, |item| item.quantify() < offset)
+    fn can_skip_reindex(self, offset: R32) -> bool {
+        self.last().map_or(true, |item| item.quantify() < offset)
     }
 
     #[rustfmt::skip]
-    fn reindex_through(&self, offset: R32, old: usize) -> usize {
-        self.table()
-            .iter()
+    fn reindex_through(self, offset: R32, old: usize) -> usize {
+        self.iter()
             .enumerate()
             .skip(old)
             .coalesce(|prev, curr| (prev.1.quantify() == curr.1.quantify())
@@ -271,7 +156,32 @@ pub trait ControllerTable {
             .take_while(|(_, item)| item.quantify() < offset)
             .last()
             .map(|(index, _)| index)
-            .unwrap_or_else(|| self.table().seek(offset))
+            .unwrap_or_else(|| self.seek(offset))
+    }
+
+    fn interp_indexed(self, offset: R32, cache: usize) -> Result<<T as Lerp>::Output, &'a T>
+    where
+        T: Lerp,
+    {
+        match &self[cache..] {
+            [prev, curr, ..] => {
+                Ok(prev.lerp(curr, offset.unit_interval(prev.quantify(), curr.quantify())))
+            }
+            [prev] => Err(prev),
+            [] => panic!("Tried to interp empty controller table."),
+        }
+    }
+
+    fn interp(self, offset: R32) -> Result<<T as Lerp>::Output, &'a T>
+    where
+        T: Lerp,
+    {
+        let index = self
+            .iter()
+            .take_while(|item| offset < item.quantify())
+            .count();
+
+        self.interp_indexed(offset, index)
     }
 }
 
@@ -300,27 +210,3 @@ pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
 }
 
 impl<T: Iterator<Item = Vec2> + Clone> OrientationExt for T {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn numbers() -> Vec<R32> {
-        [1., 2., 3., 4., 5., 6., 7., 7., 8., 9., 10.]
-            .into_iter()
-            .map(r32)
-            .collect::<Vec<_>>()
-    }
-
-    #[test]
-    fn slice_ext_before_or_at() {
-        assert_eq!(numbers().before_or_at(r32(0.0)), [] as [R32; 0]);
-        assert_eq!(numbers().before_or_at(r32(2.0)), &[r32(1.0), r32(2.0)]);
-    }
-
-    #[test]
-    fn slice_ext_after() {
-        assert_eq!(numbers().after(r32(10.)), [] as [R32; 0]);
-        assert_eq!(numbers().after(r32(7.5)), &[r32(8.0), r32(9.0), r32(10.0)]);
-    }
-}
