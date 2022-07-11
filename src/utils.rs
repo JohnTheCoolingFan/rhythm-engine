@@ -109,9 +109,6 @@ pub trait ControlTable<'a, T> {
     fn seek(self, to: impl Quantify) -> usize;
     fn can_skip_reindex(self, offset: R32) -> bool;
     fn reindex_through(self, offset: R32, old: usize) -> usize;
-    fn interp_indexed(self, offset: R32, cache: usize) -> Result<<T as Lerp>::Output, &'a T>
-    where
-        T: Lerp;
     fn interp(self, offset: R32) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp;
@@ -159,29 +156,21 @@ impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
             .unwrap_or_else(|| self.seek(offset))
     }
 
-    fn interp_indexed(self, offset: R32, cache: usize) -> Result<<T as Lerp>::Output, &'a T>
-    where
-        T: Lerp,
-    {
-        match &self[cache..] {
-            [prev, curr, ..] => {
-                Ok(prev.lerp(curr, offset.unit_interval(prev.quantify(), curr.quantify())))
-            }
-            [prev] => Err(prev),
-            [] => panic!("Tried to interp empty controller table."),
-        }
-    }
-
     fn interp(self, offset: R32) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp,
     {
-        let index = self
+        let start = self
             .iter()
             .take_while(|item| offset < item.quantify())
             .count();
 
-        self.interp_indexed(offset, index)
+        match &self[start..] {
+            [prev, curr, ..] => {
+                Ok(prev.lerp(curr, offset.unit_interval(prev.quantify(), curr.quantify())))
+            }
+            _ => Err(self.last().unwrap()),
+        }
     }
 }
 

@@ -1,8 +1,7 @@
 mod bound_sequence;
-mod hit_response;
 mod spline;
 
-use hit_response::*;
+use crate::hit::*;
 
 use std::marker::PhantomData;
 
