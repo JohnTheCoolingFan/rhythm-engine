@@ -1,11 +1,12 @@
-use std::{f32::consts::PI, hint::unreachable_unchecked};
+use core::iter::once as iter_once;
+use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use itertools::Itertools;
 use lyon_geom::*;
 use noisy_float::prelude::*;
 
-use crate::utils::*;
+use crate::{automation::*, utils::*};
 
 pub enum Sample {
     Point {
@@ -15,7 +16,6 @@ pub enum Sample {
     Arc {
         displacement: R32,
         center: Vec2,
-        theta: R32,
     },
 }
 
@@ -23,6 +23,22 @@ impl Quantify for Sample {
     fn quantify(&self) -> R32 {
         match self {
             Self::Point { displacement, .. } | Self::Arc { displacement, .. } => *displacement,
+        }
+    }
+}
+
+impl Lerp for Sample {
+    type Output = Vec2;
+    #[rustfmt::skip]
+    fn lerp(&self, next: &Self, t: T32) -> Self::Output {
+        match (self, next) {
+            (Sample::Point { position: start, .. }, Sample::Point { position: end, .. }) => {
+                start.lerp(*end, t.raw())
+            },
+            (Sample::Point { position: start, .. }, Sample::Arc { center, displacement }) => {
+                center.rotate(start, (*displacement / center.distance(*start)).to_degrees())
+            }
+            _ => unreachable!()
         }
     }
 }
@@ -115,17 +131,18 @@ impl Segment {
                         2. * PI * ((theta * center.distance(start)).abs() / 360.)
                     );
 
-                    vec![
-                        Sample::Arc {
+                    let samples = [
+                        (f32::EPSILON < center.distance(start)).then(|| Sample::Arc {
                             center,
-                            theta: r32(theta),
                             displacement,
-                        },
-                        Sample::Point {
+                        }),
+                        Some(Sample::Point {
                             position: end,
                             displacement
-                        }
-                    ]
+                        })
+                    ];
+
+                    samples.into_iter().flatten().collect()
                 }
             }
             Curvature::Quadratic(ctrl) => {
@@ -159,7 +176,10 @@ impl Segment {
     }
 }
 
-pub struct Waypoint;
+pub struct Waypoint {
+    displacement: R32,
+    weight: Weight,
+}
 
 struct Repeater;
 
@@ -168,32 +188,38 @@ pub struct SmartSpline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,
     pub waypoints: Vec<Waypoint>,
-    repeater: Repeater,
+    repeater: Option<Repeater>,
 }
 
 impl SmartSpline {
     #[rustfmt::skip]
     pub fn resample(&mut self) {
-        let start = Segment { curvature: Curvature::Linear, position: Vec2::new(0., 0.) };
+        let head = Segment { curvature: Curvature::Linear, position: Vec2::new(0., 0.) };
 
-        let tail = [&start]
-            .into_iter()
+        let tail = iter_once(&head)
             .chain(self.path.iter())
             .tuple_windows::<(_, _)>()
             .scan(r32(0.), |state, (prev, curr)| Some(curr.sample(state, prev.position)))
             .flatten();
 
-        self.lut = [Sample::Point { position: Vec2::new(0., 0.), displacement: r32(0.) }]
-            .into_iter()
+        self.lut = iter_once(Sample::Point { position: Vec2::new(0., 0.), displacement: r32(0.) })
             .chain(tail)
             .collect::<Vec<_>>();
     }
 }
 
 #[derive(Component)]
-struct SplineIndexCache {
+pub struct SplineIndexCache {
     lut: usize,
     waypoints: usize,
+}
+
+impl AutomationClip for SmartSpline {
+    type ClipCache = SplineIndexCache;
+    type Output = Vec2;
+    fn play(&self, clip_time: R32, cache: &mut Self::ClipCache) -> Self::Output {
+        todo!()
+    }
 }
 
 #[cfg(test)]
