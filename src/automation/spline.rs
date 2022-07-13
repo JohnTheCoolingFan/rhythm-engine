@@ -132,7 +132,7 @@ impl Segment {
                     );
 
                     let samples = [
-                        (f32::EPSILON < center.distance(start)).then(|| Sample::Arc {
+                        (f32::EPSILON <= center.distance(start)).then(|| Sample::Arc {
                             center,
                             displacement,
                         }),
@@ -181,14 +181,11 @@ pub struct Waypoint {
     weight: Weight,
 }
 
-struct Repeater;
-
 #[derive(Component)]
 pub struct SmartSpline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,
     pub waypoints: Vec<Waypoint>,
-    repeater: Option<Repeater>,
 }
 
 impl SmartSpline {
@@ -214,13 +211,13 @@ pub struct SplineIndexCache {
     waypoints: usize,
 }
 
-impl AutomationClip for SmartSpline {
+/*impl AutomationClip for SmartSpline {
     type ClipCache = SplineIndexCache;
     type Output = Vec2;
     fn play(&self, clip_time: R32, cache: &mut Self::ClipCache) -> Self::Output {
         todo!()
     }
-}
+}*/
 
 #[cfg(test)]
 mod tests {

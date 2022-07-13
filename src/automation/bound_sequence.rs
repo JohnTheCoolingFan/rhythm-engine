@@ -88,32 +88,12 @@ impl Lerp for Anchor {
     }
 }
 
-struct RepeaterClamp {
-    start: T32,
-    end: T32,
-    weight: Weight,
-}
-
-impl RepeaterClamp {
-    pub fn eval(&self, t: T32) -> T32 {
-        self.start.lerp(&self.end, self.weight.eval(t))
-    }
-}
-
-#[derive(Component)]
-struct Repeater {
-    duration: R32,
-    repeat_bounds: bool,
-    ceil: RepeaterClamp,
-    floor: RepeaterClamp,
-}
-
 #[derive(Component)]
 pub struct BoundSequence<T: Default> {
     upper_bounds: TinyVec<[T; 4]>,
     anchors: TinyVec<[Anchor; 8]>,
     lower_bounds: TinyVec<[T; 4]>,
-    repeater: Option<Repeater>,
+    repeat_bounds: bool,
 }
 
 #[derive(Default, Component)]
@@ -130,43 +110,35 @@ where
     type Output = Option<BoundSequenceOutput<T>>;
     type ClipCache = BoundSequenceCache;
 
-    fn play(&self, offset: R32, _clip_cahce: &mut Self::ClipCache) -> Self::Output {
-        self.repeater
-            .as_ref()
-            .zip(self.anchors.last().map(|anchor| anchor.point.x))
-            .and_then(|(Repeater { duration, floor, ceil, repeat_bounds }, period)| {
-                (offset < *duration && 0. < period).then(|| {
-                    let repeater_offset = offset % period;
-                    self.anchors.interp(repeater_offset).ok().map(|lerp_amount| {
-                        let clamp_offset = (offset / period)
-                            .trunc()
-                            .unit_interval(r32(0.), *duration);
-                        let lerp_amount = floor
-                            .eval(clamp_offset)
-                            .lerp(&ceil.eval(clamp_offset), lerp_amount);
-                        (if *repeat_bounds { repeater_offset } else { offset }, lerp_amount)
-                    })
-                })
-            })
-            .unwrap_or_else(|| self
-                .anchors
-                .interp(offset)
-                .ok()
-                .map(|lerp_amount| (offset, lerp_amount))
-            )
-            .map(|(bound_offset, lerp_amount)| {
-                let (Ok(lower) | Err(lower)) = self
-                    .lower_bounds
-                    .interp(bound_offset)
-                    .map_err(|last| last.lerp(last, t32(0.)));
+    fn duration(&self) -> R32 {
+        r32(self.anchors.last().unwrap().point.x)
+    }
 
-                let (Ok(upper) | Err(upper)) = self
-                    .upper_bounds
-                    .interp(bound_offset)
-                    .map_err(|last| last.lerp(last, t32(0.)));
+    fn play(
+        &self,
+        clip_time: R32,
+        repeat_time: R32,
+        lower_clamp: T32,
+        upper_clamp: T32,
+        _clip_cache: &mut Self::ClipCache
+    )
+        -> Self::Output
+    {
+        self.anchors.interp(repeat_time).ok().map(|lerp_amount| {
+            let bound_time = if self.repeat_bounds { repeat_time } else { clip_time };
 
-                lower.lerp(&upper, lerp_amount)
-            })
+            let (Ok(lower) | Err(lower)) = self
+                .lower_bounds
+                .interp(bound_time)
+                .map_err(|last| last.lerp(last, t32(0.)));
+
+            let (Ok(upper) | Err(upper)) = self
+                .upper_bounds
+                .interp(bound_time)
+                .map_err(|last| last.lerp(last, t32(0.)));
+
+            lower.lerp(&upper, lower_clamp.lerp(&upper_clamp, lerp_amount))
+        })
     }
 }
 

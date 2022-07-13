@@ -58,13 +58,42 @@ pub struct Channel<T> {
     _phantom: PhantomData<T>,
 }
 
+struct RepeaterClamp {
+    start: T32,
+    end: T32,
+    weight: Weight,
+}
+
+impl RepeaterClamp {
+    pub fn eval(&self, t: T32) -> T32 {
+        self.start.lerp(&self.end, self.weight.eval(t))
+    }
+}
+
+#[derive(Component)]
+struct Repeater {
+    run_time: R32,
+    ceil: RepeaterClamp,
+    floor: RepeaterClamp,
+}
+
 #[derive(Component, Deref, DerefMut)]
 struct ChannelCache(usize);
 
 pub trait AutomationClip {
     type Output;
     type ClipCache: Component;
-    fn play(&self, clip_time: R32, cache: &mut Self::ClipCache) -> Self::Output;
+
+    fn duration(&self) -> R32;
+
+    fn play(
+        &self,
+        clip_time: R32,
+        repeat_time: R32,
+        lower_clamp: T32,
+        upper_clamp: T32,
+        clip_cache: &mut Self::ClipCache,
+    ) -> Self::Output;
 }
 
 #[derive(Component)]
@@ -87,6 +116,7 @@ fn eval_automation_table<T>(
     clips: Query<(
         &T,
         Option<&HitResponse>,
+        Option<&Repeater>
     )>,
 )
 where
@@ -111,7 +141,7 @@ where
             hits = &**hit_reg;
         }
 
-        let ((clip, response), clip_start) = channel
+        let ((clip, response, repeater), clip_start) = channel
             .data
             .get(**index)
             .map(|instance| (clips.get(instance.entity).unwrap(), instance.offset))
@@ -148,7 +178,21 @@ where
             clip_time = **song_time - clip_start;
         }
 
-        slot.output = clip.play(clip_time, &mut *clip_cache);
+        let (repeat_time, lower_clamp, upper_clamp) = match (repeater, clip.duration()) {
+            (Some(repeater), period) if clip_time < repeater.run_time && r32(0.) < period => {
+                let repeat_time = clip_time % period;
+                let clamp_time = (clip_time / period).trunc().unit_interval(r32(0.), period);
+                let (lower_clamp, upper_clamp) = (
+                    repeater.floor.eval(clamp_time),
+                    repeater.ceil.eval(clamp_time)
+                );
+
+                (repeat_time, lower_clamp, upper_clamp)
+            }
+            _ => (clip_time, t32(0.), t32(1.)),
+        };
+
+        slot.output = clip.play(clip_time, repeat_time, lower_clamp, upper_clamp, &mut *clip_cache);
     })
 }
 
