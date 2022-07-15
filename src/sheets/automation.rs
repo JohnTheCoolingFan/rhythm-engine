@@ -1,14 +1,6 @@
-mod bound_sequence;
-mod spline;
-
-use crate::hit::*;
-
-use std::marker::PhantomData;
-
+use crate::utils::*;
 use bevy::prelude::*;
 use noisy_float::prelude::*;
-
-use crate::{hit::*, resources::*, utils::*};
 
 pub enum Weight {
     Constant,
@@ -33,76 +25,37 @@ impl Default for Weight {
         Self::Quadratic(r32(0.))
     }
 }
-
-#[derive(Component, Deref, DerefMut)]
-pub struct ClipID(u32);
-
-#[derive(Clone, Copy)]
-pub struct ClipInstance {
-    offset: R32,
-    entity: Entity,
-}
-
-impl Quantify for ClipInstance {
-    fn quantify(&self) -> R32 {
-        self.offset
-    }
-}
-
-#[derive(Default, Clone, Copy, Component)]
-pub struct ChannelID(u8);
-
-#[derive(Default, Component)]
-pub struct Channel<T> {
-    pub data: Vec<ClipInstance>,
-    _phantom: PhantomData<T>,
-}
-
-struct RepeaterClamp {
-    start: T32,
-    end: T32,
+//
+//
+//
+//
+#[derive(Default)]
+pub struct Anchor<T> {
+    x: R32,
+    y: T,
     weight: Weight,
 }
 
-impl RepeaterClamp {
-    pub fn eval(&self, t: T32) -> T32 {
-        self.start.lerp(&self.end, self.weight.eval(t))
+impl<T> Quantify for Anchor<T> {
+    fn quantify(&self) -> R32 {
+        self.x
     }
 }
 
-#[derive(Component)]
-struct Repeater {
-    run_time: R32,
-    ceil: RepeaterClamp,
-    floor: RepeaterClamp,
+impl<T> Lerp for Anchor<T>
+where
+    T: Lerp,
+{
+    type Output = <T as Lerp>::Output;
+    fn lerp(&self, next: &Self, t: T32) -> Self::Output {
+        next.y.lerp(&self.y, next.weight.eval(t))
+    }
 }
 
-#[derive(Component, Deref, DerefMut)]
-struct ChannelCache(usize);
+#[derive(Deref, DerefMut, Component)]
+pub struct Automation<T>(pub Vec<Anchor<T>>);
 
-pub trait AutomationClip {
-    type Output;
-    type ClipCache: Component;
-
-    fn duration(&self) -> R32;
-
-    fn play(
-        &self,
-        clip_time: R32,
-        repeat_time: R32,
-        lower_clamp: T32,
-        upper_clamp: T32,
-        clip_cache: &mut Self::ClipCache,
-    ) -> Self::Output;
-}
-
-#[derive(Component)]
-pub struct OutputSlot<T> {
-    output: T,
-    redirect: Option<u8>,
-}
-
-#[rustfmt::skip]
+/*#[rustfmt::skip]
 fn eval_automation_table<T>(
     song_time: Res<SongTime>,
     hit_reg: Res<HitRegister>,
@@ -110,8 +63,8 @@ fn eval_automation_table<T>(
         &Channel<T>,
         &mut ChannelCache,
         &mut ResponseState,
-        &mut <T as AutomationClip>::ClipCache,
-        &mut OutputSlot<<T as AutomationClip>::Output>,
+        &mut <T as Synth>::ClipCache,
+        &mut OutputSlot<<T as Synth>::Output>,
     )>,
     clips: Query<(
         &T,
@@ -120,9 +73,9 @@ fn eval_automation_table<T>(
     )>,
 )
 where
-    T: Default + Component + AutomationClip,
-    <T as AutomationClip>::Output: Send + Sync,
-    <T as AutomationClip>::ClipCache: Default + Component
+    T: Default + Component + Synth,
+    <T as Synth>::Output: Send + Sync,
+    <T as Synth>::ClipCache: Default + Component
 {
     table.iter_mut().for_each(|(channel, mut index, mut response_state, mut clip_cache, mut slot)| {
         let hits: &[Option<HitInfo>];
@@ -144,7 +97,7 @@ where
         let ((clip, response, repeater), clip_start) = channel
             .data
             .get(**index)
-            .map(|instance| (clips.get(instance.entity).unwrap(), instance.offset))
+            .map(|instance| (clips.get(instance.entity).unwrap(), instance.start))
             .unwrap();
 
         let clip_time: R32;
@@ -192,10 +145,14 @@ where
             _ => (clip_time, t32(0.), t32(1.)),
         };
 
-        slot.output = clip.play(clip_time, repeat_time, lower_clamp, upper_clamp, &mut *clip_cache);
+        //slot.output = clip.play(clip_time, repeat_time, lower_clamp, upper_clamp, &mut *clip_cache);
+        todo!()
     })
-}
-
+}*/
+//
+//
+//
+//
 #[cfg(test)]
 mod tests {
     use super::*;

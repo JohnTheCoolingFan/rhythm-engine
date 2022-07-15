@@ -6,7 +6,8 @@ use itertools::Itertools;
 use lyon_geom::*;
 use noisy_float::prelude::*;
 
-use crate::{automation::*, utils::*};
+use super::automation::*;
+use crate::utils::*;
 
 pub enum Sample {
     Point {
@@ -176,19 +177,14 @@ impl Segment {
     }
 }
 
-pub struct Waypoint {
-    displacement: R32,
-    weight: Weight,
-}
-
 #[derive(Component)]
-pub struct SmartSpline {
+pub struct Spline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,
-    pub waypoints: Vec<Waypoint>,
+    pub anchors: Vec<Anchor<R32>>,
 }
 
-impl SmartSpline {
+impl Spline {
     #[rustfmt::skip]
     pub fn resample(&mut self) {
         let head = Segment { curvature: Curvature::Linear, position: Vec2::new(0., 0.) };
@@ -206,18 +202,7 @@ impl SmartSpline {
 }
 
 #[derive(Component)]
-pub struct SplineIndexCache {
-    lut: usize,
-    waypoints: usize,
-}
-
-/*impl AutomationClip for SmartSpline {
-    type ClipCache = SplineIndexCache;
-    type Output = Vec2;
-    fn play(&self, clip_time: R32, cache: &mut Self::ClipCache) -> Self::Output {
-        todo!()
-    }
-}*/
+pub struct SampleIndexCache(usize);
 
 #[cfg(test)]
 mod tests {

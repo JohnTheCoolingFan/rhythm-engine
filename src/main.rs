@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use bevy_prototype_lyon::prelude::*;
 
-mod automation;
+mod sheets;
 mod hit;
 mod resources;
 mod utils;

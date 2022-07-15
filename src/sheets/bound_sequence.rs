@@ -5,28 +5,13 @@ use tinyvec::TinyVec;
 
 use macros::*;
 
-use crate::{automation::*, utils::*};
+use super::automation::*;
+use crate::utils::*;
 
 #[derive(Default, Component)]
 pub struct ScalarBound<T> {
     pub offset: R32,
     pub scalar: T,
-}
-
-impl<T> Quantify for ScalarBound<T> {
-    fn quantify(&self) -> R32 {
-        self.offset
-    }
-}
-
-impl<T> Lerp for ScalarBound<T>
-where
-    T: Copy + Lerp<Output = T>,
-{
-    type Output = <T as Lerp>::Output;
-    fn lerp(&self, other: &Self, _t: T32) -> Self::Output {
-        other.scalar
-    }
 }
 
 #[derive(Default, Component)]
@@ -35,25 +20,8 @@ pub struct SpannedBound<T> {
     bound: ScalarBound<T>,
 }
 
-impl<T> Lerp for SpannedBound<T>
-where
-    T: Copy + Lerp<Output = T>,
-{
-    type Output = <T as Lerp>::Output;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        self.bound
-            .scalar
-            .lerp(&other.bound.scalar, other.weight.eval(t.inv()))
-    }
-}
-
-#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
-pub struct Scale(R32);
-#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
-pub struct Rotation(R32);
 #[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Luminosity(T32);
-
 #[derive(Default, Clone, Copy, Deref, DerefMut)]
 pub struct Rgba([T32; 4]);
 
@@ -69,57 +37,41 @@ impl Lerp for Rgba {
     }
 }
 
-#[derive(Default)]
-struct Anchor {
-    point: Vec2,
-    weight: Weight,
-}
-
-impl Quantify for Anchor {
-    fn quantify(&self) -> R32 {
-        r32(self.point.x)
-    }
-}
-
-impl Lerp for Anchor {
-    type Output = T32;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        t32(other.point.y).lerp(&t32(self.point.y), other.weight.eval(t))
-    }
-}
+#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
+pub struct Scale(R32);
+#[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
+pub struct Rotation(R32);
+#[derive(Component)]
+pub struct GeometryCtrl(Vec2);
 
 #[derive(Component)]
 pub struct BoundSequence<T: Default> {
-    upper_bounds: TinyVec<[T; 4]>,
-    anchors: TinyVec<[Anchor; 8]>,
-    lower_bounds: TinyVec<[T; 4]>,
+    upper: TinyVec<[T; 4]>,
+    lower: TinyVec<[T; 4]>,
     repeat_bounds: bool,
 }
 
-#[derive(Default, Component)]
-pub struct BoundSequenceCache;
+// Make point for scale and rot a seperate sheet
 
-type BoundSequenceOutput<T> = <<T as Lerp>::Output as Lerp>::Output;
-
-#[rustfmt::skip]
-impl<T> AutomationClip for BoundSequence<T>
+/*#[rustfmt::skip]
+impl<T> Synth for BoundSequence<T>
 where
     T: Default + Quantify + Lerp,
     <T as Lerp>::Output: Lerp<Output = <T as Lerp>::Output>,
 {
+    type Input = T32;
     type Output = Option<BoundSequenceOutput<T>>;
     type ClipCache = BoundSequenceCache;
 
     fn duration(&self) -> R32 {
-        r32(self.anchors.last().unwrap().point.x)
+        self.anchors.last().unwrap().x
     }
 
     fn play(
         &self,
         clip_time: R32,
         repeat_time: R32,
-        lower_clamp: T32,
-        upper_clamp: T32,
+        input: Self::Input,
         _clip_cache: &mut Self::ClipCache
     )
         -> Self::Output
@@ -139,8 +91,9 @@ where
 
             lower.lerp(&upper, lower_clamp.lerp(&upper_clamp, lerp_amount))
         })
+        todo!()
     }
-}
+}*/
 
 /*#[cfg(test)]
 mod tests {

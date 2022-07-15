@@ -24,14 +24,26 @@ pub fn t32(value: f32) -> T32 {
     T32::new(value)
 }
 
-pub trait UnitIntervalExt {
-    fn inv(self) -> Self;
+#[derive(Debug, Clone, Copy)]
+pub struct PositiveFloatChecker;
+
+impl FloatChecker<f32> for PositiveFloatChecker {
+    fn check(value: f32) -> bool {
+        (0.0..).contains(&value)
+    }
+
+    fn assert(value: f32) {
+        debug_assert!(
+            Self::check(value),
+            "Expected positive float. Actual value: {value}"
+        );
+    }
 }
 
-impl UnitIntervalExt for T32 {
-    fn inv(self) -> Self {
-        t32(1. - self.raw())
-    }
+pub type P32 = NoisyFloat<f32, PositiveFloatChecker>;
+
+pub fn p32(value: f32) -> P32 {
+    P32::new(value)
 }
 
 pub trait Quantify {
