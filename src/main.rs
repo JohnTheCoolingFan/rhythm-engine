@@ -1,18 +1,17 @@
 #![allow(clippy::type_complexity)]
 
+use utils::*;
+
 use bevy::prelude::*;
 use bevy_prototype_lyon::prelude::*;
+use derive_more::From;
 
-mod sheet;
 mod hit;
-mod resources;
+mod sheet;
 mod utils;
 
-#[derive(Component)]
-struct Start(f32);
-
-#[derive(Component)]
-struct Duration(f32);
+#[derive(Clone, Copy, Deref, DerefMut, From)]
+pub struct SongTime(pub P32);
 
 fn main() {
     App::new()

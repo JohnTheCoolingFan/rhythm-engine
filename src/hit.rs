@@ -1,4 +1,6 @@
+use crate::utils::*;
 use bevy::prelude::*;
+use derive_more::From;
 use noisy_float::prelude::*;
 
 enum PressKind {
@@ -23,10 +25,13 @@ pub struct HitPrompt {
 #[derive(Clone, Copy)]
 pub struct HitInfo {
     /// Object time is used instead of hit time to keep animations synced with music
-    pub object_time: R32,
-    pub hit_time: R32,
+    pub object_time: P32,
+    pub hit_time: P32,
     pub layer: u8,
 }
+
+#[derive(Deref, DerefMut, From)]
+pub struct HitRegister(pub [Option<HitInfo>; 4]);
 
 #[derive(Component)]
 pub enum ResponseKind {
@@ -40,7 +45,7 @@ pub enum ResponseKind {
     Toggle(u8),
     /// Will stay at 0 state with no hit, for each hit it will play the automation
     /// from the hit time to hit time + excess.
-    Follow(R32),
+    Follow(P32),
 }
 
 #[derive(Component)]
@@ -52,6 +57,6 @@ pub struct HitResponse {
 #[derive(Component)]
 pub enum ResponseState {
     Nil,
-    Hit(R32),
+    Hit(P32),
     Delegated(bool),
 }
