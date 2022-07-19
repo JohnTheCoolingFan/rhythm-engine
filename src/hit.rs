@@ -84,46 +84,45 @@ fn clear_hit_responses(
 fn respond_to_hits(
     time: Res<SongTime>,
     hits: Res<HitRegister>,
-    hit_responses: Query<&HitResponse>,
-    mut response_sheets: Query<(&SheetPosition, &Instance<HitResponse>, &mut ResponseState)>,
+    hit_resps: Query<&HitResponse>,
+    mut sheets: Query<(&SheetPosition, &Instance<HitResponse>, &mut ResponseState)>,
 )
     -> [ResponseOutput; 256]
 {
     [ResponseOutput { seek_time: **time, redirect: None }; 256].tap_mut(|outputs| {
-        response_sheets
+        sheets
             .iter_mut()
+            .filter(|(sheet, _, _)| f32::EPSILON < sheet.duration.raw())
             .filter(|(sheet, _, _)| sheet.scheduled_at(**time))
-            .for_each(|(sheet, instance, mut response_state)| {
+            .map(|(sheet, Instance { entity, .. }, resp_state)| (sheet, entity, resp_state))
+            .map(|(sheet, entity, resp_state)| (sheet, hit_resps.get(*entity).unwrap() ,resp_state))
+            .for_each(|(sheet, HitResponse { kind, layer }, mut resp_state)| {
                 use ResponseKind::*;
                 use ResponseState::*;
-
-                let HitResponse { kind, layer } = hit_responses.get(instance.entity).unwrap();
 
                 hits.iter()
                     .flatten()
                     .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
-                    .for_each(|hit| {
-                        match (kind, &mut *response_state) {
-                            (Commence | Switch(_), state) => *state = Delegated(true),
-                            (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
-                            (Toggle(_), state) => *state = Delegated(true),
-                            (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
-                            _ => {}
-                        }
+                    .for_each(|hit| match (kind, &mut *resp_state) {
+                        (Commence | Switch(_), state) => *state = Delegated(true),
+                        (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
+                        (Toggle(_), state) => *state = Delegated(true),
+                        (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
+                        _ => {}
                     });
 
-                let adjusted_offset = match (kind, &mut *response_state) {
+                let adjusted_offset = match (kind, &mut *resp_state) {
                     (Commence, Delegated(delegate)) if !*delegate => sheet.start,
                     (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&**time) => *hit + ex,
                     _ => **time
                 };
 
-                let shift = match (kind, &mut *response_state) {
+                let shift = match (kind, &mut *resp_state) {
                     (Switch(shift) | Toggle(shift), Delegated(true)) => Some(*shift),
                     _ => None
                 };
 
-                sheet.coverage().for_each(|index| outputs[index as usize] = ResponseOutput {
+                sheet.coverage::<u8>().for_each(|index| outputs[index as usize] = ResponseOutput {
                     seek_time: adjusted_offset,
                     redirect: shift.map(|shift| index.wrapping_add(shift))
                 })

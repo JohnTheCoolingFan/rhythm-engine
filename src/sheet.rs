@@ -30,8 +30,8 @@ pub struct SheetPosition {
 }
 
 impl SheetPosition {
-    pub fn coverage(&self) -> RangeInclusive<u8> {
-        self.coverage.0..=self.coverage.1
+    pub fn coverage<T: From<u8>>(&self) -> RangeInclusive<T> {
+        self.coverage.0.into()..=self.coverage.1.into()
     }
 }
 
