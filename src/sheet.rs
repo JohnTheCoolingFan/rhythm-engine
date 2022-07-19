@@ -8,11 +8,10 @@ use repeater::*;
 use spline::*;
 
 use crate::{hit::*, utils::*, SongTime};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::RangeInclusive};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 use noisy_float::prelude::*;
-use tap::tap::Tap;
 
 type Automation = automation::Automation<T32>;
 type Color = BoundSequence<SpannedBound<Rgba>>;
@@ -21,100 +20,31 @@ type Scale = BoundSequence<ScalarBound<bound_sequence::Scale>>;
 type Rotation = BoundSequence<ScalarBound<bound_sequence::Rotation>>;
 
 #[derive(Clone, Copy)]
-struct Coverage {
-    first: u8,
-    last: u8,
-}
+pub struct Coverage(u8, u8);
 
 #[derive(Component)]
-struct SheetPosition {
-    start: P32,
-    duration: P32,
+pub struct SheetPosition {
+    pub start: P32,
+    pub duration: P32,
     coverage: Coverage,
 }
 
 impl SheetPosition {
-    fn playable(&self, time: P32) -> bool {
+    pub fn coverage(&self) -> RangeInclusive<u8> {
+        self.coverage.0..=self.coverage.1
+    }
+}
+
+impl SheetPosition {
+    pub fn scheduled_at(&self, time: P32) -> bool {
         (self.start.raw()..self.start.raw() + self.duration.raw()).contains(&time.raw())
     }
 }
 
 #[derive(Clone, Copy, Component)]
 pub struct Instance<T> {
-    entity: Entity,
+    pub entity: Entity,
     _phantom: PhantomData<T>,
-}
-
-#[rustfmt::skip]
-fn clear_hit_responses<T: Component>(
-    song_time: Res<SongTime>,
-    mut response_sheets: Query<(&SheetPosition, &mut ResponseState)>,
-) {
-    response_sheets
-        .iter_mut()
-        .filter(|(sheet, _)| !sheet.playable(**song_time))
-        .for_each(|(_, mut response_state)| *response_state = ResponseState::Nil);
-}
-
-#[rustfmt::skip]
-fn respond_to_hits<T: Component>(
-    song_time: Res<SongTime>,
-    hit_register: Res<HitRegister>,
-    hit_responses: Query<&HitResponse>,
-    mut response_sheets: Query<(
-        &SheetPosition,
-        &Instance<HitResponse>,
-        &mut ResponseState
-    )>,
-)
-    -> [(P32, Option<u8>); 256]
-{
-    [(**song_time, None); 256].tap_mut(|outputs| {
-        response_sheets
-            .iter_mut()
-            .filter(|(sheet, _, _)| sheet.playable(**song_time))
-            .for_each(|(sheet, instance, mut response_state)| {
-                use ResponseKind::*;
-                use ResponseState::*;
-
-                let (Coverage { first, last }, HitResponse { kind, layer }) = (
-                    sheet.coverage,
-                    hit_responses.get(instance.entity).unwrap()
-                );
-
-                (first..=last).for_each(|index| {
-                    let (seek_time, redirect) = &mut outputs[index as usize];
-
-                    hit_register.iter().flatten().filter(|hit| hit.layer == *layer).for_each(|hit|
-                        match (kind, &mut *response_state) {
-                            (Commence | Switch(_), state) => *state = Delegated(true),
-                            (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
-                            (Toggle(_), state) => *state = Delegated(true),
-                            (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
-                            _ => {}
-                        }
-                    );
-
-                    *redirect = match (kind, &mut *response_state) {
-                        (Switch(shift) | Toggle(shift), Delegated(true)) => {
-                            Some(index.wrapping_add(*shift))
-                        }
-                        _ => None
-                    };
-
-                    *seek_time = match (kind, &mut *response_state) {
-                        (Commence, Delegated(delegate)) if !*delegate => {
-                            sheet.start
-                        }
-                        (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&**song_time) => {
-                            *hit + ex
-                        }
-                        _ => **song_time
-                    };
-                })
-            }
-        )
-    })
 }
 
 /*#[derive(Default)]

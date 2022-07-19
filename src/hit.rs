@@ -1,7 +1,9 @@
-use crate::utils::*;
+use crate::{sheet::*, utils::*, SongTime};
+
 use bevy::prelude::*;
 use derive_more::From;
 use noisy_float::prelude::*;
+use tap::tap::Tap;
 
 enum PressKind {
     Press(N32),
@@ -59,4 +61,72 @@ pub enum ResponseState {
     Nil,
     Hit(P32),
     Delegated(bool),
+}
+
+#[derive(Clone, Copy)]
+pub struct ResponseOutput {
+    pub seek_time: P32,
+    pub redirect: Option<u8>,
+}
+
+#[rustfmt::skip]
+fn clear_hit_responses(
+    time: Res<SongTime>,
+    mut response_sheets: Query<(&SheetPosition, &mut ResponseState)>,
+) {
+    response_sheets
+        .iter_mut()
+        .filter(|(sheet, _)| !sheet.scheduled_at(**time))
+        .for_each(|(_, mut response_state)| *response_state = ResponseState::Nil);
+}
+
+#[rustfmt::skip]
+fn respond_to_hits(
+    time: Res<SongTime>,
+    hits: Res<HitRegister>,
+    hit_responses: Query<&HitResponse>,
+    mut response_sheets: Query<(&SheetPosition, &Instance<HitResponse>, &mut ResponseState)>,
+)
+    -> [ResponseOutput; 256]
+{
+    [ResponseOutput { seek_time: **time, redirect: None }; 256].tap_mut(|outputs| {
+        response_sheets
+            .iter_mut()
+            .filter(|(sheet, _, _)| sheet.scheduled_at(**time))
+            .for_each(|(sheet, instance, mut response_state)| {
+                use ResponseKind::*;
+                use ResponseState::*;
+
+                let HitResponse { kind, layer } = hit_responses.get(instance.entity).unwrap();
+
+                hits.iter()
+                    .flatten()
+                    .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
+                    .for_each(|hit| {
+                        match (kind, &mut *response_state) {
+                            (Commence | Switch(_), state) => *state = Delegated(true),
+                            (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
+                            (Toggle(_), state) => *state = Delegated(true),
+                            (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
+                            _ => {}
+                        }
+                    });
+
+                let adjusted_offset = match (kind, &mut *response_state) {
+                    (Commence, Delegated(delegate)) if !*delegate => sheet.start,
+                    (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&**time) => *hit + ex,
+                    _ => **time
+                };
+
+                let shift = match (kind, &mut *response_state) {
+                    (Switch(shift) | Toggle(shift), Delegated(true)) => Some(*shift),
+                    _ => None
+                };
+
+                sheet.coverage().for_each(|index| outputs[index as usize] = ResponseOutput {
+                    seek_time: adjusted_offset,
+                    redirect: shift.map(|shift| index.wrapping_add(shift))
+                })
+            })
+    })
 }
