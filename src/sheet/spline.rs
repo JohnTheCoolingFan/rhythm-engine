@@ -11,17 +11,17 @@ use crate::utils::*;
 
 pub enum Sample {
     Point {
-        displacement: R32,
+        displacement: P32,
         position: Vec2,
     },
     Arc {
-        displacement: R32,
+        displacement: P32,
         center: Vec2,
     },
 }
 
 impl Quantify for Sample {
-    fn quantify(&self) -> R32 {
+    fn quantify(&self) -> P32 {
         match self {
             Self::Point { displacement, .. } | Self::Arc { displacement, .. } => *displacement,
         }
@@ -37,7 +37,10 @@ impl Lerp for Sample {
                 start.lerp(*end, t.raw())
             },
             (Sample::Point { position: start, .. }, Sample::Arc { center, displacement }) => {
-                center.rotate(start, (*displacement / center.distance(*start)).to_degrees())
+                center.rotate(
+                    start,
+                    r32((*displacement / center.distance(*start)).to_degrees().raw())
+                )
             }
             _ => unreachable!()
         }
@@ -60,7 +63,7 @@ pub struct Segment {
 #[rustfmt::skip]
 impl Segment {
     fn sample_bezier(
-        path_length: &mut R32,
+        path_length: &mut P32,
         start: Vec2,
         points: impl Iterator<Item = Point<f32>>
     )
@@ -80,7 +83,7 @@ impl Segment {
             .collect::<Vec<_>>()
     }
 
-    fn sample(&self, path_length: &mut R32, start: Vec2) -> Vec<Sample> {
+    fn sample(&self, path_length: &mut P32, start: Vec2) -> Vec<Sample> {
         match self.curvature {
             Curvature::Linear => {
                 *path_length += start.distance(self.position);
@@ -128,7 +131,7 @@ impl Segment {
                         (_, _, theta) => theta.signum() * (360. - theta.abs()),
                     };
 
-                    let displacement = r32(
+                    let displacement = p32(
                         2. * PI * ((theta * center.distance(start)).abs() / 360.)
                     );
 
@@ -192,17 +195,14 @@ impl Spline {
         let tail = iter_once(&head)
             .chain(self.path.iter())
             .tuple_windows::<(_, _)>()
-            .scan(r32(0.), |state, (prev, curr)| Some(curr.sample(state, prev.position)))
+            .scan(p32(0.), |state, (prev, curr)| Some(curr.sample(state, prev.position)))
             .flatten();
 
-        self.lut = iter_once(Sample::Point { position: Vec2::new(0., 0.), displacement: r32(0.) })
+        self.lut = iter_once(Sample::Point { position: Vec2::new(0., 0.), displacement: p32(0.) })
             .chain(tail)
             .collect::<Vec<_>>();
     }
 }
-
-#[derive(Component)]
-pub struct SampleIndexCache(usize);
 
 #[cfg(test)]
 mod tests {

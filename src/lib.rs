@@ -9,8 +9,8 @@ pub fn derive_lerp(input: TokenStream) -> TokenStream {
     TokenStream::from(quote! {
         impl Lerp for #ident {
             type Output = Self;
-            fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-                Self(self.0.lerp(&other.0, t))
+            fn lerp(&self, next: &Self, t: T32) -> Self::Output {
+                Self(self.0.lerp(&next.0, t))
             }
         }
     })

@@ -47,7 +47,7 @@ pub fn p32(value: f32) -> P32 {
 }
 
 pub trait Quantify {
-    fn quantify(&self) -> R32;
+    fn quantify(&self) -> P32;
 }
 
 pub trait Lerp {
@@ -69,8 +69,8 @@ pub trait MatExt {
     fn into_matrix(self) -> Mat3;
 }
 
-impl Quantify for R32 {
-    fn quantify(&self) -> R32 {
+impl Quantify for P32 {
+    fn quantify(&self) -> P32 {
         *self
     }
 }
@@ -89,7 +89,7 @@ impl Lerp for T32 {
     }
 }
 
-impl FloatExt for R32 {
+impl FloatExt for P32 {
     fn unit_interval(self, before: Self, after: Self) -> T32 {
         t32(((self - before) / (after - before)).raw())
     }
@@ -119,9 +119,9 @@ impl MatExt for [[f32; 3]; 3] {
 
 pub trait ControlTable<'a, T> {
     fn seek(self, to: impl Quantify) -> usize;
-    fn can_skip_reindex(self, offset: R32) -> bool;
-    fn reindex_through(self, offset: R32, old: usize) -> usize;
-    fn interp(self, offset: R32) -> Result<<T as Lerp>::Output, &'a T>
+    fn can_skip_reindex(self, offset: P32) -> bool;
+    fn reindex_through(self, offset: P32, old: usize) -> usize;
+    fn interp(self, offset: P32) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp;
 }
@@ -148,12 +148,12 @@ impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
         index + to_skip
     }
 
-    fn can_skip_reindex(self, offset: R32) -> bool {
+    fn can_skip_reindex(self, offset: P32) -> bool {
         self.last().map_or(true, |item| item.quantify() < offset)
     }
 
     #[rustfmt::skip]
-    fn reindex_through(self, offset: R32, old: usize) -> usize {
+    fn reindex_through(self, offset: P32, old: usize) -> usize {
         self.iter()
             .enumerate()
             .skip(old)
@@ -168,7 +168,7 @@ impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
             .unwrap_or_else(|| self.seek(offset))
     }
 
-    fn interp(self, offset: R32) -> Result<<T as Lerp>::Output, &'a T>
+    fn interp(self, offset: P32) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp,
     {

@@ -46,7 +46,7 @@ impl RepeaterOutput {
 }
 
 #[rustfmt::skip]
-fn eval_repeaters(
+fn produce_repetitions(
     time: Res<SongTime>,
     In(response_outputs): In<[ResponseOutput; 256]>,
     repeaters: Query<&Repeater>,
@@ -62,7 +62,7 @@ fn eval_repeaters(
             .iter()
             .filter(|(sheet, _)| f32::EPSILON < sheet.duration.raw())
             .filter(|(sheet, _)| sheet.scheduled_at(**time))
-            .map(|(sheet, instance)| (sheet, repeaters.get(instance.entity).unwrap()))
+            .map(|(sheet, instance)| (sheet, repeaters.get(**instance).unwrap()))
             .filter(|(_, Repeater { period, .. })| f32::EPSILON < period.raw())
             .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| {
                 (&mut outputs[sheet.coverage()])
@@ -86,7 +86,5 @@ fn eval_repeaters(
                         }
                     })
             })
-    });
-
-    todo!()
+    })
 }

@@ -85,7 +85,11 @@ fn respond_to_hits(
     time: Res<SongTime>,
     hits: Res<HitRegister>,
     hit_resps: Query<&HitResponse>,
-    mut sheets: Query<(&SheetPosition, &Instance<HitResponse>, &mut ResponseState)>,
+    mut sheets: Query<(
+        &SheetPosition,
+        &Instance<HitResponse>,
+        &mut ResponseState
+    )>,
 )
     -> [ResponseOutput; 256]
 {
@@ -94,16 +98,15 @@ fn respond_to_hits(
             .iter_mut()
             .filter(|(sheet, _, _)| f32::EPSILON < sheet.duration.raw())
             .filter(|(sheet, _, _)| sheet.scheduled_at(**time))
-            .map(|(sheet, Instance { entity, .. }, resp_state)| (sheet, entity, resp_state))
-            .map(|(sheet, entity, resp_state)| (sheet, hit_resps.get(*entity).unwrap() ,resp_state))
-            .for_each(|(sheet, HitResponse { kind, layer }, mut resp_state)| {
+            .map(|(sheet, instance, state)| (sheet, hit_resps.get(**instance).unwrap() ,state))
+            .for_each(|(sheet, HitResponse { kind, layer }, mut state)| {
                 use ResponseKind::*;
                 use ResponseState::*;
 
                 hits.iter()
                     .flatten()
                     .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
-                    .for_each(|hit| match (kind, &mut *resp_state) {
+                    .for_each(|hit| match (kind, &mut *state) {
                         (Commence | Switch(_), state) => *state = Delegated(true),
                         (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
                         (Toggle(_), state) => *state = Delegated(true),
@@ -111,13 +114,13 @@ fn respond_to_hits(
                         _ => {}
                     });
 
-                let adjusted_offset = match (kind, &mut *resp_state) {
+                let adjusted_offset = match (kind, &mut *state) {
                     (Commence, Delegated(delegate)) if !*delegate => sheet.start,
                     (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&**time) => *hit + ex,
                     _ => **time
                 };
 
-                let shift = match (kind, &mut *resp_state) {
+                let shift = match (kind, &mut *state) {
                     (Switch(shift) | Toggle(shift), Delegated(true)) => Some(*shift),
                     _ => None
                 };
