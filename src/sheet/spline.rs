@@ -184,7 +184,7 @@ impl Segment {
 pub struct Spline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,
-    pub anchors: Vec<Anchor<R32>>,
+    pub automation: Vec<Anchor<R32>>,
 }
 
 impl Spline {

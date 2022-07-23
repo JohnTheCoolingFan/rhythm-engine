@@ -7,7 +7,7 @@ use bound_sequence::*;
 use repeater::*;
 use spline::*;
 
-use crate::{hit::*, utils::*, SongTime};
+use crate::{hit::*, utils::*, SongTime, MAX_CHANNELS};
 use std::{
     marker::PhantomData,
     ops::{Deref, RangeInclusive},
@@ -15,6 +15,7 @@ use std::{
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 use noisy_float::prelude::*;
+use tap::tap::Tap;
 
 #[derive(Clone, Copy)]
 pub struct Coverage(u8, u8);
@@ -64,8 +65,38 @@ type Luminosity = BoundSequence<bound_sequence::Luminosity>;
 type Scale = BoundSequence<bound_sequence::Scale>;
 type Rotation = BoundSequence<bound_sequence::Rotation>;
 
+#[rustfmt::skip]
+#[derive(SystemParam)]
+struct Ensemble<'w, 's, T: Component> {
+    entities: Query<'w, 's, &'static T>,
+    sheets: Query<'w, 's, (
+        &'static SheetPosition,
+        &'static Instance<T>,
+        &'static RepeaterAffinity,
+    )>,
+}
+
+#[rustfmt::skip]
+impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
+    fn add_all<'a>(
+        &'a self,
+        time: SongTime,
+        arrangements: &mut [Arrangement<'a>],
+        adder: impl Fn(&mut Arrangement<'a>, Option<&'a T>),
+    ) {
+        self.sheets
+            .iter()
+            .filter(|(pos, ..)| f32::EPSILON < pos.duration.raw())
+            .filter(|(pos, ..)| pos.scheduled_at(*time))
+            .for_each(|(pos, instance, _)| arrangements[pos.coverage()]
+                .iter_mut()
+                .for_each(|arrangement| adder(arrangement, self.entities.get(**instance).ok()))
+            )
+    }
+}
+
 #[derive(Default)]
-struct Ensemble<'a> {
+struct Arrangement<'a> {
     /// Exclusive
     spline: Option<&'a Spline>,
     automation: Option<&'a Automation>,
@@ -97,15 +128,29 @@ enum Modulation {
     },
 }
 
+#[rustfmt::skip]
 fn produce_modulations(
     time: Res<SongTime>,
-    In(sheet_inputs): In<[(ResponseOutput, RepeaterOutput); 256]>,
-    splines: Query<&Spline>,
-    automations: Query<&Automation>,
-    colors: Query<&Color>,
-    luminosities: Query<&Luminosity>,
-    scales: Query<&Scale>,
-    rotations: Query<&Rotation>,
-    geometry_ctrls: Query<&GeometryCtrl>,
-) {
+    In(sheet_inputs): In<[(ResponseOutput, RepeaterOutput); MAX_CHANNELS]>,
+    splines: Ensemble<Spline>,
+    automations: Ensemble<Automation>,
+    colors: Ensemble<Color>,
+    luminosities: Ensemble<Luminosity>,
+    scales: Ensemble<Scale>,
+    rotations: Ensemble<Rotation>,
+    geometry_ctrls: Ensemble<GeometryCtrl>,
+)
+    -> [Modulation; MAX_CHANNELS]
+{
+    let arrangements = [(); MAX_CHANNELS].map(|_| Arrangement::default()).tap_mut(|arrangements| {
+        splines.add_all(*time, arrangements, |arr, spline| arr.spline = spline);
+        automations.add_all(*time, arrangements, |arr, automation| arr.automation = automation);
+        colors.add_all(*time, arrangements, |arr, color| arr.color = color);
+        luminosities.add_all(*time, arrangements, |arr, luminosity| arr.luminosity = luminosity);
+        scales.add_all(*time, arrangements, |arr, scale| arr.scale = scale);
+        rotations.add_all(*time, arrangements, |arr, rotation| arr.rotation = rotation);
+        geometry_ctrls.add_all(*time, arrangements, |arr, geom_ctrl| arr.geometry_ctrl = geom_ctrl);
+    });
+
+    todo!()
 }

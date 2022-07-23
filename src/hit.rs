@@ -1,4 +1,4 @@
-use crate::{sheet::*, utils::*, SongTime};
+use crate::{sheet::*, utils::*, SongTime, MAX_CHANNELS};
 
 use bevy::prelude::*;
 use derive_more::From;
@@ -91,21 +91,21 @@ fn respond_to_hits(
         &mut ResponseState
     )>,
 )
-    -> [ResponseOutput; 256]
+    -> [ResponseOutput; MAX_CHANNELS]
 {
-    [ResponseOutput { seek_time: **time, redirect: None }; 256].tap_mut(|outputs| {
+    [ResponseOutput { seek_time: **time, redirect: None }; MAX_CHANNELS].tap_mut(|outputs| {
         sheets
             .iter_mut()
-            .filter(|(sheet, _, _)| f32::EPSILON < sheet.duration.raw())
-            .filter(|(sheet, _, _)| sheet.scheduled_at(**time))
-            .map(|(sheet, instance, state)| (sheet, hit_resps.get(**instance).unwrap() ,state))
-            .for_each(|(sheet, HitResponse { kind, layer }, mut state)| {
+            .filter(|(pos, ..)| f32::EPSILON < pos.duration.raw())
+            .filter(|(pos, ..)| pos.scheduled_at(**time))
+            .map(|(pos, instance, state)| (pos, hit_resps.get(**instance).unwrap() ,state))
+            .for_each(|(pos, HitResponse { kind, layer }, mut state)| {
                 use ResponseKind::*;
                 use ResponseState::*;
 
                 hits.iter()
                     .flatten()
-                    .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
+                    .filter(|hit| pos.scheduled_at(hit.hit_time) && hit.layer == *layer)
                     .for_each(|hit| match (kind, &mut *state) {
                         (Commence | Switch(_), state) => *state = Delegated(true),
                         (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
@@ -115,7 +115,7 @@ fn respond_to_hits(
                     });
 
                 let adjusted_offset = match (kind, &mut *state) {
-                    (Commence, Delegated(delegate)) if !*delegate => sheet.start,
+                    (Commence, Delegated(delegate)) if !*delegate => pos.start,
                     (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&**time) => *hit + ex,
                     _ => **time
                 };
@@ -125,7 +125,7 @@ fn respond_to_hits(
                     _ => None
                 };
 
-                sheet.coverage::<u8>().for_each(|index| outputs[index as usize] = ResponseOutput {
+                pos.coverage::<u8>().for_each(|index| outputs[index as usize] = ResponseOutput {
                     seek_time: adjusted_offset,
                     redirect: shift.map(|shift| index.wrapping_add(shift))
                 })

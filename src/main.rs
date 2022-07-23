@@ -1,4 +1,5 @@
 #![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 
 use utils::*;
 
@@ -9,6 +10,8 @@ use derive_more::From;
 mod hit;
 mod sheet;
 mod utils;
+
+pub const MAX_CHANNELS: usize = 256;
 
 #[derive(Clone, Copy, Deref, DerefMut, From)]
 pub struct SongTime(pub P32);

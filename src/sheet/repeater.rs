@@ -60,25 +60,25 @@ fn produce_repetitions(
     response_outputs.map(|out| (out, RepeaterOutput::new(out.seek_time))).tap_mut(|outputs| {
         sheets
             .iter()
-            .filter(|(sheet, _)| f32::EPSILON < sheet.duration.raw())
-            .filter(|(sheet, _)| sheet.scheduled_at(**time))
-            .map(|(sheet, instance)| (sheet, repeaters.get(**instance).unwrap()))
+            .filter(|(pos, _)| f32::EPSILON < pos.duration.raw())
+            .filter(|(pos, _)| pos.scheduled_at(**time))
+            .map(|(pos, instance)| (pos, repeaters.get(**instance).unwrap()))
             .filter(|(_, Repeater { period, .. })| f32::EPSILON < period.raw())
-            .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| {
-                (&mut outputs[sheet.coverage()])
+            .for_each(|(pos, Repeater { ping_pong, period, floor, ceil })| {
+                (&mut outputs[pos.coverage()])
                     .iter_mut()
-                    .filter(|(response_output, _)| sheet.scheduled_at(response_output.seek_time))
+                    .filter(|(response_output, _)| pos.scheduled_at(response_output.seek_time))
                     .for_each(|(ResponseOutput { seek_time, .. }, repeater_output)| {
-                        let relative_time = *seek_time - sheet.start;
+                        let relative_time = *seek_time - pos.start;
                         let remainder_time = relative_time % period;
                         let division = (relative_time / period).floor();
                         let parity = division.raw() as i32 % 2;
-                        let clamp_time = t32(((division * period) / sheet.duration).raw());
+                        let clamp_time = t32(((division * period) / pos.duration).raw());
 
                         *repeater_output = RepeaterOutput {
                             upper_clamp: ceil.eval(clamp_time),
                             lower_clamp: floor.eval(clamp_time),
-                            repeat_time: sheet.start + if *ping_pong && parity == 1 {
+                            repeat_time: pos.start + if *ping_pong && parity == 1 {
                                 *period - remainder_time
                             } else {
                                 remainder_time
