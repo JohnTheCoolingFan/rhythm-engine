@@ -82,7 +82,7 @@ impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
         &'a self,
         time: SongTime,
         arrangements: &mut [Arrangement<'a>],
-        adder: impl Fn(&mut Arrangement<'a>, Option<&'a T>),
+        grabber: impl for<'b> Fn(&'b mut Arrangement<'a>) -> &'b mut Option<&'a T>,
     ) {
         self.sheets
             .iter()
@@ -90,7 +90,7 @@ impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
             .filter(|(pos, ..)| pos.scheduled_at(*time))
             .for_each(|(pos, instance, _)| arrangements[pos.coverage()]
                 .iter_mut()
-                .for_each(|arrangement| adder(arrangement, self.entities.get(**instance).ok()))
+                .for_each(|arrangement| *grabber(arrangement) = self.entities.get(**instance).ok())
             )
     }
 }
@@ -143,13 +143,13 @@ fn produce_modulations(
     -> [Modulation; MAX_CHANNELS]
 {
     let arrangements = [(); MAX_CHANNELS].map(|_| Arrangement::default()).tap_mut(|arrangements| {
-        splines.add_all(*time, arrangements, |arr, spline| arr.spline = spline);
-        automations.add_all(*time, arrangements, |arr, automation| arr.automation = automation);
-        colors.add_all(*time, arrangements, |arr, color| arr.color = color);
-        luminosities.add_all(*time, arrangements, |arr, luminosity| arr.luminosity = luminosity);
-        scales.add_all(*time, arrangements, |arr, scale| arr.scale = scale);
-        rotations.add_all(*time, arrangements, |arr, rotation| arr.rotation = rotation);
-        geometry_ctrls.add_all(*time, arrangements, |arr, geom_ctrl| arr.geometry_ctrl = geom_ctrl);
+        splines.add_all(*time, arrangements, |arrangement| &mut arrangement.spline);
+        automations.add_all(*time, arrangements, |arrangement| &mut arrangement.automation);
+        colors.add_all(*time, arrangements, |arrangement| &mut arrangement.color);
+        luminosities.add_all(*time, arrangements, |arrangement| &mut arrangement.luminosity);
+        scales.add_all(*time, arrangements, |arrangement| &mut arrangement.scale);
+        rotations.add_all(*time, arrangements, |arrangement| &mut arrangement.rotation);
+        geometry_ctrls.add_all(*time, arrangements, |arrangement| &mut arrangement.geometry_ctrl);
     });
 
     todo!()
