@@ -82,6 +82,13 @@ impl Lerp for R32 {
     }
 }
 
+impl Lerp for P32 {
+    type Output = Self;
+    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
+        *self + (*other - *self) * t.raw()
+    }
+}
+
 impl Lerp for T32 {
     type Output = Self;
     fn lerp(&self, other: &Self, t: T32) -> Self::Output {

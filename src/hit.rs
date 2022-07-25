@@ -63,10 +63,22 @@ pub enum ResponseState {
     Delegated(bool),
 }
 
+#[derive(Default, From, Deref, Clone, Copy)]
+pub struct Redirect(Option<u8>);
+
 #[derive(Clone, Copy)]
 pub struct ResponseOutput {
     pub seek_time: P32,
-    pub redirect: Option<u8>,
+    pub redirect: Redirect,
+}
+
+impl ResponseOutput {
+    fn new(seek_time: P32) -> Self {
+        Self {
+            seek_time,
+            redirect: Redirect::default(),
+        }
+    }
 }
 
 #[rustfmt::skip]
@@ -93,7 +105,7 @@ fn respond_to_hits(
 )
     -> [ResponseOutput; MAX_CHANNELS]
 {
-    [ResponseOutput { seek_time: **time, redirect: None }; MAX_CHANNELS].tap_mut(|outputs| {
+    [ResponseOutput::new(**time); MAX_CHANNELS].tap_mut(|outputs| {
         sheets
             .iter_mut()
             .filter(|(pos, ..)| f32::EPSILON < pos.duration.raw())
@@ -127,7 +139,7 @@ fn respond_to_hits(
 
                 pos.coverage::<u8>().for_each(|index| outputs[index as usize] = ResponseOutput {
                     seek_time: adjusted_offset,
-                    redirect: shift.map(|shift| index.wrapping_add(shift))
+                    redirect: shift.map(|shift| index.wrapping_add(shift)).into()
                 })
             })
     })

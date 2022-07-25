@@ -25,14 +25,14 @@ pub struct Repeater {
     floor: RepeaterClamp,
 }
 
-#[derive(Component)]
+#[derive(Default, Deref, Component, Clone, Copy)]
 pub struct RepeaterAffinity(bool);
 
 #[derive(Clone, Copy)]
 pub struct RepeaterOutput {
-    repeat_time: P32,
-    lower_clamp: T32,
-    upper_clamp: T32,
+    pub repeat_time: P32,
+    pub lower_clamp: T32,
+    pub upper_clamp: T32,
 }
 
 impl RepeaterOutput {

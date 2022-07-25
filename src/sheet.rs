@@ -65,55 +65,69 @@ type Luminosity = BoundSequence<bound_sequence::Luminosity>;
 type Scale = BoundSequence<bound_sequence::Scale>;
 type Rotation = BoundSequence<bound_sequence::Rotation>;
 
+struct Beat<'a, T> {
+    start: P32,
+    entity: &'a T,
+    repeat: RepeaterAffinity,
+}
+
+#[derive(Default)]
+struct Harmony<'a> {
+    /// Exclusive
+    spline: Option<Beat<'a, Spline>>,
+    automation: Option<Beat<'a, Automation>>,
+    /// Exclusive
+    /// REQ: Some(_) = anchors
+    color: Option<Beat<'a, Color>>,
+    luminosity: Option<Beat<'a, Luminosity>>,
+    scale: Option<Beat<'a, Scale>>,
+    rotation: Option<Beat<'a, Rotation>>,
+    /// Optional
+    /// REQ: Some(_) = anchors && Some(_) = (rotation | scale)
+    geometry_ctrl: Option<Beat<'a, GeometryCtrl>>,
+}
+
 #[rustfmt::skip]
 #[derive(SystemParam)]
-struct Ensemble<'w, 's, T: Component> {
+struct SheetParam<'w, 's, T: Component> {
     entities: Query<'w, 's, &'static T>,
     sheets: Query<'w, 's, (
         &'static SheetPosition,
         &'static Instance<T>,
-        &'static RepeaterAffinity,
+        Option<&'static RepeaterAffinity>,
     )>,
 }
 
 #[rustfmt::skip]
-impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
+impl<'w, 's, T: Component> SheetParam<'w, 's, T> {
     fn add_all<'a>(
         &'a self,
         time: SongTime,
-        arrangements: &mut [Arrangement<'a>],
-        grabber: impl for<'b> Fn(&'b mut Arrangement<'a>) -> &'b mut Option<&'a T>,
+        harmonies: &mut [Harmony<'a>],
+        grabber: impl for<'b> Fn(&'b mut Harmony<'a>) -> &'b mut Option<Beat<'a, T>>
     ) {
         self.sheets
             .iter()
             .filter(|(pos, ..)| f32::EPSILON < pos.duration.raw())
             .filter(|(pos, ..)| pos.scheduled_at(*time))
-            .for_each(|(pos, instance, _)| arrangements[pos.coverage()]
+            .for_each(|(pos, instance, affinity)| harmonies[pos.coverage()]
                 .iter_mut()
-                .for_each(|arrangement| *grabber(arrangement) = self.entities.get(**instance).ok())
+                .for_each(|harmony| *grabber(harmony) = self
+                    .entities
+                    .get(**instance)
+                    .ok()
+                    .map(|entity| Beat {
+                        entity,
+                        start: pos.start,
+                        repeat: affinity.copied().unwrap_or_default()
+                    })
+                )
             )
     }
 }
 
-#[derive(Default)]
-struct Arrangement<'a> {
-    /// Exclusive
-    spline: Option<&'a Spline>,
-    automation: Option<&'a Automation>,
-    /// Exclusive
-    /// REQ: Some(_) = anchors
-    color: Option<&'a Color>,
-    luminosity: Option<&'a Luminosity>,
-    scale: Option<&'a Scale>,
-    rotation: Option<&'a Rotation>,
-    /// Optional
-    /// REQ: Some(_) = anchors && Some(_) = (rotation | scale)
-    geometry_ctrl: Option<&'a GeometryCtrl>,
-}
-
-#[derive(Default, Clone, Copy)]
+#[derive(Clone, Copy)]
 enum Modulation {
-    #[default]
     Nil,
     Position(Vec2),
     Color(Rgba),
@@ -132,25 +146,97 @@ enum Modulation {
 fn produce_modulations(
     time: Res<SongTime>,
     In(sheet_inputs): In<[(ResponseOutput, RepeaterOutput); MAX_CHANNELS]>,
-    splines: Ensemble<Spline>,
-    automations: Ensemble<Automation>,
-    colors: Ensemble<Color>,
-    luminosities: Ensemble<Luminosity>,
-    scales: Ensemble<Scale>,
-    rotations: Ensemble<Rotation>,
-    geometry_ctrls: Ensemble<GeometryCtrl>,
+    splines: SheetParam<Spline>,
+    automations: SheetParam<Automation>,
+    colors: SheetParam<Color>,
+    luminosities: SheetParam<Luminosity>,
+    scales: SheetParam<Scale>,
+    rotations: SheetParam<Rotation>,
+    geometry_ctrls: SheetParam<GeometryCtrl>,
 )
-    -> [Modulation; MAX_CHANNELS]
+    -> [(Redirect, Modulation); MAX_CHANNELS]
 {
-    let arrangements = [(); MAX_CHANNELS].map(|_| Arrangement::default()).tap_mut(|arrangements| {
-        splines.add_all(*time, arrangements, |arrangement| &mut arrangement.spline);
-        automations.add_all(*time, arrangements, |arrangement| &mut arrangement.automation);
-        colors.add_all(*time, arrangements, |arrangement| &mut arrangement.color);
-        luminosities.add_all(*time, arrangements, |arrangement| &mut arrangement.luminosity);
-        scales.add_all(*time, arrangements, |arrangement| &mut arrangement.scale);
-        rotations.add_all(*time, arrangements, |arrangement| &mut arrangement.rotation);
-        geometry_ctrls.add_all(*time, arrangements, |arrangement| &mut arrangement.geometry_ctrl);
+    let harmonies = [(); MAX_CHANNELS].map(|_| Harmony::default()).tap_mut(|harmonies| {
+        splines.add_all(
+            *time,
+            harmonies,
+            |harmony| &mut harmony.spline
+        );
+        automations.add_all(
+            *time,
+            harmonies,
+            |harmony| &mut harmony.automation
+        );
+        colors.add_all(
+            *time,
+            harmonies,
+            |harmony| &mut harmony.color
+        );
+        luminosities.add_all(
+            *time,
+            harmonies,
+            |harmony| &mut harmony.luminosity
+        );
+        scales.add_all(
+            *time,
+            harmonies,
+            |harmony| &mut harmony.scale
+        );
+        rotations.add_all(
+            *time,
+            harmonies,
+            |harmony| &mut harmony.rotation
+        );
+        geometry_ctrls.add_all(
+            *time,
+            harmonies,
+            |harmony| &mut harmony.geometry_ctrl
+        );
     });
 
-    todo!()
+    let mut modulations = sheet_inputs
+        .into_iter()
+        .zip(harmonies.into_iter())
+        .map(|((response, repeater), harmony)| (
+            response.redirect,
+            match &harmony {
+                Harmony { spline: Some(Beat { start, entity, repeat }), .. } => entity.play(
+                    *start - if **repeat { repeater.repeat_time } else { response.seek_time }
+                ),
+                Harmony { automation , .. } if automation.is_some() => {
+                    match harmony {
+                        Harmony {
+                            color: Some(Beat { start, entity, repeat }),
+                            ..
+                        } => {
+                            todo!()
+                        }
+                        Harmony {
+                            luminosity: Some(Beat { start, entity, repeat }),
+                            ..
+                        } => {
+                            todo!()
+                        }
+                        Harmony {
+                            scale: Some(Beat { start, entity, repeat }),
+                            geometry_ctrl,
+                            ..
+                        } => {
+                            todo!()
+                        }
+                        Harmony {
+                            rotation: Some(Beat { start, entity, repeat }),
+                            geometry_ctrl,
+                            ..
+                        } => {
+                            todo!()
+                        }
+                        _ => Modulation::Nil
+                    }
+                }
+                _ => Modulation::Nil
+            }
+        ));
+
+    [(); MAX_CHANNELS].map(|_| modulations.next().unwrap())
 }
