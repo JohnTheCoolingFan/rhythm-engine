@@ -55,7 +55,7 @@ pub struct Automation<T: Default>(pub TinyVec<[Anchor<T>; 6]>);
 
 impl<T> Automation<T>
 where
-    T: Default + Copy + Quantify + Lerp<Output = T>,
+    T: Default + Copy + Lerp<Output = T>,
 {
     pub fn play(&self, offset: P32) -> T {
         self.interp(offset).unwrap_or_else(|anchor| anchor.val)

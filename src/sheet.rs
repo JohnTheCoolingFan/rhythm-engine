@@ -142,10 +142,19 @@ enum Modulation {
     },
 }
 
+trait Synth {
+    fn play_from(
+        &self,
+        offset: P32,
+        response: Response,
+        repetition: Option<Repetition>,
+    ) -> Modulation;
+}
+
 #[rustfmt::skip]
 fn produce_modulations(
     time: Res<SongTime>,
-    In(sheet_inputs): In<[(ResponseOutput, RepeaterOutput); MAX_CHANNELS]>,
+    In(sheet_inputs): In<[(Response, Repetition); MAX_CHANNELS]>,
     splines: SheetParam<Spline>,
     automations: SheetParam<Automation>,
     colors: SheetParam<Color>,
@@ -195,15 +204,18 @@ fn produce_modulations(
     });
 
     let mut modulations = sheet_inputs
-        .into_iter()
-        .zip(harmonies.into_iter())
-        .map(|((response, repeater), harmony)| (
+        .iter()
+        .zip(harmonies.iter())
+        .map(|((response, repetition), harmony)| (
             response.redirect,
             match &harmony {
                 Harmony { spline: Some(Beat { start, entity, repeat }), .. } => entity.play(
-                    *start - if **repeat { repeater.repeat_time } else { response.seek_time }
+                    *start - if **repeat { repetition.time } else { response.seek_time }
                 ),
-                Harmony { automation , .. } if automation.is_some() => {
+                Harmony { automation: Some(Beat { start, entity, repeat }) , .. } => {
+                    let t = entity.play(
+                        *start - if **repeat { repetition.time } else { response.seek_time }
+                    );
                     match harmony {
                         Harmony {
                             color: Some(Beat { start, entity, repeat }),

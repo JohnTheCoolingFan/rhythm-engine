@@ -29,16 +29,16 @@ pub struct Repeater {
 pub struct RepeaterAffinity(bool);
 
 #[derive(Clone, Copy)]
-pub struct RepeaterOutput {
-    pub repeat_time: P32,
+pub struct Repetition {
+    pub time: P32,
     pub lower_clamp: T32,
     pub upper_clamp: T32,
 }
 
-impl RepeaterOutput {
+impl Repetition {
     fn new(seek_time: P32) -> Self {
         Self {
-            repeat_time: seek_time,
+            time: seek_time,
             lower_clamp: t32(0.),
             upper_clamp: t32(1.),
         }
@@ -48,16 +48,16 @@ impl RepeaterOutput {
 #[rustfmt::skip]
 fn produce_repetitions(
     time: Res<SongTime>,
-    In(response_outputs): In<[ResponseOutput; 256]>,
+    In(responses): In<[Response; 256]>,
     repeaters: Query<&Repeater>,
     sheets: Query<(
         &SheetPosition,
         &Instance<Repeater>,
     )>,
 )
-    -> [(ResponseOutput, RepeaterOutput); 256]
+    -> [(Response, Repetition); 256]
 {
-    response_outputs.map(|out| (out, RepeaterOutput::new(out.seek_time))).tap_mut(|outputs| {
+    responses.map(|out| (out, Repetition::new(out.seek_time))).tap_mut(|outputs| {
         sheets
             .iter()
             .filter(|(pos, _)| f32::EPSILON < pos.duration.raw())
@@ -67,18 +67,18 @@ fn produce_repetitions(
             .for_each(|(pos, Repeater { ping_pong, period, floor, ceil })| {
                 (&mut outputs[pos.coverage()])
                     .iter_mut()
-                    .filter(|(response_output, _)| pos.scheduled_at(response_output.seek_time))
-                    .for_each(|(ResponseOutput { seek_time, .. }, repeater_output)| {
+                    .filter(|(response, _)| pos.scheduled_at(response.seek_time))
+                    .for_each(|(Response { seek_time, .. }, repetition)| {
                         let relative_time = *seek_time - pos.start;
                         let remainder_time = relative_time % period;
                         let division = (relative_time / period).floor();
                         let parity = division.raw() as i32 % 2;
                         let clamp_time = t32(((division * period) / pos.duration).raw());
 
-                        *repeater_output = RepeaterOutput {
+                        *repetition = Repetition {
                             upper_clamp: ceil.eval(clamp_time),
                             lower_clamp: floor.eval(clamp_time),
-                            repeat_time: pos.start + if *ping_pong && parity == 1 {
+                            time: pos.start + if *ping_pong && parity == 1 {
                                 *period - remainder_time
                             } else {
                                 remainder_time

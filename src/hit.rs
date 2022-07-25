@@ -51,7 +51,7 @@ pub enum ResponseKind {
 }
 
 #[derive(Component)]
-pub struct HitResponse {
+pub struct ResponseSetting {
     pub kind: ResponseKind,
     pub layer: u8,
 }
@@ -67,12 +67,12 @@ pub enum ResponseState {
 pub struct Redirect(Option<u8>);
 
 #[derive(Clone, Copy)]
-pub struct ResponseOutput {
+pub struct Response {
     pub seek_time: P32,
     pub redirect: Redirect,
 }
 
-impl ResponseOutput {
+impl Response {
     fn new(seek_time: P32) -> Self {
         Self {
             seek_time,
@@ -96,22 +96,22 @@ fn clear_hit_responses(
 fn respond_to_hits(
     time: Res<SongTime>,
     hits: Res<HitRegister>,
-    hit_resps: Query<&HitResponse>,
+    resp_settings: Query<&ResponseSetting>,
     mut sheets: Query<(
         &SheetPosition,
-        &Instance<HitResponse>,
+        &Instance<ResponseSetting>,
         &mut ResponseState
     )>,
 )
-    -> [ResponseOutput; MAX_CHANNELS]
+    -> [Response; MAX_CHANNELS]
 {
-    [ResponseOutput::new(**time); MAX_CHANNELS].tap_mut(|outputs| {
+    [Response::new(**time); MAX_CHANNELS].tap_mut(|outputs| {
         sheets
             .iter_mut()
             .filter(|(pos, ..)| f32::EPSILON < pos.duration.raw())
             .filter(|(pos, ..)| pos.scheduled_at(**time))
-            .map(|(pos, instance, state)| (pos, hit_resps.get(**instance).unwrap() ,state))
-            .for_each(|(pos, HitResponse { kind, layer }, mut state)| {
+            .map(|(pos, instance, state)| (pos, resp_settings.get(**instance).unwrap() ,state))
+            .for_each(|(pos, ResponseSetting { kind, layer }, mut state)| {
                 use ResponseKind::*;
                 use ResponseState::*;
 
@@ -137,7 +137,7 @@ fn respond_to_hits(
                     _ => None
                 };
 
-                pos.coverage::<u8>().for_each(|index| outputs[index as usize] = ResponseOutput {
+                pos.coverage::<u8>().for_each(|index| outputs[index as usize] = Response {
                     seek_time: adjusted_offset,
                     redirect: shift.map(|shift| index.wrapping_add(shift)).into()
                 })
