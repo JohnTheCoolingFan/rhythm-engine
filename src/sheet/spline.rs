@@ -6,8 +6,8 @@ use itertools::Itertools;
 use lyon_geom::*;
 use noisy_float::prelude::*;
 
-use super::{automation::*, Modulation};
-use crate::utils::*;
+use super::{automation::*, repeater::*, Modulation, Synth};
+use crate::{hit::*, utils::*};
 
 pub enum Sample {
     Point {
@@ -187,8 +187,8 @@ pub struct Spline {
     pub automation: Automation<P32>,
 }
 
-#[rustfmt::skip]
 impl Spline {
+    #[rustfmt::skip]
     pub fn resample(&mut self) {
         let head = Segment { curvature: Curvature::Linear, position: Vec2::new(0., 0.) };
 
@@ -202,14 +202,27 @@ impl Spline {
             .chain(tail)
             .collect::<Vec<_>>();
     }
+}
 
-    pub fn play(&self, time: P32) -> Modulation {
-        Modulation::Position(
-            self.lut.interp(self.automation.play(time)).unwrap_or_else(|sample| match sample {
-                Sample::Arc { center, .. } => *center,
-                Sample::Point { position, .. } => *position,
-            }),
-        )
+impl Synth for Spline {
+    type Output = Modulation;
+    #[rustfmt::skip]
+    fn play_from(
+        &self,
+        offset: P32,
+        repetition: Option<Repetition>,
+    )
+        -> Modulation
+    {
+        /*Modulation::Position(
+            self.lut
+                .interp(self.automation.play(time))
+                .unwrap_or_else(|sample| match sample {
+                    Sample::Arc { center, .. } => *center,
+                    Sample::Point { position, .. } => *position,
+                }),
+        )*/
+        todo!()
     }
 }
 

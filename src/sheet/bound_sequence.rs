@@ -37,14 +37,14 @@ pub struct BoundSequence<T: Default> {
     lower: Automation<T>,
 }
 
-impl<T: Default> BoundSequence<T>
+/*impl<T: Default> BoundSequence<T>
 where
     T: Default + Copy + Quantify + Lerp + Lerp<Output = T>,
 {
     pub fn play(&self, offset: P32, t: T32) -> T {
         self.lower.play(offset).lerp(&self.upper.play(offset), t)
     }
-}
+}*/
 
 /*#[cfg(test)]
 mod tests {

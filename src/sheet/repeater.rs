@@ -1,5 +1,5 @@
 use super::automation::Weight;
-use crate::{hit::*, sheet::*, utils::*};
+use crate::{hit::*, sheet::*, utils::*, *};
 
 use bevy::prelude::*;
 use noisy_float::prelude::*;
@@ -36,7 +36,7 @@ pub struct Repetition {
 }
 
 impl Repetition {
-    fn new(seek_time: P32) -> Self {
+    pub fn new(seek_time: P32) -> Self {
         Self {
             time: seek_time,
             lower_clamp: t32(0.),
@@ -47,44 +47,45 @@ impl Repetition {
 
 #[rustfmt::skip]
 fn produce_repetitions(
-    time: Res<SongTime>,
-    In(responses): In<[Response; 256]>,
+    song_time: Res<SongTime>,
+    mut seek_times: ResMut<Table<SeekTime>>,
+    mut repetitions: ResMut<Table<Repetition>>,
     repeaters: Query<&Repeater>,
-    sheets: Query<(
-        &SheetPosition,
-        &Instance<Repeater>,
+    gen_ids: Query<(
+        &Sheet,
+        &GenID<Repeater>,
     )>,
 )
-    -> [(Response, Repetition); 256]
 {
-    responses.map(|out| (out, Repetition::new(out.seek_time))).tap_mut(|outputs| {
-        sheets
-            .iter()
-            .filter(|(pos, _)| f32::EPSILON < pos.duration.raw())
-            .filter(|(pos, _)| pos.scheduled_at(**time))
-            .map(|(pos, instance)| (pos, repeaters.get(**instance).unwrap()))
-            .filter(|(_, Repeater { period, .. })| f32::EPSILON < period.raw())
-            .for_each(|(pos, Repeater { ping_pong, period, floor, ceil })| {
-                (&mut outputs[pos.coverage()])
-                    .iter_mut()
-                    .filter(|(response, _)| pos.scheduled_at(response.seek_time))
-                    .for_each(|(Response { seek_time, .. }, repetition)| {
-                        let relative_time = *seek_time - pos.start;
-                        let remainder_time = relative_time % period;
-                        let division = (relative_time / period).floor();
-                        let parity = division.raw() as i32 % 2;
-                        let clamp_time = t32(((division * period) / pos.duration).raw());
+    gen_ids
+        .iter()
+        .filter(|(sheet, _)| f32::EPSILON < sheet.duration.raw())
+        .map(|(sheet, gen_id)| (sheet, repeaters.get(**gen_id).unwrap()))
+        .filter(|(_, Repeater { period, .. })| f32::EPSILON < period.raw())
+        .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| {
+            sheet.coverage::<usize>().for_each(|index| {
+                if let Some(time) = [*seek_times[index], **song_time]
+                    .iter()
+                    .find(|time| sheet.scheduled_at(**time))
+                {
+                    *seek_times[index] = *time;
 
-                        *repetition = Repetition {
-                            upper_clamp: ceil.eval(clamp_time),
-                            lower_clamp: floor.eval(clamp_time),
-                            time: pos.start + if *ping_pong && parity == 1 {
-                                *period - remainder_time
-                            } else {
-                                remainder_time
-                            }
+                    let relative_time = *time - sheet.start;
+                    let remainder_time = relative_time % period;
+                    let division = (relative_time / period).floor();
+                    let parity = division.raw() as i32 % 2;
+                    let clamp_time = t32(((division * period) / sheet.duration).raw());
+
+                    repetitions[index] = Repetition {
+                        upper_clamp: ceil.eval(clamp_time),
+                        lower_clamp: floor.eval(clamp_time),
+                        time: sheet.start + if *ping_pong && parity == 1 {
+                            *period - remainder_time
+                        } else {
+                            remainder_time
                         }
-                    })
+                    }
+                }
             })
-    })
+        })
 }

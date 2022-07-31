@@ -1,4 +1,4 @@
-use crate::{sheet::*, utils::*, SongTime, MAX_CHANNELS};
+use crate::{sheet::*, utils::*, *};
 
 use bevy::prelude::*;
 use derive_more::From;
@@ -51,7 +51,7 @@ pub enum ResponseKind {
 }
 
 #[derive(Component)]
-pub struct ResponseSetting {
+pub struct Response {
     pub kind: ResponseKind,
     pub layer: u8,
 }
@@ -63,84 +63,65 @@ pub enum ResponseState {
     Delegated(bool),
 }
 
-#[derive(Default, From, Deref, Clone, Copy)]
+#[derive(Default, From, Deref, DerefMut, Clone, Copy)]
 pub struct Redirect(Option<u8>);
 
-#[derive(Clone, Copy)]
-pub struct Response {
-    pub seek_time: P32,
-    pub redirect: Redirect,
-}
+#[derive(Default, From, Deref, DerefMut, Clone, Copy)]
+pub struct SeekTime(P32);
 
-impl Response {
-    fn new(seek_time: P32) -> Self {
-        Self {
-            seek_time,
-            redirect: Redirect::default(),
-        }
-    }
-}
-
-#[rustfmt::skip]
-fn clear_hit_responses(
-    time: Res<SongTime>,
-    mut response_sheets: Query<(&SheetPosition, &mut ResponseState)>,
-) {
-    response_sheets
+fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
+    instances
         .iter_mut()
-        .filter(|(sheet, _)| !sheet.scheduled_at(**time))
         .for_each(|(_, mut response_state)| *response_state = ResponseState::Nil);
 }
 
 #[rustfmt::skip]
 fn respond_to_hits(
-    time: Res<SongTime>,
+    song_time: Res<SongTime>,
+    mut seek_times: ResMut<Table<SeekTime>>,
+    mut redirects: ResMut<Table<Redirect>>,
     hits: Res<HitRegister>,
-    resp_settings: Query<&ResponseSetting>,
-    mut sheets: Query<(
-        &SheetPosition,
-        &Instance<ResponseSetting>,
+    responses: Query<&Response>,
+    mut instances: Query<(
+        &Sheet,
+        &GenID<Response>,
         &mut ResponseState
     )>,
-)
-    -> [Response; MAX_CHANNELS]
-{
-    [Response::new(**time); MAX_CHANNELS].tap_mut(|outputs| {
-        sheets
-            .iter_mut()
-            .filter(|(pos, ..)| f32::EPSILON < pos.duration.raw())
-            .filter(|(pos, ..)| pos.scheduled_at(**time))
-            .map(|(pos, instance, state)| (pos, resp_settings.get(**instance).unwrap() ,state))
-            .for_each(|(pos, ResponseSetting { kind, layer }, mut state)| {
-                use ResponseKind::*;
-                use ResponseState::*;
+) {
+    instances
+        .iter_mut()
+        .filter(|(sheet, ..)| f32::EPSILON < sheet.duration.raw())
+        .filter(|(sheet, ..)| sheet.scheduled_at(**song_time))
+        .map(|(sheet, gen_id, state)| (sheet, responses.get(**gen_id).unwrap() ,state))
+        .for_each(|(sheet, Response { kind, layer }, mut state)| {
+            use ResponseKind::*;
+            use ResponseState::*;
 
-                hits.iter()
-                    .flatten()
-                    .filter(|hit| pos.scheduled_at(hit.hit_time) && hit.layer == *layer)
-                    .for_each(|hit| match (kind, &mut *state) {
-                        (Commence | Switch(_), state) => *state = Delegated(true),
-                        (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
-                        (Toggle(_), state) => *state = Delegated(true),
-                        (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
-                        _ => {}
-                    });
+            hits.iter()
+                .flatten()
+                .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
+                .for_each(|hit| match (kind, &mut *state) {
+                    (Commence | Switch(_), state) => *state = Delegated(true),
+                    (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
+                    (Toggle(_), state) => *state = Delegated(true),
+                    (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
+                    _ => {}
+                });
 
-                let adjusted_offset = match (kind, &mut *state) {
-                    (Commence, Delegated(delegate)) if !*delegate => pos.start,
-                    (Follow(ex), Hit(hit)) if !(*hit..*hit + ex).contains(&**time) => *hit + ex,
-                    _ => **time
-                };
+            let adjusted_offset = match (kind, &*state) {
+                (Commence, Delegated(delegate)) if !delegate => sheet.start,
+                (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&**song_time) => hit + ex,
+                _ => **song_time
+            };
 
-                let shift = match (kind, &mut *state) {
-                    (Switch(shift) | Toggle(shift), Delegated(true)) => Some(*shift),
-                    _ => None
-                };
+            let shift = match (kind, &mut *state) {
+                (Switch(shift) | Toggle(shift), Delegated(true)) => Some(*shift),
+                _ => None
+            };
 
-                pos.coverage::<u8>().for_each(|index| outputs[index as usize] = Response {
-                    seek_time: adjusted_offset,
-                    redirect: shift.map(|shift| index.wrapping_add(shift)).into()
-                })
+            sheet.coverage::<u8>().for_each(|index| {
+                *(*seek_times)[index as usize] = adjusted_offset;
+                *(*redirects)[index as usize] = shift.map(|shift| shift.wrapping_add(index));
             })
-    })
+        });
 }

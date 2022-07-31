@@ -7,7 +7,7 @@ use bound_sequence::*;
 use repeater::*;
 use spline::*;
 
-use crate::{hit::*, utils::*, SongTime, MAX_CHANNELS};
+use crate::{hit::*, utils::*, *};
 use std::{
     marker::PhantomData,
     ops::{Deref, RangeInclusive},
@@ -21,13 +21,13 @@ use tap::tap::Tap;
 pub struct Coverage(u8, u8);
 
 #[derive(Component)]
-pub struct SheetPosition {
+pub struct Sheet {
     pub start: P32,
     pub duration: P32,
     coverage: Coverage,
 }
 
-impl SheetPosition {
+impl Sheet {
     pub fn coverage<T: From<u8>>(&self) -> RangeInclusive<T> {
         self.coverage.0.into()..=self.coverage.1.into()
     }
@@ -38,24 +38,24 @@ impl SheetPosition {
 }
 
 #[derive(Clone, Copy, Component)]
-pub struct Instance<T> {
-    entity: Entity,
+pub struct GenID<T> {
+    id: Entity,
     _phantom: PhantomData<T>,
 }
 
-impl<T> Instance<T> {
-    pub fn new(entity: Entity) -> Self {
+impl<T> GenID<T> {
+    pub fn new(id: Entity) -> Self {
         Self {
-            entity,
+            id,
             _phantom: PhantomData,
         }
     }
 }
 
-impl<T> Deref for Instance<T> {
+impl<T> Deref for GenID<T> {
     type Target = Entity;
     fn deref(&self) -> &Self::Target {
-        &self.entity
+        &self.id
     }
 }
 
@@ -65,35 +65,37 @@ type Luminosity = BoundSequence<bound_sequence::Luminosity>;
 type Scale = BoundSequence<bound_sequence::Scale>;
 type Rotation = BoundSequence<bound_sequence::Rotation>;
 
-struct Beat<'a, T> {
+struct Beat<T> {
     start: P32,
-    entity: &'a T,
+    gen_id: GenID<T>,
     repeat: RepeaterAffinity,
 }
 
-#[derive(Default)]
-struct Harmony<'a> {
+#[derive(SystemParam)]
+struct Harmony<'w, 's> {
     /// Exclusive
-    spline: Option<Beat<'a, Spline>>,
-    automation: Option<Beat<'a, Automation>>,
+    spline: Res<'w, Table<Option<Beat<Spline>>>>,
+    automation: Res<'w, Table<Option<Beat<Automation>>>>,
     /// Exclusive
     /// REQ: Some(_) = anchors
-    color: Option<Beat<'a, Color>>,
-    luminosity: Option<Beat<'a, Luminosity>>,
-    scale: Option<Beat<'a, Scale>>,
-    rotation: Option<Beat<'a, Rotation>>,
+    color: Res<'w, Table<Option<Beat<Color>>>>,
+    luminosity: Res<'w, Table<Option<Beat<Luminosity>>>>,
+    scale: Res<'w, Table<Option<Beat<Scale>>>>,
+    rotation: Res<'w, Table<Option<Beat<Rotation>>>>,
     /// Optional
     /// REQ: Some(_) = anchors && Some(_) = (rotation | scale)
-    geometry_ctrl: Option<Beat<'a, GeometryCtrl>>,
+    geometry_ctrl: Res<'w, Table<Option<Beat<GeometryCtrl>>>>,
+    #[system_param(ignore)]
+    _phantom: PhantomData<&'s ()>,
 }
 
-#[rustfmt::skip]
+/*#[rustfmt::skip]
 #[derive(SystemParam)]
 struct SheetParam<'w, 's, T: Component> {
     entities: Query<'w, 's, &'static T>,
     sheets: Query<'w, 's, (
-        &'static SheetPosition,
-        &'static Instance<T>,
+        &'static Sheet,
+        &'static GenID<T>,
         Option<&'static RepeaterAffinity>,
     )>,
 }
@@ -102,32 +104,33 @@ struct SheetParam<'w, 's, T: Component> {
 impl<'w, 's, T: Component> SheetParam<'w, 's, T> {
     fn add_all<'a>(
         &'a self,
-        time: SongTime,
+        seek_times: [P32; MAX_CHANNELS],
         harmonies: &mut [Harmony<'a>],
         grabber: impl for<'b> Fn(&'b mut Harmony<'a>) -> &'b mut Option<Beat<'a, T>>
     ) {
         self.sheets
             .iter()
-            .filter(|(pos, ..)| f32::EPSILON < pos.duration.raw())
-            .filter(|(pos, ..)| pos.scheduled_at(*time))
-            .for_each(|(pos, instance, affinity)| harmonies[pos.coverage()]
+            .filter(|(sheet, ..)| f32::EPSILON < sheet.duration.raw())
+            .for_each(|(sheet, gen_id, affinity)| harmonies[sheet.coverage()]
                 .iter_mut()
+                .zip(seek_times[sheet.coverage()].iter())
+                .filter(|(seek_time, ..)| sheet.scheduled_at(*time))
                 .for_each(|harmony| *grabber(harmony) = self
                     .entities
-                    .get(**instance)
+                    .get(**gen_id)
                     .ok()
                     .map(|entity| Beat {
                         entity,
-                        start: pos.start,
+                        start: sheet.start,
                         repeat: affinity.copied().unwrap_or_default()
                     })
                 )
             )
     }
-}
+}*/
 
 #[derive(Clone, Copy)]
-enum Modulation {
+pub enum Modulation {
     Nil,
     Position(Vec2),
     Color(Rgba),
@@ -142,19 +145,15 @@ enum Modulation {
     },
 }
 
-trait Synth {
-    fn play_from(
-        &self,
-        offset: P32,
-        response: Response,
-        repetition: Option<Repetition>,
-    ) -> Modulation;
+pub trait Synth {
+    type Output;
+    fn play_from(&self, offset: P32, repetition: Option<Repetition>) -> Self::Output;
 }
 
-#[rustfmt::skip]
+/*#[rustfmt::skip]
 fn produce_modulations(
     time: Res<SongTime>,
-    In(sheet_inputs): In<[(Response, Repetition); MAX_CHANNELS]>,
+    In(sheet_inputs): In<[(Signal, Repetition); MAX_CHANNELS]>,
     splines: SheetParam<Spline>,
     automations: SheetParam<Automation>,
     colors: SheetParam<Color>,
@@ -206,16 +205,13 @@ fn produce_modulations(
     let mut modulations = sheet_inputs
         .iter()
         .zip(harmonies.iter())
-        .map(|((response, repetition), harmony)| (
-            response.redirect,
+        .map(|((signal, repetition), harmony)| (
+            signal.redirect,
             match &harmony {
-                Harmony { spline: Some(Beat { start, entity, repeat }), .. } => entity.play(
-                    *start - if **repeat { repetition.time } else { response.seek_time }
-                ),
+                Harmony { spline: Some(Beat { start, entity, repeat }), .. } => {
+                    todo!()
+                }
                 Harmony { automation: Some(Beat { start, entity, repeat }) , .. } => {
-                    let t = entity.play(
-                        *start - if **repeat { repetition.time } else { response.seek_time }
-                    );
                     match harmony {
                         Harmony {
                             color: Some(Beat { start, entity, repeat }),
@@ -251,4 +247,4 @@ fn produce_modulations(
         ));
 
     [(); MAX_CHANNELS].map(|_| modulations.next().unwrap())
-}
+}*/

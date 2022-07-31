@@ -1,7 +1,9 @@
-use crate::utils::*;
 use bevy::prelude::*;
 use noisy_float::prelude::*;
 use tinyvec::TinyVec;
+
+use super::{repeater::*, Modulation, Synth};
+use crate::{hit::*, utils::*};
 
 pub enum Weight {
     Constant,
@@ -53,12 +55,18 @@ where
 #[derive(Deref, DerefMut, Component)]
 pub struct Automation<T: Default>(pub TinyVec<[Anchor<T>; 6]>);
 
-impl<T> Automation<T>
-where
-    T: Default + Copy + Lerp<Output = T>,
-{
-    pub fn play(&self, offset: P32) -> T {
-        self.interp(offset).unwrap_or_else(|anchor| anchor.val)
+impl Synth for Automation<T32> {
+    type Output = T32;
+
+    #[rustfmt::skip]
+    fn play_from(&self, offset: P32, repetition: Option<Repetition>) -> Self::Output {
+        let Repetition { time, lower_clamp, upper_clamp } = repetition.unwrap_or(Repetition {
+            time: offset,
+            lower_clamp: t32(0.),
+            upper_clamp: t32(1.)
+        });
+
+        lower_clamp.lerp(&upper_clamp, self.interp(time).unwrap_or_else(|anchor| anchor.val))
     }
 }
 
