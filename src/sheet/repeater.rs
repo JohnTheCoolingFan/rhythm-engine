@@ -48,35 +48,32 @@ impl Repetition {
 #[rustfmt::skip]
 fn produce_repetitions(
     song_time: Res<SongTime>,
-    mut seek_times: ResMut<Table<SeekTime>>,
+    seek_times: Res<Table<SeekTime>>,
     mut repetitions: ResMut<Table<Repetition>>,
     repeaters: Query<&Repeater>,
-    gen_ids: Query<(
+    instances: Query<(
         &Sheet,
         &GenID<Repeater>,
     )>,
-)
-{
-    gen_ids
+) {
+    instances
         .iter()
         .filter(|(sheet, _)| f32::EPSILON < sheet.duration.raw())
         .map(|(sheet, gen_id)| (sheet, repeaters.get(**gen_id).unwrap()))
         .filter(|(_, Repeater { period, .. })| f32::EPSILON < period.raw())
-        .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| {
-            sheet.coverage::<usize>().for_each(|index| {
-                if let Some(time) = [*seek_times[index], **song_time]
-                    .iter()
-                    .find(|time| sheet.scheduled_at(**time))
-                {
-                    *seek_times[index] = *time;
-
+        .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| sheet
+            .coverage::<usize>()
+            .for_each(|index| repetitions[index] = [*seek_times[index], **song_time]
+                .iter()
+                .find(|time| sheet.scheduled_at(**time))
+                .map_or(repetitions[index], |time| {
                     let relative_time = *time - sheet.start;
                     let remainder_time = relative_time % period;
                     let division = (relative_time / period).floor();
                     let parity = division.raw() as i32 % 2;
                     let clamp_time = t32(((division * period) / sheet.duration).raw());
 
-                    repetitions[index] = Repetition {
+                    Repetition {
                         upper_clamp: ceil.eval(clamp_time),
                         lower_clamp: floor.eval(clamp_time),
                         time: sheet.start + if *ping_pong && parity == 1 {
@@ -85,7 +82,7 @@ fn produce_repetitions(
                             remainder_time
                         }
                     }
-                }
-            })
-        })
+                })
+            )
+        )
 }

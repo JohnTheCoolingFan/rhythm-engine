@@ -33,9 +33,18 @@ impl Sheet {
     }
 
     pub fn scheduled_at(&self, time: P32) -> bool {
-        (self.start.raw()..self.start.raw() + self.duration.raw()).contains(&time.raw())
+        (self.start.raw()..(self.start + self.duration).raw()).contains(&time.raw())
+    }
+
+    pub fn scheduled_in(&self, min: P32, max: P32) -> bool {
+        self.start <= max && min <= self.start + self.duration
     }
 }
+
+#[derive(Component)]
+struct Primary<T>(T);
+#[derive(Component)]
+struct Secondary<T>(T);
 
 #[derive(Clone, Copy, Component)]
 pub struct GenID<T> {
@@ -65,42 +74,79 @@ type Luminosity = BoundSequence<bound_sequence::Luminosity>;
 type Scale = BoundSequence<bound_sequence::Scale>;
 type Rotation = BoundSequence<bound_sequence::Rotation>;
 
-struct Beat<T> {
-    start: P32,
-    gen_id: GenID<T>,
-    repeat: RepeaterAffinity,
+#[derive(Clone, Copy)]
+pub enum Modulation {
+    Nil,
+    Position(Vec2),
+    Color(Rgba),
+    Luminosity(T32),
+    Scale {
+        magnitude: R32,
+        ctrl: Option<Vec2>,
+    },
+    Rotation {
+        theta: R32,
+        ctrl: Option<Vec2>,
+    },
 }
 
-#[derive(SystemParam)]
-struct Harmony<'w, 's> {
-    /// Exclusive
-    spline: Res<'w, Table<Option<Beat<Spline>>>>,
-    automation: Res<'w, Table<Option<Beat<Automation>>>>,
-    /// Exclusive
-    /// REQ: Some(_) = anchors
-    color: Res<'w, Table<Option<Beat<Color>>>>,
-    luminosity: Res<'w, Table<Option<Beat<Luminosity>>>>,
-    scale: Res<'w, Table<Option<Beat<Scale>>>>,
-    rotation: Res<'w, Table<Option<Beat<Rotation>>>>,
-    /// Optional
-    /// REQ: Some(_) = anchors && Some(_) = (rotation | scale)
-    geometry_ctrl: Res<'w, Table<Option<Beat<GeometryCtrl>>>>,
-    #[system_param(ignore)]
-    _phantom: PhantomData<&'s ()>,
-}
-
-/*#[rustfmt::skip]
-#[derive(SystemParam)]
-struct SheetParam<'w, 's, T: Component> {
-    entities: Query<'w, 's, &'static T>,
-    sheets: Query<'w, 's, (
-        &'static Sheet,
-        &'static GenID<T>,
-        Option<&'static RepeaterAffinity>,
-    )>,
+pub trait Synth {
+    type Output;
+    fn play_from(&self, offset: P32, repetition: Option<Repetition>) -> Self::Output;
 }
 
 #[rustfmt::skip]
+fn arrange<T: Component>(
+    mut arrangement: ResMut<Table<Option<GenID<T>>>>,
+    seek_times: Res<Table<SeekTime>>,
+    repetitions: Res<Table<Repetition>>,
+    delegations: Res<Table<Delegated>>,
+    sources: Query<&T>,
+    instances: Query<(
+        &Sheet,
+        &RepeaterAffinity,
+        &Primary<GenID<T>>,
+        Option<&Secondary<GenID<T>>>,
+    )>,
+) {
+    let [min_time, max_time] = [Iterator::min, Iterator::max].map(|func|
+        func(seek_times.iter().map(|time| **time)).unwrap()
+    );
+
+    instances
+        .iter()
+        .filter(|(sheet, ..)| f32::EPSILON < sheet.duration.raw())
+        .filter(|(sheet, ..)| sheet.scheduled_in(min_time, max_time))
+        .for_each(|(sheet, repeater_affinity, primary, secondary)| {
+            todo!()
+        });
+}
+
+#[derive(SystemParam)]
+struct Arrangement<'w, 's, T: Component> {
+    sources: Query<'w, 's, &'static T>,
+    arrangement: Res<'w, Table<Option<GenID<T>>>>,
+}
+
+fn harmonize(
+    // Exclusive
+    splines: Arrangement<Spline>,
+    automations: Arrangement<Automation>,
+    // Exclusive
+    // REQ: Some(_) = automation
+    colors: Arrangement<Color>,
+    luminosities: Arrangement<Luminosity>,
+    scales: Arrangement<Scale>,
+    rotations: Arrangement<Rotation>,
+    // Optional
+    // REQ: Some(_) = automation && Some(_) = (rotation | scale)
+    geometry_ctrls: Arrangement<GeometryCtrl>,
+    mut modulations: Res<Table<Modulation>>,
+) {
+    todo!()
+}
+
+/*#[rustfmt::skip]
 impl<'w, 's, T: Component> SheetParam<'w, 's, T> {
     fn add_all<'a>(
         &'a self,
@@ -128,27 +174,6 @@ impl<'w, 's, T: Component> SheetParam<'w, 's, T> {
             )
     }
 }*/
-
-#[derive(Clone, Copy)]
-pub enum Modulation {
-    Nil,
-    Position(Vec2),
-    Color(Rgba),
-    Luminosity(T32),
-    Scale {
-        magnitude: R32,
-        ctrl: Option<Vec2>,
-    },
-    Rotation {
-        theta: R32,
-        ctrl: Option<Vec2>,
-    },
-}
-
-pub trait Synth {
-    type Output;
-    fn play_from(&self, offset: P32, repetition: Option<Repetition>) -> Self::Output;
-}
 
 /*#[rustfmt::skip]
 fn produce_modulations(

@@ -40,11 +40,11 @@ pub enum ResponseKind {
     Nil,
     /// Stays at 0 state until hit, once hit which it will commece from the current time
     Commence,
-    /// Switches to a different automation permenantly with a start from the current time
-    Switch(u8),
-    /// Switches to a different automation but will switch back to the original
+    /// Switches to a delegate automation permenantly with a start from the current time
+    Switch,
+    /// Switches to a delegate automation but will switch back to the original
     /// automation on another hit. This can be repeated indefinetly
-    Toggle(u8),
+    Toggle,
     /// Will stay at 0 state with no hit, for each hit it will play the automation
     /// from the hit time to hit time + excess.
     Follow(P32),
@@ -64,7 +64,7 @@ pub enum ResponseState {
 }
 
 #[derive(Default, From, Deref, DerefMut, Clone, Copy)]
-pub struct Redirect(Option<u8>);
+pub struct Delegated(bool);
 
 #[derive(Default, From, Deref, DerefMut, Clone, Copy)]
 pub struct SeekTime(P32);
@@ -79,7 +79,7 @@ fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
 fn respond_to_hits(
     song_time: Res<SongTime>,
     mut seek_times: ResMut<Table<SeekTime>>,
-    mut redirects: ResMut<Table<Redirect>>,
+    mut delegations: ResMut<Table<Delegated>>,
     hits: Res<HitRegister>,
     responses: Query<&Response>,
     mut instances: Query<(
@@ -101,9 +101,9 @@ fn respond_to_hits(
                 .flatten()
                 .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
                 .for_each(|hit| match (kind, &mut *state) {
-                    (Commence | Switch(_), state) => *state = Delegated(true),
-                    (Toggle(_), Delegated(delegate)) => *delegate = !*delegate,
-                    (Toggle(_), state) => *state = Delegated(true),
+                    (Commence | Switch, state) => *state = Delegated(true),
+                    (Toggle, Delegated(delegate)) => *delegate = !*delegate,
+                    (Toggle, state) => *state = Delegated(true),
                     (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
                     _ => {}
                 });
@@ -114,14 +114,14 @@ fn respond_to_hits(
                 _ => **song_time
             };
 
-            let shift = match (kind, &mut *state) {
-                (Switch(shift) | Toggle(shift), Delegated(true)) => Some(*shift),
-                _ => None
+            let delegation = match (kind, &mut *state) {
+                (Switch | Toggle, Delegated(state)) => *state,
+                _ => false
             };
 
             sheet.coverage::<u8>().for_each(|index| {
                 *(*seek_times)[index as usize] = adjusted_offset;
-                *(*redirects)[index as usize] = shift.map(|shift| shift.wrapping_add(index));
+                *(*delegations)[index as usize] = delegation;
             })
         });
 }
