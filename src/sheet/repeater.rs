@@ -25,7 +25,7 @@ pub struct Repeater {
     floor: RepeaterClamp,
 }
 
-#[derive(Default, Deref, Component, Clone, Copy)]
+#[derive(Default, derive_more::Deref, Component, Clone, Copy)]
 pub struct RepeaterAffinity(bool);
 
 #[derive(Clone, Copy)]
@@ -56,6 +56,8 @@ fn produce_repetitions(
         &GenID<Repeater>,
     )>,
 ) {
+    **repetitions = seek_times.map(|seek_time| Repetition::new(*seek_time));
+
     instances
         .iter()
         .filter(|(sheet, _)| f32::EPSILON < sheet.duration.raw())

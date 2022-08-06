@@ -67,7 +67,7 @@ pub enum ResponseState {
 pub struct Delegated(bool);
 
 #[derive(Default, From, Deref, DerefMut, Clone, Copy)]
-pub struct SeekTime(P32);
+pub struct SeekTime(pub P32);
 
 fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
     instances
@@ -88,6 +88,9 @@ fn respond_to_hits(
         &mut ResponseState
     )>,
 ) {
+    **seek_times = seek_times.map(|_| SeekTime(**song_time));
+    **delegations = delegations.map(|_| Delegated(false));
+
     instances
         .iter_mut()
         .filter(|(sheet, ..)| f32::EPSILON < sheet.duration.raw())

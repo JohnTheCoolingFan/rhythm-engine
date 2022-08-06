@@ -210,7 +210,8 @@ impl Synth for Spline {
     fn play_from(
         &self,
         offset: P32,
-        repetition: Option<Repetition>,
+        lower_clamp: T32,
+        upper_clamp: T32,
     )
         -> Modulation
     {

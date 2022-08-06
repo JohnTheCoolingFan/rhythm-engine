@@ -58,15 +58,11 @@ pub struct Automation<T: Default>(pub TinyVec<[Anchor<T>; 6]>);
 impl Synth for Automation<T32> {
     type Output = T32;
 
-    #[rustfmt::skip]
-    fn play_from(&self, offset: P32, repetition: Option<Repetition>) -> Self::Output {
-        let Repetition { time, lower_clamp, upper_clamp } = repetition.unwrap_or(Repetition {
-            time: offset,
-            lower_clamp: t32(0.),
-            upper_clamp: t32(1.)
-        });
-
-        lower_clamp.lerp(&upper_clamp, self.interp(time).unwrap_or_else(|anchor| anchor.val))
+    fn play_from(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Self::Output {
+        lower_clamp.lerp(
+            &upper_clamp,
+            self.interp(offset).unwrap_or_else(|anchor| anchor.val),
+        )
     }
 }
 
