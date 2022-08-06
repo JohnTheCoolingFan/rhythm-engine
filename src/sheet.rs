@@ -26,7 +26,7 @@ pub struct Sheet {
 }
 
 impl Sheet {
-    pub fn coverage<T: From<u8>>(&self) -> RangeInclusive<T> {
+    pub fn coverage(&self) -> RangeInclusive<usize> {
         self.coverage.0.into()..=self.coverage.1.into()
     }
 
@@ -39,10 +39,16 @@ impl Sheet {
     }
 
     #[rustfmt::skip]
-    pub fn scheduled_in<'a>(&'a self, times: &'a [SeekTime]) -> impl Iterator<Item = usize> + '_ {
-        self.coverage::<usize>()
+    pub fn active_in<'a, T>(
+        &'a self,
+        items: &'a [T],
+        key: fn(&'a T) -> P32
+    )
+        -> impl Iterator<Item = usize> + '_
+    {
+        self.coverage()
             .take(if self.duration.raw() < f32::EPSILON { 0 } else { self.span() })
-            .filter(|n| self.scheduled_at(*times[*n]))
+            .filter(move |index| self.scheduled_at(key(&items[*index])))
     }
 }
 
@@ -58,7 +64,6 @@ pub struct GenID<T> {
     id: Entity,
     _phantom: PhantomData<T>,
 }
-
 impl<T> GenID<T> {
     pub fn new(id: Entity) -> Self {
         Self {
@@ -68,6 +73,8 @@ impl<T> GenID<T> {
     }
 }
 
+impl<T> Copy for GenID<T> {}
+
 impl<T> Clone for GenID<T> {
     fn clone(&self) -> Self {
         Self {
@@ -76,14 +83,6 @@ impl<T> Clone for GenID<T> {
         }
     }
 }
-
-impl<T> Copy for GenID<T> {}
-
-type Automation = automation::Automation<T32>;
-type Color = BoundSequence<Rgba>;
-type Luminosity = BoundSequence<bound_sequence::Luminosity>;
-type Scale = BoundSequence<bound_sequence::Scale>;
-type Rotation = BoundSequence<bound_sequence::Rotation>;
 
 #[derive(Clone, Copy)]
 pub enum Modulation {
@@ -103,30 +102,30 @@ pub enum Modulation {
 
 pub trait Synth {
     type Output;
-    fn play_from(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Self::Output;
+    fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Self::Output;
 }
 
 struct Arrangement<T> {
-    gen_id: GenID<T>,
-    index: usize,
+    entity: T,
     offset: P32,
     lower_clamp: T32,
     upper_clamp: T32,
 }
 
-impl<'w, 's, T: Component + Synth> Arrangement<T> {
-    fn eval(self, sources: &Query<'w, 's, &T>) -> <T as Synth>::Output {
-        sources.get(*self.gen_id).unwrap().play_from(
-            self.offset,
-            self.lower_clamp,
-            self.upper_clamp,
-        )
+impl<T, S> Arrangement<T>
+where
+    T: std::ops::Deref<Target = S>,
+    S: Synth,
+{
+    #[rustfmt::skip]
+    fn play(&self) -> S::Output {
+        self.entity.play(self.offset, self.lower_clamp, self.upper_clamp)
     }
 }
 
 #[rustfmt::skip]
 fn arrange<T: Component>(
-    mut arrangements: ResMut<Table<Option<Arrangement<T>>>>,
+    mut arrangements: ResMut<Table<Option<Arrangement<GenID<T>>>>>,
     seek_times: Res<Table<SeekTime>>,
     delegations: Res<Table<Delegated>>,
     repetitions: Res<Table<Repetition>>,
@@ -137,65 +136,108 @@ fn arrange<T: Component>(
         Option<&Secondary<GenID<T>>>,
     )>,
 ) {
-    let repeat_times = (**repetitions).map(|Repetition { time, .. }| SeekTime(time));
+    arrangements.fill_with(|| None);
 
-    instances.iter().for_each(|(sheet, repeated, primary, secondary)| {
-        let arranger = |repeated: bool| {
-            let seek_times = &seek_times;
-            let delegations = &delegations;
-            let repetitions = &repetitions;
-            move |index: usize| {
-                let Repetition { time, lower_clamp, upper_clamp } = repeated
-                    .then(|| repetitions[index])
-                    .unwrap_or_else(|| Repetition {
-                        time: *seek_times[index],
-                        lower_clamp: t32(0.),
-                        upper_clamp: t32(1.)
-                    });
+    instances.iter().for_each(|(sheet, affinity, primary, secondary)| {
+        let regular = sheet
+            .active_in(&**seek_times, |seek_time| **seek_time)
+            .map(|index| (index, Arrangement {
+                lower_clamp: t32(0.),
+                upper_clamp: t32(1.),
+                offset: *seek_times[index] - sheet.start,
+                entity: delegations[index]
+                    .then(|| secondary)
+                    .flatten()
+                    .map_or(**primary, |secondary| **secondary)
+            }));
 
-                Arrangement {
-                    index,
-                    offset: time - sheet.start,
-                    lower_clamp,
-                    upper_clamp,
-                    gen_id: delegations[index]
-                        .then(|| secondary)
-                        .flatten()
-                        .map_or(**primary, |secondary| **secondary)
-                }
-            }
-        };
+        let repeated = sheet
+            .active_in(&**repetitions, |repetition| repetition.time)
+            .map(|index| (index, repetitions[index]))
+            .map(|(index, Repetition { time, lower_clamp, upper_clamp })| (index, Arrangement {
+                lower_clamp,
+                upper_clamp,
+                offset: time - sheet.start,
+                entity: delegations[index]
+                    .then(|| secondary)
+                    .flatten()
+                    .map_or(**primary, |secondary| **secondary)
+            }));
 
-        Some(sheet.scheduled_in(&**seek_times).map(arranger(false)))
-            .into_iter()
-            .chain(repeated.then(|| sheet.scheduled_in(&repeat_times).map(arranger(true))))
-            .flatten()
-            .for_each(|item @ Arrangement { index, .. }| arrangements[index] = Some(item))
+        regular.chain(repeated.take_while(|_| **affinity)).for_each(|(index, arrangement)| {
+            arrangements[index] = Some(arrangement)
+        })
     });
 }
 
 #[derive(SystemParam)]
 struct Composition<'w, 's, T: Component> {
     sources: Query<'w, 's, &'static T>,
-    arrangements: Res<'w, Table<Option<Arrangement<T>>>>,
+    arrangements: Res<'w, Table<Option<Arrangement<GenID<T>>>>>,
 }
 
+#[rustfmt::skip]
+impl<'w, 's, T: Component> Composition<'w, 's, T> {
+    fn get(&self, index: usize) -> Option<Arrangement<&T>> {
+        self.arrangements[index]
+            .as_ref()
+            .map(|&Arrangement { entity, lower_clamp, upper_clamp, offset }| Arrangement {
+                offset,
+                lower_clamp,
+                upper_clamp,
+                entity: self.sources.get(*entity).unwrap(),
+            })
+    }
+}
+
+type Automation = automation::Automation<T32>;
+type Color = BoundSequence<Rgba>;
+type Luminosity = BoundSequence<bound_sequence::Luminosity>;
+type Scale = BoundSequence<bound_sequence::Scale>;
+type Rotation = BoundSequence<bound_sequence::Rotation>;
+
+struct Ensemble<'a> {
+    spline: Option<Arrangement<&'a Spline>>,
+    automation: Option<Arrangement<&'a Automation>>,
+    color: Option<Arrangement<&'a Color>>,
+    luminosity: Option<Arrangement<&'a Luminosity>>,
+    scale: Option<Arrangement<&'a Scale>>,
+    rotation: Option<Arrangement<&'a Rotation>>,
+    geom_ctrl: Option<Arrangement<&'a GeometryCtrl>>,
+}
+
+#[rustfmt::skip]
 fn harmonize(
     // Harmonizer Params
-    // Exclusive
     splines: Composition<Spline>,
     automations: Composition<Automation>,
-    // Exclusive
-    // REQ: Some(_) = automation
     colors: Composition<Color>,
     luminosities: Composition<Luminosity>,
     scales: Composition<Scale>,
     rotations: Composition<Rotation>,
-    // Optional
-    // REQ: Some(_) = automation && Some(_) = (rotation | scale)
     geometry_ctrls: Composition<GeometryCtrl>,
     // System params
-    mut modulations: Res<Table<Modulation>>,
+    mut modulations: ResMut<Table<Modulation>>,
 ) {
-    todo!()
+    modulations.fill_with(|| Modulation::Nil);
+
+    modulations.iter_mut().enumerate().for_each(|(index, modulation)| {
+        *modulation = match (Ensemble {
+            // Exclusive
+            spline: splines.get(index),
+            automation: automations.get(index),
+            // Exclusive
+            // REQ: Some(_) = automation
+            color: colors.get(index),
+            luminosity: luminosities.get(index),
+            scale: scales.get(index),
+            rotation: rotations.get(index),
+            // Optional
+            // REQ: Some(_) = automation && Some(_) = (rotation | scale)
+            geom_ctrl: geometry_ctrls.get(index)
+        }) {
+            Ensemble { spline: Some(spline), .. } => spline.play(),
+            _ => *modulation
+        }
+    })
 }

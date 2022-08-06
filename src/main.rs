@@ -15,6 +15,12 @@ pub const MAX_CHANNELS: usize = 256;
 #[derive(Clone, Copy, Deref, DerefMut, From)]
 pub struct Table<T>([T; MAX_CHANNELS]);
 
+impl<T> Table<T> {
+    pub fn fill_with(&mut self, func: impl Fn() -> T) {
+        self.0 = [(); MAX_CHANNELS].map(|_| func());
+    }
+}
+
 #[derive(Clone, Copy, Deref, DerefMut, From)]
 pub struct SongTime(pub P32);
 

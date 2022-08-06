@@ -64,7 +64,7 @@ fn produce_repetitions(
         .map(|(sheet, gen_id)| (sheet, repeaters.get(**gen_id).unwrap()))
         .filter(|(_, Repeater { period, .. })| f32::EPSILON < period.raw())
         .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| sheet
-            .coverage::<usize>()
+            .coverage()
             .for_each(|index| repetitions[index] = [*seek_times[index], **song_time]
                 .iter()
                 .find(|time| sheet.scheduled_at(**time))

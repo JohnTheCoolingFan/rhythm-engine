@@ -88,8 +88,8 @@ fn respond_to_hits(
         &mut ResponseState
     )>,
 ) {
-    **seek_times = seek_times.map(|_| SeekTime(**song_time));
-    **delegations = delegations.map(|_| Delegated(false));
+    seek_times.fill_with(|| SeekTime(**song_time));
+    delegations.fill_with(|| Delegated(false));
 
     instances
         .iter_mut()
@@ -122,9 +122,9 @@ fn respond_to_hits(
                 _ => false
             };
 
-            sheet.coverage::<u8>().for_each(|index| {
-                *(*seek_times)[index as usize] = adjusted_offset;
-                *(*delegations)[index as usize] = delegation;
+            sheet.coverage().for_each(|index| {
+                *(*seek_times)[index] = adjusted_offset;
+                *(*delegations)[index] = delegation;
             })
         });
 }

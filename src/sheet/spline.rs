@@ -207,7 +207,7 @@ impl Spline {
 impl Synth for Spline {
     type Output = Modulation;
     #[rustfmt::skip]
-    fn play_from(
+    fn play(
         &self,
         offset: P32,
         lower_clamp: T32,

@@ -58,7 +58,7 @@ pub struct Automation<T: Default>(pub TinyVec<[Anchor<T>; 6]>);
 impl Synth for Automation<T32> {
     type Output = T32;
 
-    fn play_from(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Self::Output {
+    fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Self::Output {
         lower_clamp.lerp(
             &upper_clamp,
             self.interp(offset).unwrap_or_else(|anchor| anchor.val),
