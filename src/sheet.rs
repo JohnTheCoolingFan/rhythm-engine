@@ -233,7 +233,7 @@ fn harmonize(
                 .pipe(|color| Modulation::Color(*color)),
 
             // Luminosity
-            Ensemble { automation: Some(clip), luminosity: Some(lumin), .. } => lumin
+            Ensemble { automation: Some(clip), luminosity: Some(luminosity), .. } => luminosity
                 .play()
                 .pipe(|(lower, upper)| lower.lerp(&upper, clip.play()))
                 .pipe(|luminosity| Modulation::Luminosity(*luminosity)),
