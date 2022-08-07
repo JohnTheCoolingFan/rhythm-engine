@@ -31,9 +31,9 @@ impl Default for Weight {
 
 #[derive(Default)]
 pub struct Anchor<T> {
-    x: P32,
-    val: T,
-    weight: Weight,
+    pub x: P32,
+    pub val: T,
+    pub weight: Weight,
 }
 
 impl<T> Quantify for Anchor<T> {

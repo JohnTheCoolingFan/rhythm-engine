@@ -13,7 +13,7 @@ use std::{marker::PhantomData, ops::RangeInclusive};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use derive_more::Deref;
 use noisy_float::prelude::*;
-use tap::tap::Tap;
+use tap::Pipe;
 
 #[derive(Clone, Copy)]
 pub struct Coverage(u8, u8);
@@ -88,16 +88,10 @@ impl<T> Clone for GenID<T> {
 pub enum Modulation {
     Nil,
     Position(Vec2),
-    Color(Rgba),
+    Color([T32; 4]),
     Luminosity(T32),
-    Scale {
-        magnitude: R32,
-        ctrl: Option<Vec2>,
-    },
-    Rotation {
-        theta: R32,
-        ctrl: Option<Vec2>,
-    },
+    Scale { magnitude: R32, ctrl: Option<Vec2> },
+    Rotation { theta: R32, ctrl: Option<Vec2> },
 }
 
 pub trait Synth {
@@ -208,7 +202,6 @@ struct Ensemble<'a> {
 
 #[rustfmt::skip]
 fn harmonize(
-    // Harmonizer Params
     splines: Composition<Spline>,
     automations: Composition<Automation>,
     colors: Composition<Color>,
@@ -216,28 +209,55 @@ fn harmonize(
     scales: Composition<Scale>,
     rotations: Composition<Rotation>,
     geometry_ctrls: Composition<GeometryCtrl>,
-    // System params
     mut modulations: ResMut<Table<Modulation>>,
 ) {
-    modulations.fill_with(|| Modulation::Nil);
-
     modulations.iter_mut().enumerate().for_each(|(index, modulation)| {
-        *modulation = match (Ensemble {
-            // Exclusive
+        let ensemble = Ensemble {
             spline: splines.get(index),
             automation: automations.get(index),
-            // Exclusive
-            // REQ: Some(_) = automation
             color: colors.get(index),
             luminosity: luminosities.get(index),
             scale: scales.get(index),
             rotation: rotations.get(index),
-            // Optional
-            // REQ: Some(_) = automation && Some(_) = (rotation | scale)
             geom_ctrl: geometry_ctrls.get(index)
-        }) {
+        };
+
+        *modulation = match ensemble {
+            // Spline
             Ensemble { spline: Some(spline), .. } => spline.play(),
-            _ => *modulation
+
+            // Color
+            Ensemble { automation: Some(clip), color: Some(color), .. } => color
+                .play()
+                .pipe(|(lower, upper)| lower.lerp(&upper, clip.play()))
+                .pipe(|color| Modulation::Color(*color)),
+
+            // Luminosity
+            Ensemble { automation: Some(clip), luminosity: Some(lumin), .. } => lumin
+                .play()
+                .pipe(|(lower, upper)| lower.lerp(&upper, clip.play()))
+                .pipe(|luminosity| Modulation::Luminosity(*luminosity)),
+
+            // Rotation
+            Ensemble { automation: Some(clip), rotation: Some(rotation), geom_ctrl, .. } => rotation
+                .play()
+                .pipe(|(lower, upper)| lower.lerp(&upper, clip.play()))
+                .pipe(|rotation| Modulation::Rotation {
+                    theta: *rotation,
+                    ctrl: geom_ctrl.map(|arrangement| **arrangement.entity),
+                }),
+
+            // Scale
+            Ensemble { automation: Some(clip), scale: Some(scale), geom_ctrl, .. } => scale
+                .play()
+                .pipe(|(lower, upper)| lower.lerp(&upper, clip.play()))
+                .pipe(|scale| Modulation::Scale {
+                    magnitude: *scale,
+                    ctrl: geom_ctrl.map(|arrangement| **arrangement.entity),
+                }),
+
+            // No Harmony
+            _ => Modulation::Nil
         }
     })
 }

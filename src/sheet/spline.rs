@@ -185,6 +185,7 @@ pub struct Spline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,
     pub automation: Automation<P32>,
+    max_displacement: P32,
 }
 
 impl Spline {
@@ -206,15 +207,7 @@ impl Spline {
 
 impl Synth for Spline {
     type Output = Modulation;
-    #[rustfmt::skip]
-    fn play(
-        &self,
-        offset: P32,
-        lower_clamp: T32,
-        upper_clamp: T32,
-    )
-        -> Modulation
-    {
+    fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Modulation {
         /*Modulation::Position(
             self.lut
                 .interp(self.automation.play(time))

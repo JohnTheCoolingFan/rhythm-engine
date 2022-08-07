@@ -4,14 +4,17 @@ use noisy_float::prelude::*;
 
 use macros::*;
 
-use super::automation::*;
+use super::{
+    automation::*,
+    sheet::{Modulation, Synth},
+};
 use crate::utils::*;
 
 #[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Scale(R32);
 #[derive(Default, Clone, Copy, Deref, DerefMut, Lerp)]
 pub struct Rotation(R32);
-#[derive(Component)]
+#[derive(Component, Deref)]
 pub struct GeometryCtrl(Vec2);
 
 #[derive(Component, Default, Clone, Copy, Deref, DerefMut, Lerp)]
@@ -37,14 +40,22 @@ pub struct BoundSequence<T: Default> {
     lower: Automation<T>,
 }
 
-/*impl<T: Default> BoundSequence<T>
+impl<T> Synth for BoundSequence<T>
 where
-    T: Default + Copy + Quantify + Lerp + Lerp<Output = T>,
+    T: Default + Copy + Lerp + Lerp<Output = T>,
 {
-    pub fn play(&self, offset: P32, t: T32) -> T {
-        self.lower.play(offset).lerp(&self.upper.play(offset), t)
+    type Output = (T, T);
+    fn play(&self, offset: P32, _: T32, _: T32) -> Self::Output {
+        (
+            self.lower
+                .interp(offset)
+                .unwrap_or_else(|anchor| anchor.val),
+            self.upper
+                .interp(offset)
+                .unwrap_or_else(|anchor| anchor.val),
+        )
     }
-}*/
+}
 
 /*#[cfg(test)]
 mod tests {
