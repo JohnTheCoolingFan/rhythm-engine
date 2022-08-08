@@ -8,6 +8,7 @@ use repeater::*;
 use spline::*;
 
 use crate::{hit::*, utils::*, *};
+
 use std::{marker::PhantomData, ops::RangeInclusive};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -164,6 +165,12 @@ fn arrange<T: Component>(
     });
 }
 
+type Automation = automation::Automation<T32>;
+type Color = BoundSequence<Rgba>;
+type Luminosity = BoundSequence<bound_sequence::Luminosity>;
+type Scale = BoundSequence<bound_sequence::Scale>;
+type Rotation = BoundSequence<bound_sequence::Rotation>;
+
 #[derive(SystemParam)]
 struct Composition<'w, 's, T: Component> {
     sources: Query<'w, 's, &'static T>,
@@ -183,12 +190,6 @@ impl<'w, 's, T: Component> Composition<'w, 's, T> {
             })
     }
 }
-
-type Automation = automation::Automation<T32>;
-type Color = BoundSequence<Rgba>;
-type Luminosity = BoundSequence<bound_sequence::Luminosity>;
-type Scale = BoundSequence<bound_sequence::Scale>;
-type Rotation = BoundSequence<bound_sequence::Rotation>;
 
 struct Ensemble<'a> {
     spline: Option<Arrangement<&'a Spline>>,
@@ -212,7 +213,7 @@ fn harmonize(
     mut modulations: ResMut<Table<Modulation>>,
 ) {
     modulations.iter_mut().enumerate().for_each(|(index, modulation)| {
-        let ensemble = Ensemble {
+        *modulation = match (Ensemble {
             spline: splines.get(index),
             automation: automations.get(index),
             color: colors.get(index),
@@ -220,9 +221,7 @@ fn harmonize(
             scale: scales.get(index),
             rotation: rotations.get(index),
             geom_ctrl: geometry_ctrls.get(index)
-        };
-
-        *modulation = match ensemble {
+        }) {
             // Spline
             Ensemble { spline: Some(spline), .. } => spline.play(),
 

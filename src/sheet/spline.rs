@@ -1,3 +1,6 @@
+use super::{automation::*, Modulation, Synth};
+use crate::utils::*;
+
 use core::iter::once as iter_once;
 use std::f32::consts::PI;
 
@@ -5,19 +8,20 @@ use bevy::prelude::*;
 use itertools::Itertools;
 use lyon_geom::*;
 use noisy_float::prelude::*;
-
-use super::{automation::*, repeater::*, Modulation, Synth};
-use crate::{hit::*, utils::*};
+use tap::Pipe;
 
 pub enum Sample {
-    Point {
-        displacement: P32,
-        position: Vec2,
-    },
-    Arc {
-        displacement: P32,
-        center: Vec2,
-    },
+    Point { displacement: P32, position: Vec2 },
+    Arc { displacement: P32, center: Vec2 },
+}
+
+impl Sample {
+    #[rustfmt::skip]
+    fn inner(&self) -> Vec2 {
+        match self {
+            Self::Point { position: point, .. } | Self::Arc { center: point, .. } => *point,
+        }
+    }
 }
 
 impl Quantify for Sample {
@@ -185,7 +189,6 @@ pub struct Spline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,
     pub automation: Automation<P32>,
-    max_displacement: P32,
 }
 
 impl Spline {
@@ -207,16 +210,22 @@ impl Spline {
 
 impl Synth for Spline {
     type Output = Modulation;
+
+    #[rustfmt::skip]
     fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Modulation {
-        /*Modulation::Position(
-            self.lut
-                .interp(self.automation.play(time))
-                .unwrap_or_else(|sample| match sample {
-                    Sample::Arc { center, .. } => *center,
-                    Sample::Point { position, .. } => *position,
-                }),
-        )*/
-        todo!()
+        self.lut
+            .last()
+            .map(|sample| sample.quantify())
+            .filter(|length| *length <= f32::EPSILON)
+            .map_or(Modulation::Nil, |length| self
+                .automation
+                .interp(offset)
+                .unwrap_or_else(|anchor| anchor.val)
+                .pipe(|offset| t32((offset / length).raw()))
+                .pipe(|offset| p32(lower_clamp.lerp(&upper_clamp, offset).raw()) * length)
+                .pipe(|displacement| self.lut.interp(displacement).unwrap_or_else(Sample::inner))
+                .pipe(Modulation::Position)
+            )
     }
 }
 
