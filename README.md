@@ -7,13 +7,15 @@ initially designed for in order to achieve more stimulating, complex and express
 This project aims to create a pointer based rhythm game (similar to osu!) with this in mind.
 The goal is to use linear interpolation tools to enable interesting mechanics.
 The game will feature a first in class editor with tools inspired by Digital Audio Workstations
-to make hyper expressive gameplay creation much easier. Currently with similar things like 
+to make hyper expressive gameplay creation much easier. Currently with similar things like
 osu! storyboards and beatsaber custom levels this is done via scripting which isn't as accessible
 as a good gui editor nor as ergonomic to use.
 
 ---
 Status: ***WIP***
-- [ ] Refactor and port old GGEZ code to Bevy
+- [x] Refactor and port old GGEZ code to Bevy
+- [x] Core tooling refactors
+- [x] Visual programming additions
 - [ ] Editor
 - [ ] Play
 ...

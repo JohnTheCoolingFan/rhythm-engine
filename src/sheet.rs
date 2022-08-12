@@ -228,14 +228,14 @@ fn harmonize(
             // Color
             Ensemble { automation: Some(clip), color: Some(color), .. } => color
                 .play()
-                .pipe(|(lower, upper)| lower.lerp(&upper, clip.play()))
-                .pipe(|color| Modulation::Color(*color)),
+                .pipe(|(lower, upper)| *lower.lerp(&upper, clip.play()))
+                .pipe(Modulation::Color),
 
             // Luminosity
             Ensemble { automation: Some(clip), luminosity: Some(luminosity), .. } => luminosity
                 .play()
-                .pipe(|(lower, upper)| lower.lerp(&upper, clip.play()))
-                .pipe(|luminosity| Modulation::Luminosity(*luminosity)),
+                .pipe(|(lower, upper)| *lower.lerp(&upper, clip.play()))
+                .pipe(Modulation::Luminosity),
 
             // Rotation
             Ensemble { automation: Some(clip), rotation: Some(rotation), geom_ctrl, .. } => rotation
