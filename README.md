@@ -13,9 +13,14 @@ as a good gui editor nor as ergonomic to use.
 
 ---
 Status: ***WIP***
-- [x] Refactor and port old GGEZ code to Bevy
+- [x] Port old GGEZ code to Bevy
 - [x] Core tooling refactors
 - [x] Visual programming additions
 - [ ] Editor
+- [ ] Serialization
 - [ ] Play
+- [ ] Scores
+- [ ] Weighted Scores
+- [ ] Spatial patterns
+- [ ] Rigging
 ...

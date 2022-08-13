@@ -48,6 +48,7 @@ where
     T: Lerp,
 {
     type Output = <T as Lerp>::Output;
+
     fn lerp(&self, next: &Self, t: T32) -> Self::Output {
         self.val.lerp(&next.val, next.weight.eval(t))
     }
@@ -115,8 +116,8 @@ mod tests {
         })
     }
 
-    #[rustfmt::skip]
     #[test]
+    #[rustfmt::skip]
     fn play_automation() {
         let automation = Automation(tiny_vec![
             Anchor { x: p32(0.0), val: t32(0.), weight:  Constant },

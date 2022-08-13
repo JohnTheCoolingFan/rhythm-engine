@@ -24,6 +24,7 @@ pub struct Rgba([T32; 4]);
 
 impl Lerp for Rgba {
     type Output = Self;
+
     fn lerp(&self, other: &Self, t: T32) -> Self::Output {
         let mut iter = self
             .iter()
@@ -45,6 +46,7 @@ where
     T: Default + Copy + Lerp + Lerp<Output = T>,
 {
     type Output = (T, T);
+
     fn play(&self, offset: P32, _: T32, _: T32) -> Self::Output {
         (
             self.lower
@@ -56,31 +58,3 @@ where
         )
     }
 }
-
-/*#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn bounds() -> Vec<ScalarBound<R32>> {
-        vec![
-            ScalarBound {
-                scalar: r32(0.),
-                offset: r32(0.),
-            },
-            ScalarBound {
-                scalar: r32(1.),
-                offset: r32(1.),
-            },
-        ]
-    }
-
-    #[test]
-    fn scalar_bound_sample() {
-        let co_vals = [(0., 0.), (0.5, 0.), (1., 1.), (2., 1.), (3., 1.), (4., 1.)];
-
-        co_vals
-            .iter()
-            .map(|&(input, output)| (r32(input), r32(output)))
-            .for_each(|(input, output)| assert_eq!(bounds().interp_or_last(input), output));
-    }
-}*/
