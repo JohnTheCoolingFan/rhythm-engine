@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 use noisy_float::prelude::*;
-use tinyvec::TinyVec;
+use tinyvec::*;
 
 use super::{repeater::*, Modulation, Synth};
 use crate::{hit::*, utils::*};
 
+#[derive(Clone)]
 pub enum Weight {
     Constant,
     Quadratic(R32),
@@ -48,7 +49,7 @@ where
 {
     type Output = <T as Lerp>::Output;
     fn lerp(&self, next: &Self, t: T32) -> Self::Output {
-        next.val.lerp(&self.val, next.weight.eval(t))
+        self.val.lerp(&next.val, next.weight.eval(t))
     }
 }
 
@@ -69,6 +70,7 @@ impl Synth for Automation<T32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::{assert_eq, assert_ne};
     use Weight::*;
 
     #[test]
@@ -111,5 +113,23 @@ mod tests {
                 assert!(Cubic(weight).eval(t0) <= Cubic(weight).eval(t1));
             })
         })
+    }
+
+    #[rustfmt::skip]
+    #[test]
+    fn play_automation() {
+        let automation = Automation(tiny_vec![
+            Anchor { x: p32(0.0), val: t32(0.), weight:  Constant },
+            Anchor { x: p32(1.0), val: t32(1.0), weight: Quadratic(r32(0.)) },
+            Anchor { x: p32(2.0), val: t32(0.5), weight: Constant },
+            Anchor { x: p32(3.0), val: t32(0.0), weight: Quadratic(r32(0.)) }
+        ]);
+
+        assert_eq!(automation.play(p32(0.0), t32(0.), t32(1.)), 0.0);
+        assert_eq!(automation.play(p32(0.5), t32(0.), t32(1.)), 0.5);
+        assert_eq!(automation.play(p32(1.0), t32(0.), t32(1.)), 1.0);
+        assert_eq!(automation.play(p32(1.5), t32(0.), t32(1.)), 0.5);
+        assert_eq!(automation.play(p32(2.5), t32(0.), t32(1.)), 0.25);
+        assert_eq!(automation.play(p32(3.5), t32(0.), t32(1.)), 0.0);
     }
 }

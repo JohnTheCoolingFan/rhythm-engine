@@ -77,28 +77,28 @@ impl Quantify for P32 {
 
 impl Lerp for R32 {
     type Output = Self;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        *self + (*other - *self) * t.raw()
+    fn lerp(&self, next: &Self, t: T32) -> Self::Output {
+        *self + (*next - *self) * t.raw()
     }
 }
 
 impl Lerp for P32 {
     type Output = Self;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        *self + (*other - *self) * t.raw()
+    fn lerp(&self, next: &Self, t: T32) -> Self::Output {
+        *self + (*next - *self) * t.raw()
     }
 }
 
 impl Lerp for T32 {
     type Output = Self;
-    fn lerp(&self, other: &Self, t: T32) -> Self::Output {
-        *self + (other.raw() - self.raw()) * t.raw()
+    fn lerp(&self, next: &Self, t: T32) -> Self::Output {
+        *self + (next.raw() - self.raw()) * t.raw()
     }
 }
 
 impl FloatExt for P32 {
     fn unit_interval(self, before: Self, after: Self) -> T32 {
-        t32(((self - before) / (after - before)).raw())
+        t32((self.raw().abs() - before.raw().abs()) / (after.raw().abs() - before.raw().abs()))
     }
 }
 
@@ -181,8 +181,9 @@ impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
     {
         let start = self
             .iter()
-            .take_while(|item| offset < item.quantify())
-            .count();
+            .take_while(|item| item.quantify() < offset)
+            .count()
+            .saturating_sub(1);
 
         match &self[start..] {
             [prev, curr, ..] => {
