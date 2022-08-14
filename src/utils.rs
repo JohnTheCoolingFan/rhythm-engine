@@ -61,8 +61,7 @@ pub trait FloatExt {
 
 pub trait Vec2Ext {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
-    /// Returns vec rotated about self
-    fn rotate(&self, vec: &Self, theta: R32) -> Self;
+    fn rotate_about(&self, vec: Self, theta: R32) -> Self;
 }
 
 pub trait MatExt {
@@ -107,13 +106,13 @@ impl Vec2Ext for Vec2 {
         ((end.x - start.x) * (self.y - start.y) - (end.y - start.y) * (self.x - start.x)) > 0.
     }
 
-    fn rotate(&self, vec: &Self, theta: R32) -> Self {
-        let c = theta.raw().to_radians().cos();
-        let s = theta.raw().to_radians().sin();
+    fn rotate_about(&self, vec: Self, radians: R32) -> Self {
+        let c = radians.raw().cos();
+        let s = radians.raw().sin();
 
         Self::new(
-            c * (vec.x - self.x) - s * (vec.y - self.y) + self.x,
-            s * (vec.x - self.x) + c * (vec.y - self.y) + self.y,
+            c * (self.x - vec.x) - s * (self.y - vec.y) + vec.x,
+            s * (self.x - vec.x) + c * (self.y - vec.y) + vec.y,
         )
     }
 }
@@ -199,16 +198,6 @@ pub enum Orientation {
     CounterClockWise,
     CoLinear,
     ClockWise,
-}
-
-impl Orientation {
-    pub fn signum(self) -> f32 {
-        match self {
-            Self::CounterClockWise => 1.,
-            Self::ClockWise => -1.,
-            Self::CoLinear => 1.,
-        }
-    }
 }
 
 pub trait OrientationExt: Iterator<Item = Vec2> + Clone {

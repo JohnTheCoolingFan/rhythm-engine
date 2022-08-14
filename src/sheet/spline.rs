@@ -10,55 +10,49 @@ use lyon_geom::*;
 use noisy_float::prelude::*;
 use tap::Pipe;
 
-#[derive(Debug)]
-pub enum Sample {
-    Point { displacement: P32, position: Vec2 },
-    Arc { meta: R32, center: Vec2 },
+#[derive(Debug, Clone, Copy)]
+pub enum SampleKind {
+    Point,
+    CWArc,
+    CCArc,
 }
 
-impl Sample {
-    #[rustfmt::skip]
-    fn inner(&self) -> Vec2 {
+impl SampleKind {
+    fn signum(self) -> f32 {
         match self {
-            Self::Point { position: point, .. } | Self::Arc { center: point, .. } => *point,
+            Self::CWArc => 1.,
+            Self::CCArc => -1.,
+            Self::Point => unreachable!(),
         }
     }
 }
 
+#[derive(Debug)]
+pub struct Sample {
+    displacement: P32,
+    position: Vec2,
+    kind: SampleKind,
+}
+
 impl Quantify for Sample {
     fn quantify(&self) -> P32 {
-        match self {
-            Self::Point { displacement, .. } => *displacement,
-            Self::Arc { meta, .. } => p32(meta.raw().abs()),
-        }
+        self.displacement
     }
 }
 
 impl Lerp for Sample {
     type Output = Vec2;
+
     #[rustfmt::skip]
     fn lerp(&self, next: &Self, t: T32) -> Self::Output {
-        match (self, next) {
-            // Arc
-            (
-                Sample::Point { position: start, displacement },
-                Sample::Arc { center, meta },
-            ) => {
-                (meta.raw().abs() - displacement.raw())
-                    .pipe(|arc_length| arc_length * t.raw() / center.distance(*start))
-                    .to_degrees()
-                    .pipe(|deg| center.rotate(start, r32(deg * meta.raw().signum())))
+        match (self.kind, next.kind) {
+            (SampleKind::Point, SampleKind::Point) => self.position.lerp(next.position, t.raw()),
+            (SampleKind::Point, SampleKind::CWArc | SampleKind::CCArc)  => {
+                (self.displacement.raw() - next.displacement.raw())
+                    .pipe(|arc_length| arc_length * t.raw() / next.position.distance(self.position))
+                    .pipe(|raw_radians| r32(raw_radians * next.kind.signum()))
+                    .pipe(|radians| self.position.rotate_about(next.position, radians))
             },
-
-            // No Arc
-            (
-                Sample::Point { position: start, .. },
-                Sample::Point { position: end, .. }
-            ) => {
-                start.lerp(*end, t.raw())
-            }
-
-            // Shold not happen
             _ => unreachable!()
         }
     }
@@ -92,9 +86,10 @@ impl Segment {
             .tuple_windows::<(_, _)>()
             .map(|(prev, curr)| {
                 *path_length += prev.distance(curr);
-                Sample::Point {
+                Sample {
                     position: curr,
-                    displacement: *path_length
+                    displacement: *path_length,
+                    kind: SampleKind::Point
                 }
             })
             .collect::<Vec<_>>()
@@ -104,14 +99,15 @@ impl Segment {
         match self.curvature {
             Curvature::Linear => {
                 *path_length += start.distance(self.position);
-                vec![Sample::Point {
+                vec![Sample {
                     position: self.position,
-                    displacement: *path_length
+                    displacement: *path_length,
+                    kind: SampleKind::Point
                 }]
             },
             Curvature::Circular(ctrl) => {
                 let end = self.position;
-                //https://math.stackexchange.com/a/1460096
+                // https://math.stackexchange.com/a/1460096
                 let m11_determinant = [start, ctrl, end]
                     .map(|point| [point.x, point.y, 1.])
                     .into_matrix()
@@ -119,9 +115,10 @@ impl Segment {
 
                 if m11_determinant.abs() <= f32::EPSILON {
                     *path_length += start.distance(self.position);
-                    vec![Sample::Point {
+                    vec![Sample {
                         position: end,
-                        displacement: *path_length
+                        displacement: *path_length,
+                        kind: SampleKind::Point
                     }]
                 } else {
                     let m12 = [start, ctrl, end]
@@ -137,29 +134,37 @@ impl Segment {
                         -0.5 * (m13.determinant() / m11_determinant),
                     );
 
-                    let (a, b) = (center - start, center - end);
-
-                    let theta = match (
-                        [start, ctrl, end].into_iter().orientation(),
-                        [start, center, end].into_iter().orientation(),
-                        (a.dot(b) / (a.length() * b.length())).acos().to_degrees()
-                    ) {
-                        (ctrl_ori, center_ori, theta) if ctrl_ori != center_ori => theta.abs(),
-                        (ctrl_ori, _, theta) => (360. - theta.abs()) * ctrl_ori.signum()
-                    };
-
-                    *path_length += p32(
-                        2. * PI * ((theta.abs() * center.distance(start)).abs() / 360.)
+                    let (center_to_start, center_to_end, ctrl_orientation) = (
+                        center - start,
+                        center - end,
+                        [start, ctrl, end].into_iter().orientation()
                     );
 
+                    let theta = (center_to_start.length() * center_to_end.length())
+                        .pipe(|denominator| center_to_start.dot(center_to_end) / denominator)
+                        .acos()
+                        .abs()
+                        .pipe(|theta| match [start, center, end].into_iter().orientation() {
+                            orientation if orientation != ctrl_orientation => theta,
+                            _ => (360. - theta)
+                        });
+
+                    *path_length += p32(theta * center.distance(start));
+
                     let samples = [
-                        (f32::EPSILON <= center.distance(start)).then(|| Sample::Arc {
-                            meta: r32(path_length.raw() * theta.signum()),
-                            center,
+                        (f32::EPSILON <= center.distance(start)).then(|| Sample {
+                            displacement: *path_length,
+                            position: center,
+                            kind: match ctrl_orientation {
+                                Orientation::CounterClockWise => SampleKind::CCArc,
+                                Orientation::ClockWise => SampleKind::CWArc,
+                                _ => unreachable!()
+                            }
                         }),
-                        Some(Sample::Point {
+                        Some(Sample {
                             displacement: *path_length,
                             position: end,
+                            kind: SampleKind::Point
                         })
                     ];
 
@@ -215,7 +220,13 @@ impl Spline {
             .scan(p32(0.), |state, (prev, curr)| Some(curr.sample(state, prev.position)))
             .flatten();
 
-        self.lut = iter_once(Sample::Point { position: Vec2::new(0., 0.), displacement: p32(0.) })
+        let lut_start = Sample {
+            position: Vec2::new(0., 0.),
+            displacement: p32(0.),
+            kind: SampleKind::Point
+        };
+
+        self.lut = iter_once(lut_start)
             .chain(tail)
             .collect::<Vec<_>>();
     }
@@ -234,9 +245,10 @@ impl Synth for Spline {
                 .automation
                 .interp(offset)
                 .unwrap_or_else(|anchor| anchor.val)
-                .pipe(|offset| t32((offset / length).raw()))
-                .pipe(|offset| p32(lower_clamp.lerp(&upper_clamp, offset).raw()) * length)
-                .pipe(|displacement| self.lut.interp(displacement).unwrap_or_else(Sample::inner))
+                .pipe(|raw_displacement| t32((raw_displacement / length).raw()))
+                .pipe(|ratio| p32(lower_clamp.lerp(&upper_clamp, ratio).raw()) * length)
+                .pipe(|displacement| self.lut .interp(displacement))
+                .unwrap_or_else(|sample| sample.position)
                 .pipe(Modulation::Position)
             )
     }
@@ -245,7 +257,6 @@ impl Synth for Spline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
     use tinyvec::*;
     use Curvature::*;
     use Modulation::*;
@@ -285,11 +296,11 @@ mod tests {
         spline.automation = spline
             .lut
             .last()
-            .map(Quantify::quantify)
-            .map(|length| Anchor { x: length, val: length, weight: Weight::Quadratic(r32(0.)) })
-            .map(|anchor| tiny_vec![Anchor::default(), anchor])
-            .map(Automation)
-            .unwrap();
+            .unwrap()
+            .quantify()
+            .pipe(|length| Anchor { x: length, val: length, weight: Weight::Quadratic(r32(0.)) })
+            .pipe(|anchor| tiny_vec![Anchor::default(), anchor])
+            .pipe(Automation);
 
         let covals = [
             ((0.5, 0.), 0.5),
@@ -298,7 +309,14 @@ mod tests {
             ((1.5, 0.), 2.5),
             ((1., 0.), 3.),
             ((-1., 0.), 5.),
-            //((0., 1.), std::f32::consts::PI / 2. + 5.)
+            ((0., 1.), std::f32::consts::PI / 2. + 5.),
+            ((1., 0.), std::f32::consts::PI + 5.),
+            ((0., 1.), 3. * std::f32::consts::PI / 2. + 5.),
+            ((-1., 0.), 2. * std::f32::consts::PI + 5.),
+            ((-0.5, -0.5), (2. * std::f32::consts::PI + 5.).pipe(|prev|
+                prev + 0.5 * (spline.lut.last().unwrap().quantify().raw() - prev)
+            )),
+            ((0., -1.), spline.lut.last().unwrap().quantify().raw() + 1.)
         ];
 
         covals.iter().for_each(|((x, y), input)| {
@@ -307,7 +325,7 @@ mod tests {
                 let distance = position.distance(expected);
                 assert!(
                     distance < 0.001,
-                    "Input[{input}] Expected[{expected}] Position[{position}] Distance[{distance}]"
+                    "Input: {input} Expected: {expected} Position: {position} Distance: {distance}"
                 )
             } else {
                 panic!("Unexpected Nill")

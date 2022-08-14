@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use noisy_float::prelude::*;
+use tap::Pipe;
 use tinyvec::*;
 
 use super::{repeater::*, Modulation, Synth};
@@ -13,13 +14,20 @@ pub enum Weight {
 }
 
 impl Weight {
+    #[rustfmt::skip]
     pub fn eval(&self, t: T32) -> T32 {
-        let f = |x: f32, k: f32| x.signum() * x.abs().powf((k + k.signum()).abs().powf(k.signum()));
+        let func = |x: f32, k: f32| (k + k.signum())
+            .abs()
+            .powf(k.signum())
+            .pipe(|power| x.signum() * x.abs().powf(power));
 
         match self {
             Weight::Constant => t32(1.),
-            Weight::Quadratic(k) => t32(f(t.raw(), k.raw())),
-            Weight::Cubic(k) => t32(((f(2. * t.raw() - 1., k.raw()) - 1.) / 2.) + 1.),
+            Weight::Quadratic(k) => t32(func(t.raw(), k.raw())),
+            Weight::Cubic(k) => (2. * t.raw() - 1.)
+                .pipe(|x| func(x, k.raw()))
+                .pipe(|output| (output - 1.) / 2. + 1.)
+                .pipe(t32),
         }
     }
 }
