@@ -194,11 +194,21 @@ impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Orientation {
     CounterClockWise,
     CoLinear,
     ClockWise,
+}
+
+impl Orientation {
+    pub fn signum(self) -> f32 {
+        match self {
+            Self::CounterClockWise => 1.,
+            Self::ClockWise => -1.,
+            Self::CoLinear => 1.,
+        }
+    }
 }
 
 pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
@@ -210,8 +220,8 @@ pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
             .map(|(p, q)| (q.x - p.x) * (q.y + p.y))
             .sum::<f32>()
         {
+            sum if sum.abs() <= f32::EPSILON => Orientation::CoLinear,
             sum if sum < 0. => Orientation::CounterClockWise,
-            sum if sum == 0. => Orientation::CoLinear,
             sum if 0. < sum => Orientation::ClockWise,
             _ => unreachable!(),
         }

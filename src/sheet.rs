@@ -85,7 +85,7 @@ impl<T> Clone for GenID<T> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Modulation {
     Nil,
     Position(Vec2),

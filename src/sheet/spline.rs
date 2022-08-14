@@ -10,9 +10,10 @@ use lyon_geom::*;
 use noisy_float::prelude::*;
 use tap::Pipe;
 
+#[derive(Debug)]
 pub enum Sample {
     Point { displacement: P32, position: Vec2 },
-    Arc { displacement: P32, center: Vec2 },
+    Arc { meta: R32, center: Vec2 },
 }
 
 impl Sample {
@@ -27,7 +28,8 @@ impl Sample {
 impl Quantify for Sample {
     fn quantify(&self) -> P32 {
         match self {
-            Self::Point { displacement, .. } | Self::Arc { displacement, .. } => *displacement,
+            Self::Point { displacement, .. } => *displacement,
+            Self::Arc { meta, .. } => p32(meta.raw().abs()),
         }
     }
 }
@@ -37,15 +39,26 @@ impl Lerp for Sample {
     #[rustfmt::skip]
     fn lerp(&self, next: &Self, t: T32) -> Self::Output {
         match (self, next) {
-            (Sample::Point { position: start, .. }, Sample::Point { position: end, .. }) => {
-                start.lerp(*end, t.raw())
+            // Arc
+            (
+                Sample::Point { position: start, displacement },
+                Sample::Arc { center, meta },
+            ) => {
+                (meta.raw().abs() - displacement.raw())
+                    .pipe(|arc_length| arc_length * t.raw() / center.distance(*start))
+                    .to_degrees()
+                    .pipe(|deg| center.rotate(start, r32(deg * meta.raw().signum())))
             },
-            (Sample::Point { position: start, .. }, Sample::Arc { center, displacement }) => {
-                center.rotate(
-                    start,
-                    r32((*displacement / center.distance(*start)).to_degrees().raw())
-                )
+
+            // No Arc
+            (
+                Sample::Point { position: start, .. },
+                Sample::Point { position: end, .. }
+            ) => {
+                start.lerp(*end, t.raw())
             }
+
+            // Shold not happen
             _ => unreachable!()
         }
     }
@@ -131,22 +144,22 @@ impl Segment {
                         [start, center, end].into_iter().orientation(),
                         (a.dot(b) / (a.length() * b.length())).acos().to_degrees()
                     ) {
-                        (ctrl_o, center_o, theta) if ctrl_o != center_o => theta,
-                        (_, _, theta) => theta.signum() * (360. - theta.abs()),
+                        (ctrl_ori, center_ori, theta) if ctrl_ori != center_ori => theta.abs(),
+                        (ctrl_ori, _, theta) => (360. - theta.abs()) * ctrl_ori.signum()
                     };
 
-                    let displacement = p32(
-                        2. * PI * ((theta * center.distance(start)).abs() / 360.)
+                    *path_length += p32(
+                        2. * PI * ((theta.abs() * center.distance(start)).abs() / 360.)
                     );
 
                     let samples = [
                         (f32::EPSILON <= center.distance(start)).then(|| Sample::Arc {
+                            meta: r32(path_length.raw() * theta.signum()),
                             center,
-                            displacement,
                         }),
                         Some(Sample::Point {
+                            displacement: *path_length,
                             position: end,
-                            displacement
                         })
                     ];
 
@@ -216,7 +229,7 @@ impl Synth for Spline {
         self.lut
             .last()
             .map(|sample| sample.quantify())
-            .filter(|length| *length <= f32::EPSILON)
+            .filter(|length| f32::EPSILON < length.raw())
             .map_or(Modulation::Nil, |length| self
                 .automation
                 .interp(offset)
@@ -232,5 +245,73 @@ impl Synth for Spline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_eq;
+    use tinyvec::*;
+    use Curvature::*;
+    use Modulation::*;
+
+    #[test]
+    #[rustfmt::skip]
+    fn play_spline() {
+        let mut spline = Spline {
+            lut: vec![],
+            automation: Automation(tiny_vec![]),
+            path: vec![
+                Segment {
+                    curvature: Linear,
+                    position: Vec2::new(2., 0.),
+                },
+                Segment {
+                    curvature: Linear,
+                    position: Vec2::new(-1., 0.),
+                },
+                Segment {
+                    curvature: Circular(Vec2::new(0., 1.)),
+                    position: Vec2::new(1., 0.),
+                },
+                Segment {
+                    curvature: Circular(Vec2::new(0., 1.)),
+                    position: Vec2::new(-1., 0.),
+                },
+                Segment {
+                    curvature: Cubic(Vec2::new(-1., -1.), Vec2::new(0., 0.)),
+                    position: Vec2::new(0., -1.),
+                },
+            ],
+        };
+
+        spline.resample();
+
+        spline.automation = spline
+            .lut
+            .last()
+            .map(Quantify::quantify)
+            .map(|length| Anchor { x: length, val: length, weight: Weight::Quadratic(r32(0.)) })
+            .map(|anchor| tiny_vec![Anchor::default(), anchor])
+            .map(Automation)
+            .unwrap();
+
+        let covals = [
+            ((0.5, 0.), 0.5),
+            ((1., 0.), 1.),
+            ((1.5, 0.), 1.5),
+            ((1.5, 0.), 2.5),
+            ((1., 0.), 3.),
+            ((-1., 0.), 5.),
+            //((0., 1.), std::f32::consts::PI / 2. + 5.)
+        ];
+
+        covals.iter().for_each(|((x, y), input)| {
+            if let Position(position) = spline.play(p32(*input), t32(0.), t32(1.)) {
+                let expected = Vec2::new(*x, *y);
+                let distance = position.distance(expected);
+                assert!(
+                    distance < 0.001,
+                    "Input[{input}] Expected[{expected}] Position[{position}] Distance[{distance}]"
+                )
+            } else {
+                panic!("Unexpected Nill")
+            }
+        })
+    }
 }
