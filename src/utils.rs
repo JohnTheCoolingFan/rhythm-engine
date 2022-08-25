@@ -64,10 +64,6 @@ pub trait Vec2Ext {
     fn rotate_about(&self, vec: Self, theta: R32) -> Self;
 }
 
-pub trait MatExt {
-    fn into_matrix(self) -> Mat3;
-}
-
 impl Quantify for P32 {
     fn quantify(&self) -> P32 {
         *self
@@ -114,12 +110,6 @@ impl Vec2Ext for Vec2 {
             c * (self.x - vec.x) - s * (self.y - vec.y) + vec.x,
             s * (self.x - vec.x) + c * (self.y - vec.y) + vec.y,
         )
-    }
-}
-
-impl MatExt for [[f32; 3]; 3] {
-    fn into_matrix(self) -> Mat3 {
-        Mat3::from_cols_array_2d(&self).transpose()
     }
 }
 

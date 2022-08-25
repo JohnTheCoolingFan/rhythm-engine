@@ -223,7 +223,9 @@ fn harmonize(
             geom_ctrl: geometry_ctrls.get(index)
         }) {
             // Spline
-            Ensemble { spline: Some(spline), .. } => spline.play(),
+            Ensemble { automation: Some(clip), spline: Some(spline), .. } => clip
+                .play()
+                .pipe(|t| spline.entity.play(t)),
 
             // Color
             Ensemble { automation: Some(clip), color: Some(color), .. } => color

@@ -110,7 +110,8 @@ impl Segment {
                 // https://math.stackexchange.com/a/1460096
                 let m11_determinant = [start, ctrl, end]
                     .map(|point| [point.x, point.y, 1.])
-                    .into_matrix()
+                    .pipe_ref(Mat3::from_cols_array_2d)
+                    .transpose()
                     .determinant();
 
                 if m11_determinant.abs() <= f32::EPSILON {
@@ -123,11 +124,13 @@ impl Segment {
                 } else {
                     let m12 = [start, ctrl, end]
                         .map(|point| [point.x.powi(2) + point.y.powi(2), point.y, 1.])
-                        .into_matrix();
+                        .pipe_ref(Mat3::from_cols_array_2d)
+                        .transpose();
 
                     let m13 = [start, ctrl, end]
                         .map(|point| [point.x.powi(2) + point.y.powi(2), point.x, 1.])
-                        .into_matrix();
+                        .pipe_ref(Mat3::from_cols_array_2d)
+                        .transpose();
 
                     let center = Vec2::new(
                         0.5 * (m12.determinant() / m11_determinant),
@@ -206,48 +209,39 @@ impl Segment {
 pub struct Spline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,
-    pub automation: Automation<P32>,
 }
 
 impl Spline {
     #[rustfmt::skip]
     pub fn resample(&mut self) {
-        let head = Segment { curvature: Curvature::Linear, position: Vec2::new(0., 0.) };
+        let start = Segment { curvature: Curvature::Linear, position: Vec2::new(0., 0.) };
 
-        let tail = iter_once(&head)
-            .chain(self.path.iter())
-            .tuple_windows::<(_, _)>()
-            .scan(p32(0.), |state, (prev, curr)| Some(curr.sample(state, prev.position)))
-            .flatten();
-
-        let lut_start = Sample {
+        let head = Sample {
             position: Vec2::new(0., 0.),
             displacement: p32(0.),
             kind: SampleKind::Point
         };
 
-        self.lut = iter_once(lut_start)
+        let tail = iter_once(&start)
+            .chain(self.path.iter())
+            .tuple_windows::<(_, _)>()
+            .scan(p32(0.), |state, (prev, curr)| Some(curr.sample(state, prev.position)))
+            .flatten();
+
+        self.lut = iter_once(head)
             .chain(tail)
             .collect::<Vec<_>>();
     }
-}
-
-impl Synth for Spline {
-    type Output = Modulation;
 
     #[rustfmt::skip]
-    fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Modulation {
+    pub fn play(&self, t: T32) -> Modulation {
         self.lut
             .last()
             .map(|sample| sample.quantify())
             .filter(|length| f32::EPSILON < length.raw())
             .map_or(Modulation::Nil, |length| self
-                .automation
-                .interp(offset)
-                .unwrap_or_else(|anchor| anchor.val)
-                .pipe(|raw_displacement| t32((raw_displacement / length).raw()))
-                .pipe(|ratio| p32(lower_clamp.lerp(&upper_clamp, ratio).raw()) * length)
-                .pipe(|displacement| self.lut .interp(displacement))
+                .lut
+                .interp(length * t.raw())
                 .unwrap_or_else(|sample| sample.position)
                 .pipe(Modulation::Position)
             )
@@ -266,7 +260,6 @@ mod tests {
     fn play_spline() {
         let mut spline = Spline {
             lut: vec![],
-            automation: Automation(tiny_vec![]),
             path: vec![
                 Segment {
                     curvature: Linear,
@@ -293,14 +286,15 @@ mod tests {
 
         spline.resample();
 
-        spline.automation = spline
-            .lut
-            .last()
-            .unwrap()
-            .quantify()
-            .pipe(|length| Anchor { x: length, val: length, weight: Weight::Quadratic(r32(0.)) })
-            .pipe(|anchor| tiny_vec![Anchor::default(), anchor])
-            .pipe(Automation);
+        let (length, q_turn) = (
+            spline.lut.last().unwrap().quantify(),
+            std::f32::consts::PI / 2.
+        );
+
+        let automation = Automation(tiny_vec![
+            Anchor::default(),
+            Anchor { x: length, val: t32(1.), weight: Weight::Quadratic(r32(0.)) }
+        ]);
 
         let covals = [
             ((0.5, 0.), 0.5),
@@ -309,23 +303,27 @@ mod tests {
             ((1.5, 0.), 2.5),
             ((1., 0.), 3.),
             ((-1., 0.), 5.),
-            ((0., 1.), std::f32::consts::PI / 2. + 5.),
-            ((1., 0.), std::f32::consts::PI + 5.),
-            ((0., 1.), 3. * std::f32::consts::PI / 2. + 5.),
-            ((-1., 0.), 2. * std::f32::consts::PI + 5.),
-            ((-0.5, -0.5), (2. * std::f32::consts::PI + 5.).pipe(|prev|
-                prev + 0.5 * (spline.lut.last().unwrap().quantify().raw() - prev)
-            )),
+            ((0., 1.), q_turn + 5.),
+            ((1., 0.), 2. * q_turn + 5.),
+            ((0., 1.), 3. * q_turn + 5.),
+            ((-1., 0.), 4. * q_turn + 5.),
+            ((-0.5, -0.5), (4. * q_turn + 5.).pipe(|prev| prev + 0.5 * (length.raw() - prev))),
             ((0., -1.), spline.lut.last().unwrap().quantify().raw() + 1.)
         ];
 
-        covals.iter().for_each(|((x, y), input)| {
-            if let Position(position) = spline.play(p32(*input), t32(0.), t32(1.)) {
+        covals.iter().for_each(|((x, y), displacement)| {
+            if let Position(position) = automation
+                .play(p32(*displacement), t32(0.), t32(1.))
+                .pipe(|t| spline.play(t))
+            {
                 let expected = Vec2::new(*x, *y);
                 let distance = position.distance(expected);
                 assert!(
                     distance < 0.001,
-                    "Input: {input} Expected: {expected} Position: {position} Distance: {distance}"
+                    "Input: {displacement}
+                    Expected: {expected}
+                    Position: {position}
+                    Distance: {distance}"
                 )
             } else {
                 panic!("Unexpected Nill")
