@@ -1,10 +1,10 @@
 mod automation;
-mod bound_sequence;
 mod repeater;
+mod sequence;
 mod spline;
 
-use bound_sequence::*;
 use repeater::*;
+use sequence::*;
 use spline::*;
 
 use crate::{hit::*, utils::*, *};
@@ -16,14 +16,32 @@ use derive_more::Deref;
 use noisy_float::prelude::*;
 use tap::Pipe;
 
+pub const MAX_CHANNELS: usize = 256;
+
+#[derive(Deref, DerefMut, From, Clone, Copy)]
+pub struct Table<T>([T; MAX_CHANNELS]);
+
+impl<T> Table<T> {
+    pub fn fill_with(&mut self, func: impl Fn() -> T) {
+        self.0 = [(); MAX_CHANNELS].map(|_| func());
+    }
+}
+
+pub struct TimeTable {
+    pub song_time: P32,
+    pub seek_times: Table<P32>,
+    pub delegations: Table<Delegated>,
+    pub repetitions: Table<Repetition>,
+}
+
 #[derive(Clone, Copy)]
-pub struct Coverage(u8, u8);
+pub struct Coverage(pub u8, pub u8);
 
 #[derive(Component)]
 pub struct Sheet {
     pub start: P32,
     pub duration: P32,
-    coverage: Coverage,
+    pub coverage: Coverage,
 }
 
 impl Sheet {
@@ -53,12 +71,6 @@ impl Sheet {
     }
 }
 
-#[derive(Clone, Copy, Component, Deref)]
-struct Primary<T>(T);
-
-#[derive(Clone, Copy, Component, Deref)]
-struct Secondary<T>(T);
-
 #[derive(Component, Deref)]
 pub struct GenID<T> {
     #[deref]
@@ -74,8 +86,6 @@ impl<T> GenID<T> {
     }
 }
 
-impl<T> Copy for GenID<T> {}
-
 impl<T> Clone for GenID<T> {
     fn clone(&self) -> Self {
         Self {
@@ -85,14 +95,22 @@ impl<T> Clone for GenID<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Modulation {
-    Nil,
-    Position(Vec2),
-    Color([T32; 4]),
-    Luminosity(T32),
-    Scale { magnitude: R32, ctrl: Option<Vec2> },
-    Rotation { theta: R32, ctrl: Option<Vec2> },
+impl<T> Copy for GenID<T> {}
+
+#[derive(Clone, Copy, Component)]
+struct Sources<T> {
+    primary: GenID<T>,
+    secondary: Option<GenID<T>>,
+}
+
+impl<T: Component> Sources<T> {
+    #[rustfmt::skip]
+    fn get(self, delegate: bool) -> Entity {
+        match self {
+            Self { secondary: Some(gen_id), .. } if delegate => *gen_id,
+            Self { primary: gen_id, .. } => *gen_id,
+        }
+    }
 }
 
 pub trait Synth {
@@ -100,7 +118,18 @@ pub trait Synth {
     fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Self::Output;
 }
 
-struct Arrangement<T> {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Modulation {
+    Position(Vec2),
+    Color([T32; 4]),
+    Luminosity(T32),
+    Scale { magnitude: R32, ctrl: Option<Vec2> },
+    Rotation { theta: R32, ctrl: Option<Vec2> },
+    Partial {},
+}
+
+pub enum SynthProduce {}
+/*struct Arrangement<T> {
     entity: T,
     offset: P32,
     lower_clamp: T32,
@@ -171,46 +200,26 @@ type Luminosity = BoundSequence<bound_sequence::Luminosity>;
 type Scale = BoundSequence<bound_sequence::Scale>;
 type Rotation = BoundSequence<bound_sequence::Rotation>;
 
-#[derive(SystemParam)]
-struct Composition<'w, 's, T: Component> {
-    sources: Query<'w, 's, &'static T>,
-    arrangements: Res<'w, Table<Option<Arrangement<GenID<T>>>>>,
-}
-
-#[rustfmt::skip]
-impl<'w, 's, T: Component> Composition<'w, 's, T> {
-    fn get(&self, index: usize) -> Option<Arrangement<&T>> {
-        self.arrangements[index]
-            .as_ref()
-            .map(|&Arrangement { entity, lower_clamp, upper_clamp, offset }| Arrangement {
-                offset,
-                lower_clamp,
-                upper_clamp,
-                entity: self.sources.get(*entity).unwrap(),
-            })
-    }
-}
-
-struct Ensemble<'a> {
-    spline: Option<Arrangement<&'a Spline>>,
-    automation: Option<Arrangement<&'a Automation>>,
-    color: Option<Arrangement<&'a Color>>,
-    luminosity: Option<Arrangement<&'a Luminosity>>,
-    scale: Option<Arrangement<&'a Scale>>,
-    rotation: Option<Arrangement<&'a Rotation>>,
-    geom_ctrl: Option<Arrangement<&'a GeometryCtrl>>,
-}
-
 #[rustfmt::skip]
 fn harmonize(
-    splines: Composition<Spline>,
-    automations: Composition<Automation>,
-    colors: Composition<Color>,
-    luminosities: Composition<Luminosity>,
-    scales: Composition<Scale>,
-    rotations: Composition<Rotation>,
-    geometry_ctrls: Composition<GeometryCtrl>,
     mut modulations: ResMut<Table<Modulation>>,
+    automations: Query<(
+        &Sheet,
+        Option<&RepeaterAffinity>,
+        &Sources<Automation>,
+    )>,
+    synths: Query<(
+        &Sheet,
+        Option<&RepeaterAffinity>,
+        AnyOf<(
+            &Sources<Spline>,
+            &Sources<Color>,
+            &Sources<Luminosity>,
+            &Sources<Scale>,
+            &Sources<Rotation>,
+            &Sources<GeometryCtrl>,
+        )>,
+    )>,
 ) {
     modulations.iter_mut().enumerate().for_each(|(index, modulation)| {
         *modulation = match (Ensemble {
@@ -223,9 +232,9 @@ fn harmonize(
             geom_ctrl: geometry_ctrls.get(index)
         }) {
             // Spline
-            Ensemble { automation: Some(clip), spline: Some(spline), .. } => clip
-                .play()
-                .pipe(|t| spline.entity.play(t)),
+            Ensemble { automation: Some(clip), spline: Some(spline), .. } => spline
+                .entity
+                .play(clip.play()),
 
             // Color
             Ensemble { automation: Some(clip), color: Some(color), .. } => color
@@ -261,4 +270,4 @@ fn harmonize(
             _ => Modulation::Nil
         }
     })
-}
+}*/

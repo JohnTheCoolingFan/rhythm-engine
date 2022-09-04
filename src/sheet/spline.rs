@@ -1,8 +1,6 @@
-use super::{automation::*, Modulation, Synth};
 use crate::utils::*;
 
 use core::iter::once as iter_once;
-use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use itertools::Itertools;
@@ -211,8 +209,8 @@ pub struct Spline {
     pub lut: Vec<Sample>,
 }
 
+#[rustfmt::skip]
 impl Spline {
-    #[rustfmt::skip]
     pub fn resample(&mut self) {
         let start = Segment { curvature: Curvature::Linear, position: Vec2::new(0., 0.) };
 
@@ -233,27 +231,25 @@ impl Spline {
             .collect::<Vec<_>>();
     }
 
-    #[rustfmt::skip]
-    pub fn play(&self, t: T32) -> Modulation {
+    pub fn play(&self, t: T32) -> Vec2 {
         self.lut
             .last()
             .map(|sample| sample.quantify())
             .filter(|length| f32::EPSILON < length.raw())
-            .map_or(Modulation::Nil, |length| self
+            .map_or(Vec2::default(), |length| self
                 .lut
                 .interp(length * t.raw())
                 .unwrap_or_else(|sample| sample.position)
-                .pipe(Modulation::Position)
             )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::{automation::*, Synth};
     use super::*;
     use tinyvec::*;
     use Curvature::*;
-    use Modulation::*;
 
     #[test]
     #[rustfmt::skip]
@@ -286,7 +282,7 @@ mod tests {
 
         spline.resample();
 
-        let (length, q_turn) = (
+        let (length, qcw_turn) = (
             spline.lut.last().unwrap().quantify(),
             std::f32::consts::PI / 2.
         );
@@ -303,31 +299,28 @@ mod tests {
             ((1.5, 0.), 2.5),
             ((1., 0.), 3.),
             ((-1., 0.), 5.),
-            ((0., 1.), q_turn + 5.),
-            ((1., 0.), 2. * q_turn + 5.),
-            ((0., 1.), 3. * q_turn + 5.),
-            ((-1., 0.), 4. * q_turn + 5.),
-            ((-0.5, -0.5), (4. * q_turn + 5.).pipe(|prev| prev + 0.5 * (length.raw() - prev))),
+            ((0., 1.), qcw_turn + 5.),
+            ((1., 0.), 2. * qcw_turn + 5.),
+            ((0., 1.), 3. * qcw_turn + 5.),
+            ((-1., 0.), 4. * qcw_turn + 5.),
+            ((-0.5, -0.5), (4. * qcw_turn + 5.).pipe(|prev| prev + 0.5 * (length.raw() - prev))),
             ((0., -1.), spline.lut.last().unwrap().quantify().raw() + 1.)
         ];
 
         covals.iter().for_each(|((x, y), displacement)| {
-            if let Position(position) = automation
+            let position = automation
                 .play(p32(*displacement), t32(0.), t32(1.))
-                .pipe(|t| spline.play(t))
-            {
-                let expected = Vec2::new(*x, *y);
-                let distance = position.distance(expected);
-                assert!(
-                    distance < 0.001,
-                    "Input: {displacement}
-                    Expected: {expected}
-                    Position: {position}
-                    Distance: {distance}"
-                )
-            } else {
-                panic!("Unexpected Nill")
-            }
+                .pipe(|t| spline.play(t));
+
+            let expected = Vec2::new(*x, *y);
+            let distance = position.distance(expected);
+            assert!(
+                distance < 0.001,
+                "Input: {displacement}
+                Expected: {expected}
+                Position: {position}
+                Distance: {distance}"
+            )
         })
     }
 }

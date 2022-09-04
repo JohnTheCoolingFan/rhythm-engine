@@ -38,12 +38,12 @@ pub struct HitRegister(pub [Option<HitInfo>; 4]);
 #[derive(Component)]
 pub enum ResponseKind {
     Nil,
-    /// Stays at 0 state until hit, once hit which it will commece from the current time
+    /// Stays at 0 state until hit, once hit which it will commece from the current time.
     Commence,
-    /// Switches to a delegate automation permenantly with a start from the current time
+    /// Switches to a delegate automation permenantly.
     Switch,
     /// Switches to a delegate automation but will switch back to the original
-    /// automation on another hit. This can be repeated indefinetly
+    /// automation on another hit. This can be repeated indefinetly.
     Toggle,
     /// Will stay at 0 state with no hit, for each hit it will play the automation
     /// from the hit time to hit time + excess.
@@ -66,9 +66,6 @@ pub enum ResponseState {
 #[derive(Default, From, Deref, DerefMut, Clone, Copy)]
 pub struct Delegated(bool);
 
-#[derive(Default, From, Deref, DerefMut, Clone, Copy)]
-pub struct SeekTime(pub P32);
-
 fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
     instances
         .iter_mut()
@@ -77,25 +74,23 @@ fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
 
 #[rustfmt::skip]
 fn respond_to_hits(
-    song_time: Res<SongTime>,
-    mut seek_times: ResMut<Table<SeekTime>>,
-    mut delegations: ResMut<Table<Delegated>>,
     hits: Res<HitRegister>,
-    responses: Query<&Response>,
-    mut instances: Query<(
+    mut time_table: ResMut<TimeTable>,
+    mut responses: Query<(
         &Sheet,
-        &GenID<Response>,
+        &Response,
         &mut ResponseState
     )>,
 ) {
-    seek_times.fill_with(|| SeekTime(**song_time));
-    delegations.fill_with(|| Delegated(false));
+    let song_time = time_table.song_time;
 
-    instances
+    time_table.seek_times.fill_with(|| song_time);
+    time_table.delegations.fill_with(|| Delegated(false));
+
+    responses
         .iter_mut()
         .filter(|(sheet, ..)| f32::EPSILON < sheet.duration.raw())
-        .filter(|(sheet, ..)| sheet.scheduled_at(**song_time))
-        .map(|(sheet, gen_id, state)| (sheet, responses.get(**gen_id).unwrap() ,state))
+        .filter(|(sheet, ..)| sheet.scheduled_at(song_time))
         .for_each(|(sheet, Response { kind, layer }, mut state)| {
             use ResponseKind::*;
             use ResponseState::*;
@@ -113,8 +108,8 @@ fn respond_to_hits(
 
             let adjusted_offset = match (kind, &*state) {
                 (Commence, Delegated(delegate)) if !delegate => sheet.start,
-                (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&**song_time) => hit + ex,
-                _ => **song_time
+                (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&song_time) => hit + ex,
+                _ => song_time
             };
 
             let delegation = match (kind, &mut *state) {
@@ -123,8 +118,56 @@ fn respond_to_hits(
             };
 
             sheet.coverage().for_each(|index| {
-                *(*seek_times)[index] = adjusted_offset;
-                *(*delegations)[index] = delegation;
+                time_table.seek_times[index] = adjusted_offset;
+                *time_table.delegations[index] = delegation;
             })
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[rustfmt::skip]
+    fn hit_responses() {
+        let mut app = App::new();
+
+        /*app.insert_resource(Table::<SeekTime>);
+        app.insert_resource(Table::<Delegated>);
+        app.insert_resource(HitRegister);*/
+
+        app.world.spawn_batch([
+            (
+                Sheet { start: p32(0.), duration:  p32(1000.), coverage: Coverage(0, 0) },
+                Response { kind: ResponseKind::Commence, layer: 0 }
+            ),
+            (
+                Sheet { start: p32(300.), duration:  p32(1000.), coverage: Coverage(1, 1) },
+                Response { kind: ResponseKind::Commence, layer: 1 }
+            ),
+            (
+                Sheet { start: p32(300.), duration:  p32(1000.), coverage: Coverage(2, 2) },
+                Response { kind: ResponseKind::Switch, layer: 2 }
+            ),
+            (
+                Sheet { start: p32(300.), duration:  p32(1000.), coverage: Coverage(3, 3) },
+                Response { kind: ResponseKind::Toggle, layer: 3 }
+            ),
+            (
+                Sheet { start: p32(300.), duration:  p32(1000.), coverage: Coverage(4, 4) },
+                Response { kind: ResponseKind::Follow(p32(200.)), layer: 4 }
+            ),
+        ]);
+
+        let hit = HitInfo {
+            object_time: p32(200.),
+            hit_time: p32(300.),
+            layer: 3,
+        };
+
+        //app.insert_resource(SongTime(p32(500.)));
+
+        app.update()
+    }
 }
