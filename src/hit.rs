@@ -75,17 +75,17 @@ fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
 #[rustfmt::skip]
 fn respond_to_hits(
     hits: Res<HitRegister>,
-    mut time_table: ResMut<TimeTable>,
+    mut time_tables: ResMut<TimeTables>,
     mut responses: Query<(
         &Sheet,
         &Response,
         &mut ResponseState
     )>,
 ) {
-    let song_time = time_table.song_time;
+    let song_time = time_tables.song_time;
 
-    time_table.seek_times.fill_with(|| song_time);
-    time_table.delegations.fill_with(|| Delegated(false));
+    time_tables.seek_times.fill_with(|| song_time);
+    time_tables.delegations.fill_with(|| Delegated(false));
 
     responses
         .iter_mut()
@@ -118,8 +118,8 @@ fn respond_to_hits(
             };
 
             sheet.coverage().for_each(|index| {
-                time_table.seek_times[index] = adjusted_offset;
-                *time_table.delegations[index] = delegation;
+                time_tables.seek_times[index] = adjusted_offset;
+                *time_tables.delegations[index] = delegation;
             })
         });
 }

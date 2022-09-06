@@ -3,8 +3,7 @@ use noisy_float::prelude::*;
 use tap::Pipe;
 use tinyvec::*;
 
-use super::{repeater::*, Modulation, Synth};
-use crate::{hit::*, utils::*};
+use crate::utils::*;
 
 #[derive(Clone)]
 pub enum Weight {
@@ -65,14 +64,11 @@ where
 #[derive(Deref, DerefMut, Component)]
 pub struct Automation<T: Default>(pub TinyVec<[Anchor<T>; 6]>);
 
-impl Synth for Automation<T32> {
-    type Output = T32;
-
-    fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> Self::Output {
-        lower_clamp.lerp(
-            &upper_clamp,
-            self.interp(offset).unwrap_or_else(|anchor| anchor.val),
-        )
+impl Automation<T32> {
+    pub fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> T32 {
+        self.interp(offset)
+            .unwrap_or_else(|anchor| anchor.val)
+            .pipe(|t| lower_clamp.lerp(&upper_clamp, t))
     }
 }
 

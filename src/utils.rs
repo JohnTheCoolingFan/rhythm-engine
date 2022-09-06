@@ -84,7 +84,7 @@ impl<Checker: FloatChecker<f32>> CompletionRatio for NoisyFloat<f32, Checker> {
 
 impl Vec2Ext for Vec2 {
     fn is_left(&self, start: &Self, end: &Self) -> bool {
-        0. < ((end.x - start.x) * (self.y - start.y) - (end.y - start.y) * (self.x - start.x))
+        0. < (end.x - start.x) * (self.y - start.y) - (end.y - start.y) * (self.x - start.x)
     }
 
     fn rotate_about(&self, vec: Self, radians: R32) -> Self {
@@ -99,9 +99,7 @@ impl Vec2Ext for Vec2 {
 }
 
 pub trait ControlTable<'a, T> {
-    fn seek(self, to: impl Quantify) -> usize;
-    fn can_skip_reindex(self, offset: P32) -> bool;
-    fn reindex_through(self, offset: P32, old: usize) -> usize;
+    fn at_or_after(self, offset: P32) -> &'a [T];
     fn interp(self, offset: P32) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp;
@@ -109,62 +107,25 @@ pub trait ControlTable<'a, T> {
 
 /// Must be non-empty and sorted
 impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
-    fn seek(self, to: impl Quantify) -> usize {
-        let index = self
-            .binary_search_by(|item| item.quantify().cmp(&to.quantify()))
-            .unwrap_or_else(|index| match index {
-                0 => 0,
-                index if self.len() <= index => self.len() - 1,
-                _ => index - 1,
-            });
-
-        let found = &self[index];
-
-        let to_skip = self
-            .iter()
-            .skip(index + 1)
-            .take_while(|item| found.quantify() == item.quantify())
-            .count();
-
-        index + to_skip
-    }
-
-    fn can_skip_reindex(self, offset: P32) -> bool {
-        self.last().map_or(true, |item| item.quantify() < offset)
-    }
-
-    #[rustfmt::skip]
-    fn reindex_through(self, offset: P32, old: usize) -> usize {
+    fn at_or_after(self, offset: P32) -> &'a [T] {
         self.iter()
-            .enumerate()
-            .skip(old)
-            .coalesce(|prev, curr| (prev.1.quantify() == curr.1.quantify())
-                .then(|| curr)
-                .ok_or((prev, curr))
-            )
-            .take(4)
-            .take_while(|(_, item)| item.quantify() < offset)
-            .last()
-            .map(|(index, _)| index)
-            .unwrap_or_else(|| self.seek(offset))
+            .take_while(|item| item.quantify() < offset)
+            .count()
+            .saturating_sub(1)
+            .pipe(|start| &self[start..])
     }
 
     fn interp(self, offset: P32) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp,
     {
-        let start = self
-            .iter()
-            .take_while(|item| item.quantify() < offset)
-            .count()
-            .saturating_sub(1);
-
-        match &self[start..] {
+        match self.at_or_after(offset) {
+            [single] => Err(single),
             [prev, curr, ..] => offset
                 .completion_ratio(prev.quantify(), curr.quantify())
                 .pipe(|t| prev.lerp(curr, t))
                 .pipe(Ok),
-            _ => Err(self.last().unwrap()),
+            _ => panic!("Unexpected existing no item control table"),
         }
     }
 }

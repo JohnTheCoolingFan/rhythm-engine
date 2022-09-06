@@ -246,7 +246,7 @@ impl Spline {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{automation::*, Synth};
+    use super::super::automation::*;
     use super::*;
     use tinyvec::*;
     use Curvature::*;
@@ -308,10 +308,7 @@ mod tests {
         ];
 
         covals.iter().for_each(|((x, y), displacement)| {
-            let position = automation
-                .play(p32(*displacement), t32(0.), t32(1.))
-                .pipe(|t| spline.play(t));
-
+            let position = spline.play(automation.play(p32(*displacement), t32(0.), t32(1.)));
             let expected = Vec2::new(*x, *y);
             let distance = position.distance(expected);
             assert!(

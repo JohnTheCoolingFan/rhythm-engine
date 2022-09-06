@@ -2719,8 +2719,6 @@ dependencies = [
  "lyon_geom",
  "noisy_float",
  "pretty_assertions",
- "quote",
- "syn",
  "tap",
  "tinyvec",
 ]

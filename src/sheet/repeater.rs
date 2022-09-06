@@ -38,9 +38,9 @@ pub struct RepeaterAffinity;
 #[rustfmt::skip]
 fn produce_repetitions(
     repeaters: Query<(&Sheet, &Repeater)>,
-    mut time_table: ResMut<TimeTable>,
+    mut time_tables: ResMut<TimeTables>,
 ) {
-    let TimeTable{ song_time, seek_times, repetitions, .. } = &mut *time_table;
+    let TimeTables { song_time, seek_times, repetitions, .. } = &mut *time_tables;
 
     **repetitions = seek_times.map(|seek_time| Repetition {
         time: seek_time,
