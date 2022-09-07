@@ -3,11 +3,11 @@ mod repeater;
 mod sequence;
 mod spline;
 
+use crate::{hit::*, utils::*, *};
+use automation::*;
 use repeater::*;
 use sequence::*;
 use spline::*;
-
-use crate::{hit::*, utils::*, *};
 
 use std::{marker::PhantomData, ops::RangeInclusive};
 
@@ -56,19 +56,6 @@ impl Sheet {
     pub fn scheduled_at(&self, time: P32) -> bool {
         (self.start.raw()..(self.start + self.duration).raw()).contains(&time.raw())
     }
-
-    #[rustfmt::skip]
-    pub fn active_in<'a, T>(
-        &'a self,
-        items: &'a [T],
-        key: fn(&'a T) -> P32
-    )
-        -> impl Iterator<Item = usize> + '_
-    {
-        self.coverage()
-            .take(if self.duration.raw() < f32::EPSILON { 0 } else { self.span() })
-            .filter(move |index| self.scheduled_at(key(&items[*index])))
-    }
 }
 
 #[derive(Component, Deref)]
@@ -96,25 +83,61 @@ impl<T> Copy for GenID<T> {}
 
 #[derive(Clone, Copy, Component)]
 struct Sources<T> {
-    primary: GenID<T>,
-    secondary: Option<GenID<T>>,
+    main: GenID<T>,
+    delegation: Option<GenID<T>>,
 }
 
-impl<T: Component> Sources<T> {
+impl<T> Sources<T> {
     #[rustfmt::skip]
-    fn get(self, delegate: bool) -> Entity {
+    fn pick(&self, delegated: bool) -> GenID<T> {
         match self {
-            Self { secondary: Some(gen_id), .. } if delegate => *gen_id,
-            Self { primary: gen_id, .. } => *gen_id,
+            Self { delegation: Some(delegation), .. } if delegated => *delegation,
+            _ => self.main,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Modulation {
     Position(Vec2),
     Color([T32; 4]),
     Luminosity(T32),
     Scale { magnitude: R32, ctrl: Option<Vec2> },
     Rotation { theta: R32, ctrl: Option<Vec2> },
+}
+
+struct Arrangement<T> {
+    offset: P32,
+    primary: GenID<T>,
+    secondary: Option<GenID<T>>,
+}
+
+#[rustfmt::skip]
+fn arrange<T: Default + Component>(
+    mut arrangements: ResMut<Table<Option<Arrangement<T>>>>,
+    time_tables: ResMut<TimeTables>,
+    instances: Query<(
+        &Sheet,
+        &PrimaryBound<Sources<T>>,
+        Option<&SecondaryBound<Sources<T>>>,
+        Option<&RepeaterAffinity>,
+    )>,
+) {
+    arrangements.fill_with(|| None);
+    instances.iter().for_each(|(sheet, primary, secondary, affinity)| {
+        sheet.coverage().for_each(|index| {
+            if let Some(time) = affinity
+                .map(|_| time_tables.repetitions[index].time)
+                .iter()
+                .chain(Some(time_tables.seek_times[index]).iter())
+                .find(|time| sheet.scheduled_at(**time))
+            {
+                let delegation = time_tables.delegations[index];
+                arrangements[index] = Some(Arrangement {
+                    offset: *time,
+                    primary: primary.pick(*delegation),
+                    secondary: secondary.map(|secondary| secondary.pick(*delegation))
+                })
+            }
+        })
+    })
 }

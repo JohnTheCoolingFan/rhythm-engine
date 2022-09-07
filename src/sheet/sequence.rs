@@ -11,7 +11,7 @@ use crate::{
     utils::*,
 };
 
-struct GeometryCtrl(Vec2);
+pub struct GeometryCtrl(Vec2);
 
 #[derive(Deref, DerefMut, Default, Clone, Copy)]
 pub struct Scalar<Marker, Type = R32> {
@@ -31,8 +31,11 @@ impl<Marker, Type: Lerp<Output = Type>> Lerp for Scalar<Marker, Type> {
     }
 }
 
+#[derive(Default)]
 pub struct MarkerLuminosity;
+#[derive(Default)]
 pub struct MarkerRotation;
+#[derive(Default)]
 pub struct MarkerScale;
 
 pub type Luminosity = Scalar<MarkerLuminosity, T32>;
@@ -54,12 +57,6 @@ impl Lerp for Rgba {
     }
 }
 
-#[derive(Component)]
-struct TopBound;
-
-#[derive(Component)]
-struct BottomBound;
-
 #[derive(Deref, DerefMut, Component)]
 pub struct Sequence<T: Default>(Automation<T>);
 
@@ -80,7 +77,6 @@ impl Sequence<Option<GenID<Spline>>> {
         -> Option<Vec2>
     {
         match self.at_or_after(offset) {
-            [single] => single.val.and_then(get).map(|spline| spline.play(t)),
             [prev, curr, ..] => offset
                 .completion_ratio(prev.quantify(), curr.quantify())
                 .raw()
@@ -90,7 +86,14 @@ impl Sequence<Option<GenID<Spline>>> {
                     .zip(curr.val.and_then(get))
                     .map(|(prev, curr)| prev.play(t).lerp(curr.play(t), weight))
                 ),
+            [single] => single.val.and_then(get).map(|spline| spline.play(t)),
             _ => panic!("Unexpected existing no item control table"),
         }
     }
 }
+
+#[derive(Deref, DerefMut, Component)]
+pub struct PrimaryBound<T>(T);
+
+#[derive(Deref, DerefMut, Component)]
+pub struct SecondaryBound<T>(T);

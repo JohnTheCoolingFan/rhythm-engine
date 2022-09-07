@@ -120,11 +120,11 @@ impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
         T: Lerp,
     {
         match self.at_or_after(offset) {
-            [single] => Err(single),
             [prev, curr, ..] => offset
                 .completion_ratio(prev.quantify(), curr.quantify())
                 .pipe(|t| prev.lerp(curr, t))
                 .pipe(Ok),
+            [single] => Err(single),
             _ => panic!("Unexpected existing no item control table"),
         }
     }
