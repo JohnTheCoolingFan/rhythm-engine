@@ -218,11 +218,10 @@ where
     fn play(&self, channel: usize, t: T32) -> Option<Modulation> {
         self.get(channel).and_then(|arrangement| arrangement
             .secondary
-            .map(|secondary| secondary.play(arrangement.offset))
             .map(|secondary| arrangement
                 .primary
                 .play(arrangement.offset)
-                .lerp(&secondary, t)
+                .lerp(&secondary.play(arrangement.offset), t)
                 .into()
             )
         )
@@ -252,9 +251,16 @@ fn harmonize(
     time_tables: ResMut<TimeTables>,
     performers: Performers,
     geom_ctrl_sources: Query<&GeometryCtrl>,
-    geom_ctrls: Query<(&Sheet, &GenID<GeometryCtrl>)>,
     automation_sources: Query<&Automation<T32>>,
-    automations: Query<(&Sheet, &Sources<Automation<T32>>, Option<&RepeaterAffinity>)>,
+    geom_ctrls: Query<(
+        &Sheet,
+        &GenID<GeometryCtrl>
+    )>,
+    automations: Query<(
+        &Sheet,
+        &Sources<Automation<T32>>,
+        Option<&RepeaterAffinity>
+    )>,
 ) {
     let TimeTables { song_time, seek_times, clamped_times, delegations } = *time_tables;
 
@@ -267,12 +273,11 @@ fn harmonize(
                 .into_iter()
                 .chain(iter_once(ClampedTime::new(seek_times[index])))
                 .find(|ClampedTime { offset, .. }| sheet.scheduled_at(*offset))
-                .and_then(|clamped_time| {
-                    automation_sources
-                        .get(*automation.pick(*delegations[index]))
-                        .ok()
-                        .map(|automation| automation.play(clamped_time))
-                })
+                .and_then(|clamped_time| automation_sources
+                    .get(*automation.pick(*delegations[index]))
+                    .map(|automation| automation.play(clamped_time))
+                    .ok()
+                )
             {
                 let performances = [
                     performers.splines.play(index, t),
