@@ -103,21 +103,20 @@ fn respond_to_hits(
                 .flatten()
                 .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
                 .for_each(|hit| match (kind, &mut *state) {
-                    (Commence | Switch, state) => *state = Active(true),
-                    (Toggle, Active(delegate)) => *delegate = !*delegate,
-                    (Toggle, state) => *state = Active(true),
+                    (Toggle, Active(active)) => *active = !*active,
                     (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
+                    (Commence | Switch | Toggle, state) => *state = Active(true),
                     _ => {}
                 });
 
             let adjusted_offset = match (kind, &*state) {
-                (Commence, Active(delegate)) if !delegate => sheet.start,
+                (Commence, Active(active)) if !active => sheet.start,
                 (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&song_time) => hit + ex,
                 _ => song_time
             };
 
             let delegation = match (kind, &mut *state) {
-                (Switch | Toggle, Active(state)) => *state,
+                (Switch | Toggle, Active(active)) => *active,
                 _ => false
             };
 
