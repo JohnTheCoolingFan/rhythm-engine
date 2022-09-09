@@ -35,6 +35,12 @@ pub struct HitInfo {
 #[derive(Deref, DerefMut, From)]
 pub struct HitRegister(pub [Option<HitInfo>; 4]);
 
+impl Default for HitRegister {
+    fn default() -> Self {
+        HitRegister([None; 4])
+    }
+}
+
 #[derive(Component)]
 pub enum ResponseKind {
     Nil,
@@ -56,20 +62,20 @@ pub struct Response {
     pub layer: u8,
 }
 
-#[derive(Component)]
+#[derive(Debug, PartialEq, Component)]
 pub enum ResponseState {
-    Nil,
+    None,
     Hit(P32),
     Delegated(bool),
 }
 
 #[derive(Default, From, Deref, DerefMut, Clone, Copy)]
-pub struct Delegated(bool);
+pub struct Delegated(pub bool);
 
 fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
     instances
         .iter_mut()
-        .for_each(|(_, mut response_state)| *response_state = ResponseState::Nil);
+        .for_each(|(_, mut response_state)| *response_state = ResponseState::None);
 }
 
 #[rustfmt::skip]
@@ -127,47 +133,58 @@ fn respond_to_hits(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     #[rustfmt::skip]
-    fn hit_responses() {
-        let mut app = App::new();
+    fn hit_layers_and_scheduling() {
+        let mut game = App::new();
+        game.add_system(respond_to_hits);
+        game.insert_resource(TimeTables { song_time: p32(300.), ..Default::default() });
 
-        /*app.insert_resource(Table::<SeekTime>);
-        app.insert_resource(Table::<Delegated>);
-        app.insert_resource(HitRegister);*/
+        game.world.spawn().insert_bundle((
+            Sheet { start: p32(0.), duration:  p32(1000.), coverage: Coverage(0, 0) },
+            Response { kind: ResponseKind::Commence, layer: 0 },
+            ResponseState::None
+        ));
 
-        app.world.spawn_batch([
-            (
-                Sheet { start: p32(0.), duration:  p32(1000.), coverage: Coverage(0, 0) },
-                Response { kind: ResponseKind::Commence, layer: 0 }
-            ),
-            (
-                Sheet { start: p32(300.), duration:  p32(1000.), coverage: Coverage(1, 1) },
-                Response { kind: ResponseKind::Commence, layer: 1 }
-            ),
-            (
-                Sheet { start: p32(300.), duration:  p32(1000.), coverage: Coverage(2, 2) },
-                Response { kind: ResponseKind::Switch, layer: 2 }
-            ),
-            (
-                Sheet { start: p32(300.), duration:  p32(1000.), coverage: Coverage(3, 3) },
-                Response { kind: ResponseKind::Toggle, layer: 3 }
-            ),
-            (
-                Sheet { start: p32(300.), duration:  p32(1000.), coverage: Coverage(4, 4) },
-                Response { kind: ResponseKind::Follow(p32(200.)), layer: 4 }
-            ),
-        ]);
-
-        let hit = HitInfo {
+        // Wrong layer
+        game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
             object_time: p32(200.),
             hit_time: p32(300.),
             layer: 3,
-        };
+        })]));
 
-        //app.insert_resource(SongTime(p32(500.)));
+        game.update();
+        assert_eq!(
+            ResponseState::None,
+            *game.world.query::<&ResponseState>().single(&game.world)
+        );
 
-        app.update()
+        // Wrong scheduling
+        game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
+            object_time: p32(200.),
+            hit_time: p32(1100.),
+            layer: 0,
+        })]));
+
+        game.update();
+        assert_eq!(
+            ResponseState::None,
+            *game.world.query::<&ResponseState>().single(&game.world)
+        );
+
+        // Correct layer correct scheduling
+        game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
+            object_time: p32(200.),
+            hit_time: p32(300.),
+            layer: 0,
+        })]));
+
+        game.update();
+        assert_eq!(
+            ResponseState::Delegated(true),
+            *game.world.query::<&ResponseState>().single(&game.world)
+        );
     }
 }
