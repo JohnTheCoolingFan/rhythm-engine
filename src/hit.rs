@@ -130,58 +130,31 @@ fn respond_to_hits(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_eq;
+    use test_case::test_case;
 
-    #[test]
     #[rustfmt::skip]
-    fn hit_layers_and_scheduling() {
+    #[test_case(300., 3, ResponseState::None; "wrong Layer")]
+    #[test_case(1100., 0, ResponseState::None; "wrong scheduling")]
+    #[test_case(300., 0, ResponseState::Active(true); "correct layer and scheduling")]
+    fn hit_layers_and_scheduling(time: f32, layer: u8, expected: ResponseState) {
         let mut game = App::new();
         game.add_system(respond_to_hits);
-        game.insert_resource(TimeTables { song_time: p32(300.), ..Default::default() });
+        game.insert_resource(TimeTables { song_time: p32(time), ..Default::default() });
         game.world.spawn().insert_bundle((
             Sheet { start: p32(0.), duration:  p32(1000.), coverage: Coverage(0, 0) },
             Response { kind: ResponseKind::Commence, layer: 0 },
             ResponseState::None
         ));
 
-        // Wrong layer
         game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
-            object_time: p32(200.),
-            hit_time: p32(300.),
-            layer: 3,
+            object_time: p32(time),
+            hit_time: p32(time),
+            layer,
         })]));
 
         game.update();
-        assert_eq!(
-            ResponseState::None,
-            *game.world.query::<&ResponseState>().single(&game.world)
-        );
-
-        // Wrong scheduling
-        game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
-            object_time: p32(200.),
-            hit_time: p32(1100.),
-            layer: 0,
-        })]));
-
-        game.update();
-        assert_eq!(
-            ResponseState::None,
-            *game.world.query::<&ResponseState>().single(&game.world)
-        );
-
-        // Correct layer correct scheduling
-        game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
-            object_time: p32(200.),
-            hit_time: p32(300.),
-            layer: 0,
-        })]));
-
-        game.update();
-        assert_eq!(
-            ResponseState::Active(true),
-            *game.world.query::<&ResponseState>().single(&game.world)
-        );
+        assert_eq!(expected, *game.world.query::<&ResponseState>().single(&game.world))
     }
 
     #[test]

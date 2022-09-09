@@ -5,6 +5,10 @@ version = "0.1.0"
 authors = ["iiYese iiyese@outlook.com"]
 edition = "2021"
 
+[dev-dependencies]
+test-case = "2.2.1"
+pretty_assertions = "1.2.1"
+
 [dependencies]
 derive_more = "0.99.17"
 bevy = { version = "0.8.0", features = ["dynamic"] }
@@ -12,7 +16,6 @@ noisy_float = "0.2.0"
 tinyvec = "1.5.1"
 itertools = "0.10.3"
 lyon_geom = "0.17"
-pretty_assertions = "1.2.1"
 tap = "1.0.1"
 
 [profile.dev.package."*"]
