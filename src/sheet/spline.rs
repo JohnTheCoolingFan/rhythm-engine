@@ -203,7 +203,7 @@ impl Segment {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct Spline {
     pub path: Vec<Segment>,
     pub lut: Vec<Sample>,

@@ -9,6 +9,8 @@ use repeater::*;
 use sequence::*;
 use spline::*;
 
+use core::iter::once as iter_once;
+
 use std::{marker::PhantomData, ops::RangeInclusive};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -99,45 +101,202 @@ impl<T> Sources<T> {
 
 pub enum Modulation {
     Position(Vec2),
-    Color([T32; 4]),
+    Rgba([T32; 4]),
     Luminosity(T32),
     Scale { magnitude: R32, ctrl: Option<Vec2> },
     Rotation { theta: R32, ctrl: Option<Vec2> },
+    None,
+}
+
+impl From<Vec2> for Modulation {
+    fn from(point: Vec2) -> Self {
+        Self::Position(point)
+    }
+}
+
+impl From<Rgba> for Modulation {
+    fn from(color: Rgba) -> Self {
+        Self::Rgba(*color)
+    }
+}
+
+impl From<Luminosity> for Modulation {
+    fn from(luminosity: Luminosity) -> Self {
+        Self::Luminosity(*luminosity)
+    }
+}
+
+impl From<Scale> for Modulation {
+    fn from(scale: Scale) -> Self {
+        Self::Scale {
+            magnitude: *scale,
+            ctrl: None,
+        }
+    }
+}
+
+impl From<Rotation> for Modulation {
+    fn from(theta: Rotation) -> Self {
+        Self::Rotation {
+            theta: *theta,
+            ctrl: None,
+        }
+    }
 }
 
 struct Arrangement<T> {
     offset: P32,
-    primary: GenID<T>,
-    secondary: Option<GenID<T>>,
+    primary: T,
+    secondary: Option<T>,
+}
+
+impl Arrangement<&Sequence<Spline>> {
+    fn play(&self, t: T32) -> Option<Modulation> {
+        self.secondary
+            .is_none()
+            .then(|| self.primary.play(t, self.offset).into())
+    }
+}
+
+impl<T> Arrangement<&Sequence<T>>
+where
+    T: Default + Clone + Copy + Lerp<Output = T>,
+    Modulation: From<T>,
+{
+    fn play(&self, t: T32) -> Option<Modulation> {
+        self.secondary
+            .map(|secondary| secondary.play(self.offset))
+            .map(|secondary| self.primary.play(self.offset).lerp(&secondary, t).into())
+    }
+
+    fn play_primary(&self) -> Option<Modulation> {
+        self.secondary
+            .is_none()
+            .then(|| self.primary.play(self.offset).into())
+    }
 }
 
 #[rustfmt::skip]
 fn arrange<T: Default + Component>(
-    mut arrangements: ResMut<Table<Option<Arrangement<T>>>>,
+    mut arrangements: ResMut<Table<Option<Arrangement<GenID<T>>>>>,
     time_tables: ResMut<TimeTables>,
     instances: Query<(
         &Sheet,
-        &PrimaryBound<Sources<T>>,
-        Option<&SecondaryBound<Sources<T>>>,
+        &PrimarySequence<Sources<T>>,
+        Option<&SecondarySequence<Sources<T>>>,
         Option<&RepeaterAffinity>,
     )>,
 ) {
     arrangements.fill_with(|| None);
-    instances.iter().for_each(|(sheet, primary, secondary, affinity)| {
-        sheet.coverage().for_each(|index| {
-            if let Some(time) = affinity
-                .map(|_| time_tables.repetitions[index].time)
-                .iter()
-                .chain(Some(time_tables.seek_times[index]).iter())
-                .find(|time| sheet.scheduled_at(**time))
-            {
-                let delegation = time_tables.delegations[index];
-                arrangements[index] = Some(Arrangement {
-                    offset: *time,
-                    primary: primary.pick(*delegation),
-                    secondary: secondary.map(|secondary| secondary.pick(*delegation))
-                })
-            }
+    instances.iter().for_each(|(sheet, primary, secondary, affinity)| sheet
+        .coverage()
+        .for_each(|index| arrangements[index] = affinity
+            .map(|_| time_tables.repetitions[index].time)
+            .into_iter()
+            .chain(iter_once(time_tables.seek_times[index]))
+            .find(|time| sheet.scheduled_at(*time))
+            .map(|time| Arrangement {
+                offset: time - sheet.start,
+                primary: primary.pick(*time_tables.delegations[index]),
+                secondary: secondary.map(|sources| sources.pick(*time_tables.delegations[index]))
+            })
+        )
+    )
+}
+
+#[derive(SystemParam)]
+struct Ensemble<'w, 's, T: Component> {
+    sources: Query<'w, 's, &'static T>,
+    arrangements: Res<'w, Table<Option<Arrangement<GenID<T>>>>>,
+}
+
+impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
+    #[rustfmt::skip]
+    fn get(&self, channel: usize) -> Option<Arrangement<&T>> {
+        self.arrangements[channel].as_ref().map(|arrangement| Arrangement {
+            offset: arrangement.offset,
+            primary: self.sources.get(*arrangement.primary).unwrap(),
+            secondary: arrangement.secondary.map(|secondary| self.sources.get(*secondary).unwrap()),
         })
-    })
+    }
+}
+
+#[derive(SystemParam)]
+struct Performers<'w, 's> {
+    splines: Ensemble<'w, 's, Sequence<Spline>>,
+    colors: Ensemble<'w, 's, Sequence<Rgba>>,
+    luminosities: Ensemble<'w, 's, Sequence<Luminosity>>,
+    scales: Ensemble<'w, 's, Sequence<Scale>>,
+    rotations: Ensemble<'w, 's, Sequence<Rotation>>,
+}
+
+#[rustfmt::skip]
+fn harmonize(
+    mut modulations: ResMut<Table<Option<Modulation>>>,
+    time_tables: ResMut<TimeTables>,
+    performers: Performers,
+    geom_ctrl_sources: Query<&GeometryCtrl>,
+    geom_ctrls: Query<(&Sheet, &GenID<GeometryCtrl>)>,
+    automation_sources: Query<&Automation<T32>>,
+    automations: Query<(
+        &Sheet,
+        &Sources<Automation<T32>>,
+        Option<&RepeaterAffinity>
+    )>,
+) {
+    use Modulation::*;
+    modulations.fill_with(|| Option::None);
+
+    automations.iter().for_each(|(sheet, automation, affinity)| sheet
+        .coverage()
+        .for_each(|index| modulations[index] = affinity
+            .map(|_| time_tables.repetitions[index])
+            .into_iter()
+            .chain(iter_once(Repetition::new(time_tables.seek_times[index])))
+            .find(|repetition| sheet.scheduled_at(repetition.time))
+            .and_then(|Repetition { time, lower_clamp, upper_clamp }| automation_sources
+                .get(*automation.pick(*time_tables.delegations[index]))
+                .ok()
+                .map(|automation| automation.play(time - sheet.start, lower_clamp, upper_clamp))
+                .and_then(|t| {
+                    let performances = [
+                        performers.splines.get(index).and_then(|spline| spline.play(t)),
+                        performers.colors.get(index).and_then(|color| color.play(t)),
+                        performers.luminosities.get(index).and_then(|lumin| lumin.play(t)),
+                        performers.scales.get(index).and_then(|scale| scale.play(t)),
+                        performers.rotations.get(index).and_then(|rotation| rotation.play(t)),
+                    ];
+
+                    performances.into_iter().find(Option::is_some).unwrap_or(Some(Modulation::None))
+                })
+            )
+        )
+    );
+
+    modulations
+        .iter_mut()
+        .enumerate()
+        .filter(|(_, modulation)| modulation.is_none())
+        .for_each(|(index, modulation)| {
+            let performances = [
+                performers.colors.get(index).and_then(|color| color.play_primary()),
+                performers.luminosities.get(index).and_then(|lumin| lumin.play_primary()),
+                performers.scales.get(index).and_then(|scale| scale.play_primary()),
+                performers.rotations.get(index).and_then(|rotation| rotation.play_primary()),
+            ];
+
+            *modulation = performances.into_iter().find(Option::is_some).flatten()
+        });
+
+    geom_ctrls
+        .iter()
+        .filter(|(sheet, ..)| sheet.scheduled_at(time_tables.song_time))
+        .for_each(|(sheet, gen_id)| modulations[sheet.coverage()]
+            .iter_mut()
+            .for_each(|modulation| {
+                if let Some(Scale { ctrl, .. } | Rotation { ctrl, .. }) = modulation {
+                    *ctrl = geom_ctrl_sources.get(**gen_id).ok().map(|ctrl| **ctrl)
+                }
+            })
+        );
 }

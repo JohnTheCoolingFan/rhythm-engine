@@ -32,6 +32,13 @@ pub struct Repetition {
     pub upper_clamp: T32,
 }
 
+impl Repetition {
+    #[rustfmt::skip]
+    pub fn new(time: P32) -> Self {
+        Self { time, upper_clamp: t32(1.), lower_clamp: t32(0.) }
+    }
+}
+
 #[derive(Component, Clone, Copy)]
 pub struct RepeaterAffinity;
 
@@ -41,12 +48,7 @@ fn produce_repetitions(
     mut time_tables: ResMut<TimeTables>,
 ) {
     let TimeTables { song_time, seek_times, repetitions, .. } = &mut *time_tables;
-
-    **repetitions = seek_times.map(|seek_time| Repetition {
-        time: seek_time,
-        lower_clamp: t32(0.),
-        upper_clamp: t32(1.),
-    });
+    **repetitions = seek_times.map(|seek_time| Repetition::new(seek_time));
 
     repeaters
         .iter()
