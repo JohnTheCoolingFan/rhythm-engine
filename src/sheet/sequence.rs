@@ -11,7 +11,7 @@ use crate::{
     utils::*,
 };
 
-#[derive(Deref, DerefMut, Default, Clone, Copy)]
+#[derive(Deref, DerefMut, Default, Component, Clone, Copy)]
 pub struct Scalar<Marker, Type = R32> {
     #[deref]
     #[deref_mut]
@@ -40,7 +40,7 @@ pub type Luminosity = Scalar<MarkerLuminosity, T32>;
 pub type Rotation = Scalar<MarkerRotation>;
 pub type Scale = Scalar<MarkerScale>;
 
-#[derive(Deref, DerefMut, Default, Clone, Copy)]
+#[derive(Deref, DerefMut, Default, Component, Clone, Copy)]
 pub struct Rgba([T32; 4]);
 
 impl Lerp for Rgba {

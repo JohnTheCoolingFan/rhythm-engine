@@ -150,32 +150,6 @@ struct Arrangement<T> {
     secondary: Option<T>,
 }
 
-impl Arrangement<&Sequence<Spline>> {
-    fn play(&self, t: T32) -> Option<Modulation> {
-        self.secondary
-            .is_none()
-            .then(|| self.primary.play(t, self.offset).into())
-    }
-}
-
-impl<T> Arrangement<&Sequence<T>>
-where
-    T: Default + Clone + Copy + Lerp<Output = T>,
-    Modulation: From<T>,
-{
-    fn play(&self, t: T32) -> Option<Modulation> {
-        self.secondary
-            .map(|secondary| secondary.play(self.offset))
-            .map(|secondary| self.primary.play(self.offset).lerp(&secondary, t).into())
-    }
-
-    fn play_primary(&self) -> Option<Modulation> {
-        self.secondary
-            .is_none()
-            .then(|| self.primary.play(self.offset).into())
-    }
-}
-
 #[rustfmt::skip]
 fn arrange<T: Default + Component>(
     mut arrangements: ResMut<Table<Option<Arrangement<GenID<T>>>>>,
@@ -216,8 +190,49 @@ impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
         self.arrangements[channel].as_ref().map(|arrangement| Arrangement {
             offset: arrangement.offset,
             primary: self.sources.get(*arrangement.primary).unwrap(),
-            secondary: arrangement.secondary.map(|secondary| self.sources.get(*secondary).unwrap()),
+            secondary: arrangement.secondary.map(|secondary| self
+                .sources
+                .get(*secondary)
+                .unwrap()
+            ),
         })
+    }
+}
+
+impl<'w, 's> Ensemble<'w, 's, Sequence<Spline>> {
+    #[rustfmt::skip]
+    fn play(&self, channel: usize,  t: T32) -> Option<Modulation> {
+        self.get(channel).and_then(|arrangement| arrangement
+            .secondary
+            .is_none()
+            .then(|| arrangement.primary.play(t, arrangement.offset).into())
+        )
+    }
+}
+
+#[rustfmt::skip]
+impl<'w, 's, T> Ensemble<'w, 's, Sequence<T>>
+where
+    T: Default + Component + Clone + Copy + Lerp<Output = T>,
+    Modulation: From<T>,
+{
+    fn play(&self, channel: usize, t: T32) -> Option<Modulation> {
+        self.get(channel).and_then(|arrangement| arrangement.secondary
+            .map(|secondary| secondary.play(arrangement.offset))
+            .map(|secondary| arrangement
+                .primary
+                .play(arrangement.offset)
+                .lerp(&secondary, t)
+                .into()
+            )
+        )
+    }
+
+    fn play_primary(&self, channel: usize) -> Option<Modulation> {
+        self.get(channel).and_then(|arrangement| arrangement.secondary
+            .is_none()
+            .then(|| arrangement.primary.play(arrangement.offset).into())
+        )
     }
 }
 
@@ -260,11 +275,11 @@ fn harmonize(
                 .map(|automation| automation.play(time - sheet.start, lower_clamp, upper_clamp))
                 .and_then(|t| {
                     let performances = [
-                        performers.splines.get(index).and_then(|spline| spline.play(t)),
-                        performers.colors.get(index).and_then(|color| color.play(t)),
-                        performers.luminosities.get(index).and_then(|lumin| lumin.play(t)),
-                        performers.scales.get(index).and_then(|scale| scale.play(t)),
-                        performers.rotations.get(index).and_then(|rotation| rotation.play(t)),
+                        performers.splines.play(index, t),
+                        performers.colors.play(index, t),
+                        performers.luminosities.play(index, t),
+                        performers.scales.play(index, t),
+                        performers.rotations.play(index, t),
                     ];
 
                     performances.into_iter().find(Option::is_some).unwrap_or(Some(Modulation::None))
@@ -279,10 +294,10 @@ fn harmonize(
         .filter(|(_, modulation)| modulation.is_none())
         .for_each(|(index, modulation)| {
             let performances = [
-                performers.colors.get(index).and_then(|color| color.play_primary()),
-                performers.luminosities.get(index).and_then(|lumin| lumin.play_primary()),
-                performers.scales.get(index).and_then(|scale| scale.play_primary()),
-                performers.rotations.get(index).and_then(|rotation| rotation.play_primary()),
+                performers.colors.play_primary(index),
+                performers.luminosities.play_primary(index),
+                performers.scales.play_primary(index),
+                performers.rotations.play_primary(index),
             ];
 
             *modulation = performances.into_iter().find(Option::is_some).flatten()
