@@ -57,13 +57,12 @@ impl Lerp for Rgba {
 
 impl Sequence<Spline> {
     #[rustfmt::skip]
-    pub fn play(&self, t: T32, offset: P32) -> Modulation {
+    pub fn play(&self, t: T32, offset: P32) -> Vec2 {
         match self.at_or_after(offset) {
             [prev, curr, ..] => offset
                 .completion_ratio(prev.quantify(), curr.quantify())
-                .pipe(|weight| prev.val.play(t).lerp(curr.val.play(t), weight.raw()))
-                .into(),
-            [single] => single.val.play(t).into(),
+                .pipe(|weight| prev.val.play(t).lerp(curr.val.play(t), weight.raw())),
+            [single] => single.val.play(t),
             _ => panic!("Unexpected existing no item control table"),
         }
     }
