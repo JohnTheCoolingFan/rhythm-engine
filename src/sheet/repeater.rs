@@ -1,9 +1,7 @@
 use super::automation::Weight;
-use crate::{hit::*, sheet::*, utils::*, *};
+use crate::{sheet::*, utils::*, *};
 
-use bevy::prelude::*;
 use noisy_float::prelude::*;
-use tap::tap::Tap;
 
 pub struct RepeaterClamp {
     start: T32,
@@ -25,7 +23,7 @@ pub struct Repeater {
     floor: RepeaterClamp,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct ClampedTime {
     pub offset: P32,
     pub lower_clamp: T32,

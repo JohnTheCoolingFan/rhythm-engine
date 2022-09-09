@@ -1,9 +1,8 @@
-use crate::{sheet::*, utils::*, *};
-
+use crate::{sheet::*, utils::*};
 use bevy::prelude::*;
+
 use derive_more::From;
 use noisy_float::prelude::*;
-use tap::tap::Tap;
 
 enum PressKind {
     Press(N32),
@@ -41,7 +40,7 @@ impl Default for HitRegister {
     }
 }
 
-#[derive(Component)]
+#[derive(Debug, Component)]
 pub enum ResponseKind {
     Nil,
     /// Stays at 0 state until hit, once hit which it will commece from the current time.
@@ -66,10 +65,10 @@ pub struct Response {
 pub enum ResponseState {
     None,
     Hit(P32),
-    Delegated(bool),
+    Active(bool),
 }
 
-#[derive(Default, From, Deref, DerefMut, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, From, Deref, DerefMut, Clone, Copy)]
 pub struct Delegated(pub bool);
 
 fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
@@ -95,8 +94,7 @@ fn respond_to_hits(
 
     responses
         .iter_mut()
-        .filter(|(sheet, ..)| f32::EPSILON < sheet.duration.raw())
-        .filter(|(sheet, ..)| sheet.scheduled_at(song_time))
+        .filter(|(sheet, ..)| sheet.playable_at(song_time))
         .for_each(|(sheet, Response { kind, layer }, mut state)| {
             use ResponseKind::*;
             use ResponseState::*;
@@ -105,21 +103,21 @@ fn respond_to_hits(
                 .flatten()
                 .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
                 .for_each(|hit| match (kind, &mut *state) {
-                    (Commence | Switch, state) => *state = Delegated(true),
-                    (Toggle, Delegated(delegate)) => *delegate = !*delegate,
-                    (Toggle, state) => *state = Delegated(true),
+                    (Commence | Switch, state) => *state = Active(true),
+                    (Toggle, Active(delegate)) => *delegate = !*delegate,
+                    (Toggle, state) => *state = Active(true),
                     (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
                     _ => {}
                 });
 
             let adjusted_offset = match (kind, &*state) {
-                (Commence, Delegated(delegate)) if !delegate => sheet.start,
+                (Commence, Active(delegate)) if !delegate => sheet.start,
                 (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&song_time) => hit + ex,
                 _ => song_time
             };
 
             let delegation = match (kind, &mut *state) {
-                (Switch | Toggle, Delegated(state)) => *state,
+                (Switch | Toggle, Active(state)) => *state,
                 _ => false
             };
 
@@ -133,7 +131,7 @@ fn respond_to_hits(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
+    use pretty_assertions::{assert_eq, assert_ne};
 
     #[test]
     #[rustfmt::skip]
@@ -141,7 +139,6 @@ mod tests {
         let mut game = App::new();
         game.add_system(respond_to_hits);
         game.insert_resource(TimeTables { song_time: p32(300.), ..Default::default() });
-
         game.world.spawn().insert_bundle((
             Sheet { start: p32(0.), duration:  p32(1000.), coverage: Coverage(0, 0) },
             Response { kind: ResponseKind::Commence, layer: 0 },
@@ -183,8 +180,86 @@ mod tests {
 
         game.update();
         assert_eq!(
-            ResponseState::Delegated(true),
+            ResponseState::Active(true),
             *game.world.query::<&ResponseState>().single(&game.world)
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn hit_logic() {
+        let mut game = App::new();
+        game.add_system(respond_to_hits);
+        game.world.spawn_batch([
+            (
+                Sheet { start: p32(0.), duration:  p32(400.), coverage: Coverage(0, 0) },
+                Response { kind: ResponseKind::Commence, layer: 0 },
+                ResponseState::None,
+            ),
+            (
+                Sheet { start: p32(0.), duration:  p32(400.), coverage: Coverage(1, 1) },
+                Response { kind: ResponseKind::Switch, layer: 0 },
+                ResponseState::None,
+            ),
+            (
+                Sheet { start: p32(0.), duration:  p32(400.), coverage: Coverage(2, 2) },
+                Response { kind: ResponseKind::Toggle, layer: 0 },
+                ResponseState::None,
+            ),
+            (
+                Sheet { start: p32(0.), duration:  p32(400.), coverage: Coverage(3, 3) },
+                Response { kind: ResponseKind::Follow(p32(50.)), layer: 0 },
+                ResponseState::None,
+            ),
+        ]);
+
+        // First hit
+        game.insert_resource(TimeTables { song_time: p32(100.), ..Default::default() });
+        game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
+            object_time: p32(100.),
+            hit_time: p32(100.),
+            layer: 0,
+        })]));
+
+        game.update();
+        game.world.query::<&ResponseState>().iter(&game.world).for_each(|state| {
+            assert_ne!(ResponseState::None, *state)
+        });
+        assert_eq!(
+            game.world.resource::<TimeTables>().seek_times[..4],
+            [100.; 4].map(p32)
+        );
+        assert_eq!(
+            game.world.resource::<TimeTables>().delegations[..4],
+            [false, true, true, false].map(Delegated)
+        );
+
+        // State after first hit and before second
+        game.insert_resource(TimeTables { song_time: p32(200.), ..Default::default() });
+        game.insert_resource(HitRegister([None, None, None, None]));
+
+        game.update();
+        assert_eq!(
+            game.world.resource::<TimeTables>().seek_times[..4],
+            [200., 200., 200., 150.].map(p32)
+        );
+
+        // Second hit
+        game.insert_resource(TimeTables { song_time: p32(300.), ..Default::default() });
+        game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
+            object_time: p32(300.),
+            hit_time: p32(300.),
+            layer: 0,
+        })]));
+
+        game.update();
+        assert_eq!(
+            game.world.resource::<TimeTables>().seek_times[..4],
+            [300., 300., 300., 300.].map(p32)
+        );
+        assert_eq!(
+            game.world.resource::<TimeTables>().delegations[..4],
+            [false, true, false, false].map(Delegated)
         );
     }
 }

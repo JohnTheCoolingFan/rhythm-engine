@@ -6,10 +6,7 @@ use noisy_float::prelude::*;
 use tap::Pipe;
 
 use super::automation::*;
-use crate::{
-    sheet::{spline::*, *},
-    utils::*,
-};
+use crate::{sheet::spline::*, utils::*};
 
 #[derive(Deref, DerefMut, Default, Component, Clone, Copy)]
 pub struct Scalar<Marker, Type = R32> {

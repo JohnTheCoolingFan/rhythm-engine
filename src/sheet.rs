@@ -69,6 +69,10 @@ impl Sheet {
     pub fn scheduled_at(&self, time: P32) -> bool {
         (self.start.raw()..(self.start + self.duration).raw()).contains(&time.raw())
     }
+
+    pub fn playable_at(&self, time: P32) -> bool {
+        f32::EPSILON < self.duration.raw() && self.scheduled_at(time)
+    }
 }
 
 #[derive(Component, Deref)]
@@ -178,7 +182,7 @@ fn arrange<T: Default + Component>(
             .map(|_| time_tables.clamped_times[index].offset)
             .into_iter()
             .chain(iter_once(time_tables.seek_times[index]))
-            .find(|time| sheet.scheduled_at(*time))
+            .find(|time| sheet.playable_at(*time))
             .map(|time| Arrangement {
                 offset: time - sheet.start,
                 primary: primary.pick(*time_tables.delegations[index]),
@@ -282,7 +286,7 @@ fn harmonize(
             .map(|_| clamped_times[index])
             .into_iter()
             .chain(iter_once(ClampedTime::new(seek_times[index])))
-            .find(|ClampedTime { offset, .. }| sheet.scheduled_at(*offset))
+            .find(|ClampedTime { offset, .. }| sheet.playable_at(*offset))
             .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.start)
             .and_then(|time| automation_sources
                 .get(*automation.pick(*delegations[index]))
@@ -319,11 +323,11 @@ fn harmonize(
             .flatten()
     });
 
-    geom_ctrls.iter().filter(|(sheet, ..)| sheet.scheduled_at(song_time)).for_each(|(sheet, id)| {
+    geom_ctrls.iter().filter(|(sheet, ..)| sheet.playable_at(song_time)).for_each(|(sheet, genid)| {
         modulations[sheet.coverage()].iter_mut().for_each(|modulation| {
             use Modulation::*;
             if let Some(Scale { ctrl, .. } | Rotation { ctrl, .. }) = modulation {
-                *ctrl = geom_ctrl_sources.get(**id).ok().map(|ctrl| **ctrl)
+                *ctrl = geom_ctrl_sources.get(**genid).ok().map(|ctrl| **ctrl)
             }
         })
     })
