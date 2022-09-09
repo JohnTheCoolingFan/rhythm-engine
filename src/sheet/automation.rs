@@ -3,6 +3,7 @@ use noisy_float::prelude::*;
 use tap::Pipe;
 use tinyvec::*;
 
+use super::repeater::*;
 use crate::utils::*;
 
 #[derive(Clone)]
@@ -65,7 +66,8 @@ where
 pub struct Automation<T: Default>(pub TinyVec<[Anchor<T>; 6]>);
 
 impl Automation<T32> {
-    pub fn play(&self, offset: P32, lower_clamp: T32, upper_clamp: T32) -> T32 {
+    #[rustfmt::skip]
+    pub fn play(&self, ClampedTime { offset, lower_clamp, upper_clamp }: ClampedTime) -> T32 {
         self.interp(offset)
             .unwrap_or_else(|anchor| anchor.val)
             .pipe(|t| lower_clamp.lerp(&upper_clamp, t))
@@ -130,11 +132,11 @@ mod tests {
             Anchor { x: p32(3.0), val: t32(0.0), weight: Quadratic(r32(0.)) }
         ]);
 
-        assert_eq!(automation.play(p32(0.0), t32(0.), t32(1.)), 0.0);
-        assert_eq!(automation.play(p32(0.5), t32(0.), t32(1.)), 0.5);
-        assert_eq!(automation.play(p32(1.0), t32(0.), t32(1.)), 1.0);
-        assert_eq!(automation.play(p32(1.5), t32(0.), t32(1.)), 0.5);
-        assert_eq!(automation.play(p32(2.5), t32(0.), t32(1.)), 0.25);
-        assert_eq!(automation.play(p32(3.5), t32(0.), t32(1.)), 0.0);
+        assert_eq!(automation.play(ClampedTime::new(p32(0.0))), 0.0);
+        assert_eq!(automation.play(ClampedTime::new(p32(0.5))), 0.5);
+        assert_eq!(automation.play(ClampedTime::new(p32(1.0))), 1.0);
+        assert_eq!(automation.play(ClampedTime::new(p32(1.5))), 0.5);
+        assert_eq!(automation.play(ClampedTime::new(p32(2.5))), 0.25);
+        assert_eq!(automation.play(ClampedTime::new(p32(3.5))), 0.0);
     }
 }

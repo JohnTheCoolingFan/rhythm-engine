@@ -32,8 +32,8 @@ impl<T> Table<T> {
 pub struct TimeTables {
     pub song_time: P32,
     pub seek_times: Table<P32>,
+    pub clamped_times: Table<ClampedTime>,
     pub delegations: Table<Delegated>,
-    pub repetitions: Table<Repetition>,
 }
 
 #[derive(Clone, Copy)]
@@ -162,20 +162,19 @@ fn arrange<T: Default + Component>(
     )>,
 ) {
     arrangements.fill_with(|| None);
-    instances.iter().for_each(|(sheet, primary, secondary, affinity)| sheet
-        .coverage()
-        .for_each(|index| arrangements[index] = affinity
-            .map(|_| time_tables.repetitions[index].time)
+    instances.iter().for_each(|(sheet, primary, secondary, affinity)| {
+        sheet.coverage().for_each(|index| arrangements[index] = affinity
+            .map(|_| time_tables.clamped_times[index].offset)
             .into_iter()
             .chain(iter_once(time_tables.seek_times[index]))
             .find(|time| sheet.scheduled_at(*time))
             .map(|time| Arrangement {
                 offset: time - sheet.start,
                 primary: primary.pick(*time_tables.delegations[index]),
-                secondary: secondary.map(|sources| sources.pick(*time_tables.delegations[index]))
+                secondary: secondary.map(|sources| sources.pick(*time_tables.delegations[index])),
             })
         )
-    )
+    })
 }
 
 #[derive(SystemParam)]
@@ -217,7 +216,8 @@ where
     Modulation: From<T>,
 {
     fn play(&self, channel: usize, t: T32) -> Option<Modulation> {
-        self.get(channel).and_then(|arrangement| arrangement.secondary
+        self.get(channel).and_then(|arrangement| arrangement
+            .secondary
             .map(|secondary| secondary.play(arrangement.offset))
             .map(|secondary| arrangement
                 .primary
@@ -229,7 +229,8 @@ where
     }
 
     fn play_primary(&self, channel: usize) -> Option<Modulation> {
-        self.get(channel).and_then(|arrangement| arrangement.secondary
+        self.get(channel).and_then(|arrangement| arrangement
+            .secondary
             .is_none()
             .then(|| arrangement.primary.play(arrangement.offset).into())
         )
@@ -253,65 +254,62 @@ fn harmonize(
     geom_ctrl_sources: Query<&GeometryCtrl>,
     geom_ctrls: Query<(&Sheet, &GenID<GeometryCtrl>)>,
     automation_sources: Query<&Automation<T32>>,
-    automations: Query<(
-        &Sheet,
-        &Sources<Automation<T32>>,
-        Option<&RepeaterAffinity>
-    )>,
+    automations: Query<(&Sheet, &Sources<Automation<T32>>, Option<&RepeaterAffinity>)>,
 ) {
-    use Modulation::*;
-    modulations.fill_with(|| Option::None);
+    let TimeTables { song_time, seek_times, clamped_times, delegations } = *time_tables;
 
-    automations.iter().for_each(|(sheet, automation, affinity)| sheet
-        .coverage()
-        .for_each(|index| modulations[index] = affinity
-            .map(|_| time_tables.repetitions[index])
-            .into_iter()
-            .chain(iter_once(Repetition::new(time_tables.seek_times[index])))
-            .find(|repetition| sheet.scheduled_at(repetition.time))
-            .and_then(|Repetition { time, lower_clamp, upper_clamp }| automation_sources
-                .get(*automation.pick(*time_tables.delegations[index]))
-                .ok()
-                .map(|automation| automation.play(time - sheet.start, lower_clamp, upper_clamp))
-                .and_then(|t| {
-                    let performances = [
-                        performers.splines.play(index, t),
-                        performers.colors.play(index, t),
-                        performers.luminosities.play(index, t),
-                        performers.scales.play(index, t),
-                        performers.rotations.play(index, t),
-                    ];
+    modulations.fill_with(|| None);
 
-                    performances.into_iter().find(Option::is_some).unwrap_or(Some(Modulation::None))
+    automations.iter().for_each(|(sheet, automation, affinity)| {
+        sheet.coverage().for_each(|index| {
+            if let Some(t) = affinity
+                .map(|_| clamped_times[index])
+                .into_iter()
+                .chain(iter_once(ClampedTime::new(seek_times[index])))
+                .find(|ClampedTime { offset, .. }| sheet.scheduled_at(*offset))
+                .and_then(|clamped_time| {
+                    automation_sources
+                        .get(*automation.pick(*delegations[index]))
+                        .ok()
+                        .map(|automation| automation.play(clamped_time))
                 })
-            )
-        )
-    );
+            {
+                let performances = [
+                    performers.splines.play(index, t),
+                    performers.colors.play(index, t),
+                    performers.luminosities.play(index, t),
+                    performers.scales.play(index, t),
+                    performers.rotations.play(index, t),
+                ];
 
-    modulations
-        .iter_mut()
-        .enumerate()
-        .filter(|(_, modulation)| modulation.is_none())
-        .for_each(|(index, modulation)| {
-            let performances = [
-                performers.colors.play_primary(index),
-                performers.luminosities.play_primary(index),
-                performers.scales.play_primary(index),
-                performers.rotations.play_primary(index),
-            ];
+                modulations[index] = performances
+                    .into_iter()
+                    .find(Option::is_some)
+                    .unwrap_or(Some(Modulation::None))
+            }
+        })
+    });
 
-            *modulation = performances.into_iter().find(Option::is_some).flatten()
-        });
+    modulations.iter_mut().enumerate().for_each(|(index, modulation)| if let None = modulation {
+        let performances = [
+            performers.colors.play_primary(index),
+            performers.luminosities.play_primary(index),
+            performers.scales.play_primary(index),
+            performers.rotations.play_primary(index),
+        ];
 
-    geom_ctrls
-        .iter()
-        .filter(|(sheet, ..)| sheet.scheduled_at(time_tables.song_time))
-        .for_each(|(sheet, gen_id)| modulations[sheet.coverage()]
-            .iter_mut()
-            .for_each(|modulation| {
-                if let Some(Scale { ctrl, .. } | Rotation { ctrl, .. }) = modulation {
-                    *ctrl = geom_ctrl_sources.get(**gen_id).ok().map(|ctrl| **ctrl)
-                }
-            })
-        );
+        *modulation = performances
+            .into_iter()
+            .find(Option::is_some)
+            .flatten()
+    });
+
+    geom_ctrls.iter().filter(|(sheet, ..)| sheet.scheduled_at(song_time)).for_each(|(sheet, id)| {
+        sheet.coverage().for_each(|index| {
+            use Modulation::*;
+            if let Some(Scale { ctrl, .. } | Rotation { ctrl, .. }) = &mut modulations[index] {
+                *ctrl = geom_ctrl_sources.get(**id).ok().map(|ctrl| **ctrl)
+            }
+        })
+    })
 }
