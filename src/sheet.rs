@@ -115,17 +115,20 @@ impl<T> Sources<T> {
 }
 
 pub enum Modulation {
-    Position(Vec2),
+    None,
     Rgba([T32; 4]),
     Luminosity(T32),
-    Scale { magnitude: R32, ctrl: Option<Vec2> },
     Rotation { theta: R32, ctrl: Option<Vec2> },
-    None,
+    Scale { magnitude: R32, ctrl: Option<Vec2> },
+    Position { shift: Vec2, start: Option<Vec2> },
 }
 
 impl From<Vec2> for Modulation {
     fn from(point: Vec2) -> Self {
-        Self::Position(point)
+        Self::Position {
+            shift: point,
+            start: None,
+        }
     }
 }
 
@@ -325,9 +328,14 @@ fn harmonize(
 
     geom_ctrls.iter().filter(|(sheet, ..)| sheet.playable_at(song_time)).for_each(|(sheet, genid)| {
         modulations[sheet.coverage()].iter_mut().for_each(|modulation| {
-            use Modulation::*;
-            if let Some(Scale { ctrl, .. } | Rotation { ctrl, .. }) = modulation {
-                *ctrl = geom_ctrl_sources.get(**genid).ok().map(|ctrl| **ctrl)
+            if let Some(
+                Modulation::Scale { ctrl: point, .. }
+                | Modulation::Rotation { ctrl: point, .. }
+                | Modulation::Position { start: point, .. }
+            )
+                = modulation
+            {
+                *point = geom_ctrl_sources.get(**genid).ok().map(|ctrl| **ctrl)
             }
         })
     })
