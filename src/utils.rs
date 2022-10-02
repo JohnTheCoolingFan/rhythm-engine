@@ -1,7 +1,10 @@
 use bevy::prelude::*;
+use derive_more::Deref;
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
 use tap::Pipe;
+
+use std::marker::PhantomData;
 
 #[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;
@@ -153,5 +156,28 @@ pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
         }
     }
 }
+
+#[derive(Component, Deref)]
+pub struct GenID<T> {
+    #[deref]
+    id: Entity,
+    _phantom: PhantomData<T>,
+}
+
+#[rustfmt::skip]
+impl<T> GenID<T> {
+    pub fn new(id: Entity) -> Self {
+        Self { id, _phantom: PhantomData }
+    }
+}
+
+#[rustfmt::skip]
+impl<T> Clone for GenID<T> {
+    fn clone(&self) -> Self {
+        Self { id: self.id, _phantom: PhantomData }
+    }
+}
+
+impl<T> Copy for GenID<T> {}
 
 impl<T: Iterator<Item = Vec2> + Clone> OrientationExt for T {}

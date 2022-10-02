@@ -11,9 +11,9 @@ use spline::*;
 
 use core::iter::once as iter_once;
 
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::ecs::system::SystemParam;
 use derive_more::Deref;
 use noisy_float::prelude::*;
 use tap::TapOptional;
@@ -74,29 +74,6 @@ impl Sheet {
         f32::EPSILON < self.duration.raw() && self.scheduled_at(time)
     }
 }
-
-#[derive(Component, Deref)]
-pub struct GenID<T> {
-    #[deref]
-    id: Entity,
-    _phantom: PhantomData<T>,
-}
-
-#[rustfmt::skip]
-impl<T> GenID<T> {
-    pub fn new(id: Entity) -> Self {
-        Self { id, _phantom: PhantomData }
-    }
-}
-
-#[rustfmt::skip]
-impl<T> Clone for GenID<T> {
-    fn clone(&self) -> Self {
-        Self { id: self.id, _phantom: PhantomData }
-    }
-}
-
-impl<T> Copy for GenID<T> {}
 
 #[derive(Clone, Copy, Component)]
 struct Sources<T> {
