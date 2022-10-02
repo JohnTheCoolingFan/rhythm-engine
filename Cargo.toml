@@ -12,6 +12,7 @@ pretty_assertions = "1.2.1"
 [dependencies]
 derive_more = "0.99.17"
 bevy = { version = "0.8.0", features = ["dynamic"] }
+bevy_egui = "0.16"
 noisy_float = "0.2.0"
 tinyvec = "1.5.1"
 itertools = "0.10.3"

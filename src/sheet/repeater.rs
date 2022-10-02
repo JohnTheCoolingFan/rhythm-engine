@@ -23,7 +23,7 @@ pub struct Repeater {
     floor: RepeaterClamp,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct ClampedTime {
     pub offset: P32,
     pub lower_clamp: T32,
@@ -41,7 +41,7 @@ impl ClampedTime {
 pub struct RepeaterAffinity;
 
 #[rustfmt::skip]
-fn produce_repetitions(
+pub fn produce_repetitions(
     repeaters: Query<(&Sheet, &Repeater)>,
     mut time_tables: ResMut<TimeTables>,
 ) {

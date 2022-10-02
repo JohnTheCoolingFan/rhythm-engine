@@ -62,7 +62,7 @@ where
     }
 }
 
-#[derive(Deref, DerefMut, Component)]
+#[derive(Default, Deref, DerefMut, Component)]
 pub struct Automation<T: Default>(pub TinyVec<[Anchor<T>; 6]>);
 
 impl Automation<T32> {

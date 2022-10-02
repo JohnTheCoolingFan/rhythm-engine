@@ -1,7 +1,7 @@
-mod automation;
-mod repeater;
-mod sequence;
-mod spline;
+pub mod automation;
+pub mod repeater;
+pub mod sequence;
+pub mod spline;
 
 use crate::{hit::*, utils::*, *};
 use automation::*;
@@ -26,6 +26,12 @@ pub struct Table<T>(pub [T; MAX_CHANNELS]);
 impl<T> Table<T> {
     pub fn fill_with(&mut self, func: impl Fn() -> T) {
         self.0 = [(); MAX_CHANNELS].map(|_| func());
+    }
+}
+
+impl<T: Default> Default for Table<T> {
+    fn default() -> Self {
+        Self([(); MAX_CHANNELS].map(|_| T::default()))
     }
 }
 
@@ -76,7 +82,7 @@ impl Sheet {
 }
 
 #[derive(Clone, Copy, Component)]
-struct Sources<T> {
+pub struct Sources<T> {
     main: GenID<T>,
     delegation: Option<GenID<T>>,
 }
@@ -139,14 +145,14 @@ impl From<Rotation> for Modulation {
     }
 }
 
-struct Arrangement<T> {
+pub struct Arrangement<T> {
     offset: P32,
     primary: T,
     secondary: Option<T>,
 }
 
 #[rustfmt::skip]
-fn arrange<T: Default + Component>(
+pub fn arrange<T: Default + Component>(
     mut arrangements: ResMut<Table<Option<Arrangement<GenID<T>>>>>,
     time_tables: ResMut<TimeTables>,
     instances: Query<(
@@ -173,7 +179,7 @@ fn arrange<T: Default + Component>(
 }
 
 #[derive(SystemParam)]
-struct Ensemble<'w, 's, T: Component> {
+pub struct Ensemble<'w, 's, T: Component> {
     sources: Query<'w, 's, &'static T>,
     arrangements: Res<'w, Table<Option<Arrangement<GenID<T>>>>>,
 }
@@ -232,7 +238,7 @@ where
 }
 
 #[derive(SystemParam)]
-struct Performers<'w, 's> {
+pub struct Performers<'w, 's> {
     splines: Ensemble<'w, 's, Sequence<Spline>>,
     colors: Ensemble<'w, 's, Sequence<Rgba>>,
     luminosities: Ensemble<'w, 's, Sequence<Luminosity>>,
@@ -241,7 +247,7 @@ struct Performers<'w, 's> {
 }
 
 #[rustfmt::skip]
-fn harmonize(
+pub fn harmonize(
     mut modulations: ResMut<Table<Option<Modulation>>>,
     time_tables: ResMut<TimeTables>,
     performers: Performers,
@@ -320,4 +326,61 @@ fn harmonize(
             }
         })
     })
+}
+
+#[derive(SystemLabel)]
+pub enum AutomationSystems {
+    RespondToHits,
+    ProduceRepetitions,
+    Arrange,
+    Harmonize,
+}
+
+pub struct SheetPlugin;
+
+impl Plugin for SheetPlugin {
+    fn build(&self, game: &mut App) {
+        game.init_resource::<TimeTables>()
+            .init_resource::<HitRegister>()
+            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Spline>>>>>>()
+            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Rgba>>>>>>()
+            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Luminosity>>>>>>()
+            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Scale>>>>>>()
+            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Rotation>>>>>>()
+            .init_resource::<Table<Option<Modulation>>>()
+            .add_system_set(
+                SystemSet::new()
+                    .label(AutomationSystems::RespondToHits)
+                    .before(AutomationSystems::ProduceRepetitions)
+                    .with_run_criteria(map_selected)
+                    .with_system(hit::respond_to_hits),
+            )
+            .add_system_set(
+                SystemSet::new()
+                    .with_run_criteria(map_selected)
+                    .label(AutomationSystems::ProduceRepetitions)
+                    .after(AutomationSystems::RespondToHits)
+                    .before(AutomationSystems::Arrange)
+                    .with_system(sheet::repeater::produce_repetitions),
+            )
+            .add_system_set(
+                SystemSet::new()
+                    .with_run_criteria(map_selected)
+                    .label(AutomationSystems::Arrange)
+                    .after(AutomationSystems::ProduceRepetitions)
+                    .before(AutomationSystems::Harmonize)
+                    .with_system(sheet::arrange::<Sequence<Spline>>)
+                    .with_system(sheet::arrange::<Sequence<Rgba>>)
+                    .with_system(sheet::arrange::<Sequence<Luminosity>>)
+                    .with_system(sheet::arrange::<Sequence<Scale>>)
+                    .with_system(sheet::arrange::<Sequence<Rotation>>),
+            )
+            .add_system_set(
+                SystemSet::new()
+                    .with_run_criteria(map_selected)
+                    .label(AutomationSystems::Harmonize)
+                    .after(AutomationSystems::Arrange)
+                    .with_system(sheet::harmonize),
+            );
+    }
 }

@@ -65,7 +65,7 @@ impl Sequence<Spline> {
     }
 }
 
-#[derive(Deref, DerefMut, Component)]
+#[derive(Default, Deref, DerefMut, Component)]
 pub struct Sequence<T: Default>(Automation<T>);
 
 impl<T: Default + Clone + Copy + Lerp<Output = T>> Sequence<T> {

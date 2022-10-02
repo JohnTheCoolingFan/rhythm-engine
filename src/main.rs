@@ -3,7 +3,8 @@
 
 use utils::*;
 
-use bevy::prelude::*;
+use bevy::{ecs::schedule::ShouldRun, prelude::*};
+use bevy_egui::{egui, EguiContext, EguiPlugin};
 use derive_more::From;
 
 mod editor;
@@ -12,21 +13,56 @@ mod sheet;
 mod timing;
 mod utils;
 
+use sheet::SheetPlugin;
+
+struct Settings {
+    ui_scale: f32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { ui_scale: 1. }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum GameState {
     Browse,
-    Edit,
-    Play,
+    Edit(String),
+    Play(String),
+    Paused,
 }
 
+fn map_selected(game_state: Res<State<GameState>>) -> ShouldRun {
+    match game_state.current() {
+        GameState::Edit(_) | GameState::Play(_) => ShouldRun::Yes,
+        _ => ShouldRun::No,
+    }
+}
+
+#[rustfmt::skip]
 fn main() {
-    /*App::new()
-    .insert_resource(Msaa { samples: 4 })
-    .add_plugins(DefaultPlugins)
-    .add_plugin(ShapePlugin)
-    .add_startup_system(setup_system)
-    .run();*/
+    let mut game = App::new();
+
+    game.add_plugins(DefaultPlugins)
+        .add_plugin(EguiPlugin)
+        .add_plugin(SheetPlugin)
+        .init_resource::<Settings>();
+
+    #[cfg(debug_assertions)]
+    game.add_state(GameState::Edit("test".to_string()));
+
+    #[cfg(not(debug_assertions))]
+    game.add_state(GameState::Browse);
+
+    game.run()
 }
 
+fn ui_example(mut egui_context: ResMut<EguiContext>) {
+    egui::Window::new("Hello").show(egui_context.ctx_mut(), |ui| {
+        ui.label("world");
+    });
+}
 /*fn setup_system(mut commands: Commands) {
     let shape = shapes::RegularPolygon {
         sides: 6,

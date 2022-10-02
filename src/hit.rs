@@ -78,7 +78,7 @@ fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
 }
 
 #[rustfmt::skip]
-fn respond_to_hits(
+pub fn respond_to_hits(
     hits: Res<HitRegister>,
     mut time_tables: ResMut<TimeTables>,
     mut responses: Query<(
@@ -147,11 +147,16 @@ mod tests {
             ResponseState::None
         ));
 
-        game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
-            object_time: p32(time),
-            hit_time: p32(time),
-            layer,
-        })]));
+        game.insert_resource(HitRegister([
+            None,
+            None,
+            None,
+            Some(HitInfo {
+                object_time: p32(time),
+                hit_time: p32(time),
+                layer,
+            })
+        ]));
 
         game.update();
         assert_eq!(expected, *game.world.query::<&ResponseState>().single(&game.world))
