@@ -284,46 +284,50 @@ fn harmonize(
 
     modulations.fill_with(|| None);
 
-    automations.iter().for_each(|(sheet, automation, affinity)| sheet.coverage().for_each(|index| {
-        if let Some(t) = affinity
-            .map(|_| clamped_times[index])
-            .into_iter()
-            .chain(iter_once(ClampedTime::new(seek_times[index])))
-            .find(|ClampedTime { offset, .. }| sheet.playable_at(*offset))
-            .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.start)
-            .and_then(|time| automation_sources
-                .get(*automation.pick(*delegations[index]))
-                .map(|automation| automation.play(time))
-                .ok()
-            )
-        {
+    automations.iter().for_each(|(sheet, automation, affinity)| {
+        sheet.coverage().for_each(|index| {
+            if let Some(t) = affinity
+                .map(|_| clamped_times[index])
+                .into_iter()
+                .chain(iter_once(ClampedTime::new(seek_times[index])))
+                .find(|ClampedTime { offset, .. }| sheet.playable_at(*offset))
+                .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.start)
+                .and_then(|time| automation_sources
+                    .get(*automation.pick(*delegations[index]))
+                    .map(|automation| automation.play(time))
+                    .ok()
+                )
+            {
+                let performances = [
+                    performers.splines.play(index, t),
+                    performers.colors.play(index, t),
+                    performers.luminosities.play(index, t),
+                    performers.scales.play(index, t),
+                    performers.rotations.play(index, t),
+                ];
+
+                modulations[index] = performances
+                    .into_iter()
+                    .find(Option::is_some)
+                    .unwrap_or(Some(Modulation::None))
+            }
+        })
+    });
+
+    modulations.iter_mut().enumerate().for_each(|(index, modulation)| {
+        if modulation.is_none() {
             let performances = [
-                performers.splines.play(index, t),
-                performers.colors.play(index, t),
-                performers.luminosities.play(index, t),
-                performers.scales.play(index, t),
-                performers.rotations.play(index, t),
+                performers.colors.play_primary(index),
+                performers.luminosities.play_primary(index),
+                performers.scales.play_primary(index),
+                performers.rotations.play_primary(index),
             ];
 
-            modulations[index] = performances
+            *modulation = performances
                 .into_iter()
                 .find(Option::is_some)
-                .unwrap_or(Some(Modulation::None))
+                .flatten()
         }
-    }));
-
-    modulations.iter_mut().enumerate().for_each(|(index, modulation)| if let None = modulation {
-        let performances = [
-            performers.colors.play_primary(index),
-            performers.luminosities.play_primary(index),
-            performers.scales.play_primary(index),
-            performers.rotations.play_primary(index),
-        ];
-
-        *modulation = performances
-            .into_iter()
-            .find(Option::is_some)
-            .flatten()
     });
 
     geom_ctrls.iter().filter(|(sheet, ..)| sheet.playable_at(song_time)).for_each(|(sheet, genid)| {

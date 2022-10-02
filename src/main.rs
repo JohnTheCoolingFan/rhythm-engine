@@ -6,9 +6,17 @@ use utils::*;
 use bevy::prelude::*;
 use derive_more::From;
 
+mod editor;
 mod hit;
 mod sheet;
+mod timing;
 mod utils;
+
+enum GameState {
+    Browse,
+    Edit,
+    Play,
+}
 
 fn main() {
     /*App::new()

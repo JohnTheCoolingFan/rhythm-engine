@@ -147,7 +147,7 @@ impl Segment {
                         .abs()
                         .pipe(|theta| match [start, center, end].into_iter().orientation() {
                             orientation if orientation != ctrl_orientation => theta,
-                            _ => (360. - theta)
+                            _ => 360. - theta
                         });
 
                     *path_length += p32(theta * center.distance(start));
