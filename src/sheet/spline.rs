@@ -135,37 +135,35 @@ impl Segment {
                         -0.5 * (m13.determinant() / m11_determinant),
                     );
 
-                    let (center_to_start, center_to_end, ctrl_orientation) = (
+                    let (center_to_start, center_to_end, ctrl_dir, arc_dir) = (
                         center - start,
                         center - end,
-                        [start, ctrl, end].into_iter().orientation()
+                        [start, ctrl, end].into_iter().orientation(),
+                        [start, center, end].into_iter().orientation()
                     );
 
                     let theta = (center_to_start.length() * center_to_end.length())
                         .pipe(|denominator| center_to_start.dot(center_to_end) / denominator)
                         .acos()
                         .abs()
-                        .pipe(|theta| match [start, center, end].into_iter().orientation() {
-                            orientation if orientation != ctrl_orientation => theta,
-                            _ => 360. - theta
-                        });
+                        .pipe(|theta| if ctrl_dir != arc_dir { theta } else { 360. - theta });
 
                     *path_length += p32(theta * center.distance(start));
 
                     let samples = [
                         (f32::EPSILON <= center.distance(start)).then(|| Sample {
-                            displacement: *path_length,
                             position: center,
-                            kind: match ctrl_orientation {
+                            displacement: *path_length,
+                            kind: match ctrl_dir {
                                 Orientation::CounterClockWise => SampleKind::CCArc,
                                 Orientation::ClockWise => SampleKind::CWArc,
                                 _ => unreachable!()
                             }
                         }),
                         Some(Sample {
-                            displacement: *path_length,
                             position: end,
-                            kind: SampleKind::Point
+                            kind: SampleKind::Point,
+                            displacement: *path_length,
                         })
                     ];
 

@@ -297,8 +297,11 @@ pub fn harmonize(
         })
     });
 
-    modulations.iter_mut().enumerate().for_each(|(index, modulation)| {
-        if modulation.is_none() {
+    modulations
+        .iter_mut()
+        .enumerate()
+        .filter(|(_, modulation)|  modulation.is_none())
+        .for_each(|(index, modulation)| {
             let performances = [
                 performers.colors.play_primary(index),
                 performers.luminosities.play_primary(index),
@@ -310,16 +313,14 @@ pub fn harmonize(
                 .into_iter()
                 .find(Option::is_some)
                 .flatten()
-        }
-    });
+        });
 
     geom_ctrls.iter().filter(|(sheet, ..)| sheet.playable_at(song_time)).for_each(|(sheet, genid)| {
-        modulations[sheet.coverage()].iter_mut().for_each(|modulation| {
-            if let Some(
-                Modulation::Scale { ctrl: point, .. }
+        modulations[sheet.coverage()].iter_mut().flatten().for_each(|modulation| {
+            if let
+                | Modulation::Scale { ctrl: point, .. }
                 | Modulation::Rotation { ctrl: point, .. }
                 | Modulation::Position { start: point, .. }
-            )
                 = modulation
             {
                 *point = geom_ctrl_sources.get(**genid).ok().map(|ctrl| **ctrl)
@@ -338,6 +339,7 @@ pub enum AutomationSystems {
 
 pub struct SheetPlugin;
 
+#[rustfmt::skip]
 impl Plugin for SheetPlugin {
     fn build(&self, game: &mut App) {
         game.init_resource::<TimeTables>()
@@ -348,39 +350,35 @@ impl Plugin for SheetPlugin {
             .init_resource::<Table<Option<Arrangement<GenID<Sequence<Scale>>>>>>()
             .init_resource::<Table<Option<Arrangement<GenID<Sequence<Rotation>>>>>>()
             .init_resource::<Table<Option<Modulation>>>()
-            .add_system_set(
-                SystemSet::new()
-                    .label(AutomationSystems::RespondToHits)
-                    .before(AutomationSystems::ProduceRepetitions)
-                    .with_run_criteria(map_selected)
-                    .with_system(hit::respond_to_hits),
+            .add_system_set(SystemSet::new()
+                .with_run_criteria(map_selected)
+                .label(AutomationSystems::RespondToHits)
+                .before(AutomationSystems::ProduceRepetitions)
+                .with_system(hit::respond_to_hits),
             )
-            .add_system_set(
-                SystemSet::new()
-                    .with_run_criteria(map_selected)
-                    .label(AutomationSystems::ProduceRepetitions)
-                    .after(AutomationSystems::RespondToHits)
-                    .before(AutomationSystems::Arrange)
-                    .with_system(sheet::repeater::produce_repetitions),
+            .add_system_set(SystemSet::new()
+                .with_run_criteria(map_selected)
+                .after(AutomationSystems::RespondToHits)
+                .label(AutomationSystems::ProduceRepetitions)
+                .before(AutomationSystems::Arrange)
+                .with_system(repeater::produce_repetitions),
             )
-            .add_system_set(
-                SystemSet::new()
-                    .with_run_criteria(map_selected)
-                    .label(AutomationSystems::Arrange)
-                    .after(AutomationSystems::ProduceRepetitions)
-                    .before(AutomationSystems::Harmonize)
-                    .with_system(sheet::arrange::<Sequence<Spline>>)
-                    .with_system(sheet::arrange::<Sequence<Rgba>>)
-                    .with_system(sheet::arrange::<Sequence<Luminosity>>)
-                    .with_system(sheet::arrange::<Sequence<Scale>>)
-                    .with_system(sheet::arrange::<Sequence<Rotation>>),
+            .add_system_set(SystemSet::new()
+                .with_run_criteria(map_selected)
+                .after(AutomationSystems::ProduceRepetitions)
+                .label(AutomationSystems::Arrange)
+                .before(AutomationSystems::Harmonize)
+                .with_system(arrange::<Sequence<Spline>>)
+                .with_system(arrange::<Sequence<Rgba>>)
+                .with_system(arrange::<Sequence<Luminosity>>)
+                .with_system(arrange::<Sequence<Scale>>)
+                .with_system(arrange::<Sequence<Rotation>>),
             )
-            .add_system_set(
-                SystemSet::new()
-                    .with_run_criteria(map_selected)
-                    .label(AutomationSystems::Harmonize)
-                    .after(AutomationSystems::Arrange)
-                    .with_system(sheet::harmonize),
+            .add_system_set(SystemSet::new()
+                .with_run_criteria(map_selected)
+                .after(AutomationSystems::Arrange)
+                .label(AutomationSystems::Harmonize)
+                .with_system(harmonize),
             );
     }
 }

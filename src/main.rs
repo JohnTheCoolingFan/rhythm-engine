@@ -9,6 +9,7 @@ use derive_more::From;
 
 mod editor;
 mod hit;
+mod serialization;
 mod sheet;
 mod timing;
 mod utils;
@@ -28,19 +29,18 @@ impl Default for Settings {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum GameState {
     Browse,
-    Edit(String),
-    Play(String),
+    Edit,
+    Play,
     Paused,
 }
 
 fn map_selected(game_state: Res<State<GameState>>) -> ShouldRun {
     match game_state.current() {
-        GameState::Edit(_) | GameState::Play(_) => ShouldRun::Yes,
+        GameState::Edit | GameState::Play => ShouldRun::Yes,
         _ => ShouldRun::No,
     }
 }
 
-#[rustfmt::skip]
 fn main() {
     let mut game = App::new();
 
@@ -50,7 +50,7 @@ fn main() {
         .init_resource::<Settings>();
 
     #[cfg(debug_assertions)]
-    game.add_state(GameState::Edit("test".to_string()));
+    game.add_state(GameState::Edit);
 
     #[cfg(not(debug_assertions))]
     game.add_state(GameState::Browse);
