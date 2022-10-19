@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{math::f64::DVec2, prelude::*};
 use derive_more::Deref;
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
@@ -9,88 +9,88 @@ use std::marker::PhantomData;
 #[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;
 
-impl FloatChecker<f32> for UnitIntervalChecker {
+impl FloatChecker<f64> for UnitIntervalChecker {
     #[inline]
-    fn check(value: f32) -> bool {
+    fn check(value: f64) -> bool {
         (0.0..=1.0).contains(&value)
     }
 
     #[inline]
-    fn assert(value: f32) {
+    fn assert(value: f64) {
         debug_assert!(Self::check(value), "Unexpected non-unit float: {value}");
     }
 }
 
-pub type T32 = NoisyFloat<f32, UnitIntervalChecker>;
+pub type T64 = NoisyFloat<f64, UnitIntervalChecker>;
 
-pub fn t32(value: f32) -> T32 {
-    T32::new(value)
+pub fn t64(value: f64) -> T64 {
+    T64::new(value)
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct PositiveFloatChecker;
 
-impl FloatChecker<f32> for PositiveFloatChecker {
+impl FloatChecker<f64> for PositiveFloatChecker {
     #[inline]
-    fn check(value: f32) -> bool {
+    fn check(value: f64) -> bool {
         (0.0..).contains(&value)
     }
 
     #[inline]
-    fn assert(value: f32) {
+    fn assert(value: f64) {
         debug_assert!(Self::check(value), "Unexpected non-positive float: {value}");
     }
 }
 
-pub type P32 = NoisyFloat<f32, PositiveFloatChecker>;
+pub type P64 = NoisyFloat<f64, PositiveFloatChecker>;
 
-pub fn p32(value: f32) -> P32 {
-    P32::new(value)
+pub fn p64(value: f64) -> P64 {
+    P64::new(value)
 }
 
 pub trait Quantify {
-    fn quantify(&self) -> P32;
+    fn quantify(&self) -> P64;
 }
 
 pub trait Lerp {
     type Output;
-    fn lerp(&self, next: &Self, t: T32) -> Self::Output;
+    fn lerp(&self, next: &Self, t: T64) -> Self::Output;
 }
 
 pub trait CompletionRatio {
-    fn completion_ratio(self, start: Self, end: Self) -> T32;
+    fn completion_ratio(self, start: Self, end: Self) -> T64;
 }
 
 pub trait Vec2Ext {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
-    fn rotate_about(&self, vec: Self, theta: R32) -> Self;
+    fn rotate_about(&self, vec: Self, theta: R64) -> Self;
 }
 
-impl Quantify for P32 {
-    fn quantify(&self) -> P32 {
+impl Quantify for P64 {
+    fn quantify(&self) -> P64 {
         *self
     }
 }
 
-impl<Checker: FloatChecker<f32>> Lerp for NoisyFloat<f32, Checker> {
+impl<Checker: FloatChecker<f64>> Lerp for NoisyFloat<f64, Checker> {
     type Output = Self;
-    fn lerp(&self, next: &Self, t: T32) -> Self::Output {
+    fn lerp(&self, next: &Self, t: T64) -> Self::Output {
         Self::new(self.raw() + (next.raw() - self.raw()) * t.raw())
     }
 }
 
-impl<Checker: FloatChecker<f32>> CompletionRatio for NoisyFloat<f32, Checker> {
-    fn completion_ratio(self, start: Self, end: Self) -> T32 {
-        t32((self.raw() - start.raw()) / (end.raw() - start.raw()))
+impl<Checker: FloatChecker<f64>> CompletionRatio for NoisyFloat<f64, Checker> {
+    fn completion_ratio(self, start: Self, end: Self) -> T64 {
+        t64((self.raw() - start.raw()) / (end.raw() - start.raw()))
     }
 }
 
-impl Vec2Ext for Vec2 {
+impl Vec2Ext for DVec2 {
     fn is_left(&self, start: &Self, end: &Self) -> bool {
         0. < (end.x - start.x) * (self.y - start.y) - (end.y - start.y) * (self.x - start.x)
     }
 
-    fn rotate_about(&self, vec: Self, radians: R32) -> Self {
+    fn rotate_about(&self, vec: Self, radians: R64) -> Self {
         let c = radians.raw().cos();
         let s = radians.raw().sin();
 
@@ -102,15 +102,15 @@ impl Vec2Ext for Vec2 {
 }
 
 pub trait ControlTable<'a, T> {
-    fn at_or_after(self, offset: P32) -> &'a [T];
-    fn interp(self, offset: P32) -> Result<<T as Lerp>::Output, &'a T>
+    fn at_or_after(self, offset: P64) -> &'a [T];
+    fn interp(self, offset: P64) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp;
 }
 
 /// Must be non-empty and sorted
 impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
-    fn at_or_after(self, offset: P32) -> &'a [T] {
+    fn at_or_after(self, offset: P64) -> &'a [T] {
         self.iter()
             .take_while(|item| item.quantify() < offset)
             .count()
@@ -118,7 +118,7 @@ impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
             .pipe(|start| &self[start..])
     }
 
-    fn interp(self, offset: P32) -> Result<<T as Lerp>::Output, &'a T>
+    fn interp(self, offset: P64) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp,
     {
@@ -140,16 +140,16 @@ pub enum Orientation {
     ClockWise,
 }
 
-pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
+pub trait OrientationExt: Iterator<Item = DVec2> + Clone {
     fn orientation(self) -> Orientation {
         match self
             .clone()
             .chain(self.take(1))
             .tuple_windows::<(_, _)>()
             .map(|(p, q)| (q.x - p.x) * (q.y + p.y))
-            .sum::<f32>()
+            .sum::<f64>()
         {
-            sum if sum.abs() <= f32::EPSILON => Orientation::CoLinear,
+            sum if sum.abs() <= f64::EPSILON => Orientation::CoLinear,
             sum if sum < 0. => Orientation::CounterClockWise,
             sum if 0. < sum => Orientation::ClockWise,
             _ => unreachable!(),
@@ -180,4 +180,4 @@ impl<T> Clone for GenID<T> {
 
 impl<T> Copy for GenID<T> {}
 
-impl<T: Iterator<Item = Vec2> + Clone> OrientationExt for T {}
+impl<T: Iterator<Item = DVec2> + Clone> OrientationExt for T {}

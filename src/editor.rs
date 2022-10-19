@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 
-struct SelectionItems {
-    item: usize,
-    sub_itme: Option<usize>,
+enum Selection {
+    Single(Entity),
+    Multi(Vec<Entity>),
+    SingleItem(Entity, usize),
+    MultiItem(Entity, Vec<usize>),
 }
 
-struct Selection {
-    entity: Entity,
-    items: Option<SelectionItems>,
-}
+struct ClipBoard(Selection);
+
+#[derive(Component)]
+struct Seeker(f64);

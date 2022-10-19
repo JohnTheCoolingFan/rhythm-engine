@@ -2,7 +2,10 @@ use crate::utils::*;
 
 use core::iter::once as iter_once;
 
-use bevy::prelude::*;
+use bevy::{
+    math::f64::{DMat3, DVec2},
+    prelude::*,
+};
 use itertools::Itertools;
 use lyon_geom::*;
 use noisy_float::prelude::*;
@@ -16,7 +19,7 @@ pub enum SampleKind {
 }
 
 impl SampleKind {
-    fn signum(self) -> f32 {
+    fn signum(self) -> f64 {
         match self {
             Self::CWArc => 1.,
             Self::CCArc => -1.,
@@ -27,31 +30,32 @@ impl SampleKind {
 
 #[derive(Debug)]
 pub struct Sample {
-    displacement: P32,
-    position: Vec2,
+    displacement: P64,
+    position: DVec2,
     kind: SampleKind,
 }
 
 impl Quantify for Sample {
-    fn quantify(&self) -> P32 {
+    fn quantify(&self) -> P64 {
         self.displacement
     }
 }
 
 impl Lerp for Sample {
-    type Output = Vec2;
+    type Output = DVec2;
 
     #[rustfmt::skip]
-    fn lerp(&self, next: &Self, t: T32) -> Self::Output {
-        match (self.kind, next.kind) {
-            (SampleKind::Point, SampleKind::Point) => self.position.lerp(next.position, t.raw()),
-            (SampleKind::Point, SampleKind::CWArc | SampleKind::CCArc)  => {
+    fn lerp(&self, next: &Self, t: T64) -> Self::Output {
+        if !matches!(self.kind, SampleKind::Point) { unreachable!() };
+
+        match next.kind {
+            SampleKind::Point => self.position.lerp(next.position, t.raw()),
+            SampleKind::CWArc | SampleKind::CCArc => {
                 (self.displacement.raw() - next.displacement.raw())
                     .pipe(|arc_length| arc_length * t.raw() / next.position.distance(self.position))
-                    .pipe(|raw_radians| r32(raw_radians * next.kind.signum()))
+                    .pipe(|raw_radians| r64(raw_radians * next.kind.signum()))
                     .pipe(|radians| self.position.rotate_about(next.position, radians))
             },
-            _ => unreachable!()
         }
     }
 }
@@ -59,28 +63,28 @@ impl Lerp for Sample {
 #[derive(Clone, Copy)]
 pub enum Curvature {
     Linear,
-    Circular(Vec2),
-    Quadratic(Vec2),
-    Cubic(Vec2, Vec2),
+    Circular(DVec2),
+    Quadratic(DVec2),
+    Cubic(DVec2, DVec2),
 }
 
 pub struct Segment {
     curvature: Curvature,
-    position: Vec2,
+    position: DVec2,
 }
 
 #[rustfmt::skip]
 impl Segment {
     fn sample_bezier(
-        path_length: &mut P32,
-        start: Vec2,
-        points: impl Iterator<Item = Point<f32>>
+        path_length: &mut P64,
+        start: DVec2,
+        points: impl Iterator<Item = Point<f64>>
     )
         -> Vec<Sample>
     {
         [start]
             .into_iter()
-            .chain(points.map(|p| Vec2::new(p.x, p.y)))
+            .chain(points.map(|p| DVec2::new(p.x, p.y)))
             .tuple_windows::<(_, _)>()
             .map(|(prev, curr)| {
                 *path_length += prev.distance(curr);
@@ -93,7 +97,7 @@ impl Segment {
             .collect::<Vec<_>>()
     }
 
-    fn sample(&self, path_length: &mut P32, start: Vec2) -> Vec<Sample> {
+    fn sample(&self, path_length: &mut P64, start: DVec2) -> Vec<Sample> {
         match self.curvature {
             Curvature::Linear => {
                 *path_length += start.distance(self.position);
@@ -108,11 +112,11 @@ impl Segment {
                 // https://math.stackexchange.com/a/1460096
                 let m11_determinant = [start, ctrl, end]
                     .map(|point| [point.x, point.y, 1.])
-                    .pipe_ref(Mat3::from_cols_array_2d)
+                    .pipe_ref(DMat3::from_cols_array_2d)
                     .transpose()
                     .determinant();
 
-                if m11_determinant.abs() <= f32::EPSILON {
+                if m11_determinant.abs() <= f64::EPSILON {
                     *path_length += start.distance(self.position);
                     vec![Sample {
                         position: end,
@@ -122,15 +126,15 @@ impl Segment {
                 } else {
                     let m12 = [start, ctrl, end]
                         .map(|point| [point.x.powi(2) + point.y.powi(2), point.y, 1.])
-                        .pipe_ref(Mat3::from_cols_array_2d)
+                        .pipe_ref(DMat3::from_cols_array_2d)
                         .transpose();
 
                     let m13 = [start, ctrl, end]
                         .map(|point| [point.x.powi(2) + point.y.powi(2), point.x, 1.])
-                        .pipe_ref(Mat3::from_cols_array_2d)
+                        .pipe_ref(DMat3::from_cols_array_2d)
                         .transpose();
 
-                    let center = Vec2::new(
+                    let center = DVec2::new(
                         0.5 * (m12.determinant() / m11_determinant),
                         -0.5 * (m13.determinant() / m11_determinant),
                     );
@@ -148,10 +152,10 @@ impl Segment {
                         .abs()
                         .pipe(|theta| if ctrl_dir != arc_dir { theta } else { 360. - theta });
 
-                    *path_length += p32(theta * center.distance(start));
+                    *path_length += p64(theta * center.distance(start));
 
                     let samples = [
-                        (f32::EPSILON <= center.distance(start)).then(|| Sample {
+                        (f64::EPSILON <= center.distance(start)).then(|| Sample {
                             position: center,
                             displacement: *path_length,
                             kind: match ctrl_dir {
@@ -210,18 +214,18 @@ pub struct Spline {
 #[rustfmt::skip]
 impl Spline {
     pub fn resample(&mut self) {
-        let start = Segment { curvature: Curvature::Linear, position: Vec2::new(0., 0.) };
+        let start = Segment { curvature: Curvature::Linear, position: DVec2::new(0., 0.) };
 
         let head = Sample {
-            position: Vec2::new(0., 0.),
-            displacement: p32(0.),
+            position: DVec2::new(0., 0.),
+            displacement: p64(0.),
             kind: SampleKind::Point
         };
 
         let tail = iter_once(&start)
             .chain(self.path.iter())
             .tuple_windows::<(_, _)>()
-            .scan(p32(0.), |state, (prev, curr)| Some(curr.sample(state, prev.position)))
+            .scan(p64(0.), |state, (prev, curr)| Some(curr.sample(state, prev.position)))
             .flatten();
 
         self.lut = iter_once(head)
@@ -229,12 +233,12 @@ impl Spline {
             .collect::<Vec<_>>();
     }
 
-    pub fn play(&self, t: T32) -> Vec2 {
+    pub fn play(&self, t: T64) -> DVec2 {
         self.lut
             .last()
             .map(|sample| sample.quantify())
-            .filter(|length| f32::EPSILON < length.raw())
-            .map_or(Vec2::default(), |length| self
+            .filter(|length| f64::EPSILON < length.raw())
+            .map_or(DVec2::default(), |length| self
                 .lut
                 .interp(length * t.raw())
                 .unwrap_or_else(|sample| sample.position)
@@ -258,23 +262,23 @@ mod tests {
             path: vec![
                 Segment {
                     curvature: Linear,
-                    position: Vec2::new(2., 0.),
+                    position: DVec2::new(2., 0.),
                 },
                 Segment {
                     curvature: Linear,
-                    position: Vec2::new(-1., 0.),
+                    position: DVec2::new(-1., 0.),
                 },
                 Segment {
-                    curvature: Circular(Vec2::new(0., 1.)),
-                    position: Vec2::new(1., 0.),
+                    curvature: Circular(DVec2::new(0., 1.)),
+                    position: DVec2::new(1., 0.),
                 },
                 Segment {
-                    curvature: Circular(Vec2::new(0., 1.)),
-                    position: Vec2::new(-1., 0.),
+                    curvature: Circular(DVec2::new(0., 1.)),
+                    position: DVec2::new(-1., 0.),
                 },
                 Segment {
-                    curvature: Cubic(Vec2::new(-1., -1.), Vec2::new(0., 0.)),
-                    position: Vec2::new(0., -1.),
+                    curvature: Cubic(DVec2::new(-1., -1.), DVec2::new(0., 0.)),
+                    position: DVec2::new(0., -1.),
                 },
             ],
         };
@@ -283,12 +287,12 @@ mod tests {
 
         let (length, qcw_turn) = (
             spline.lut.last().unwrap().quantify(),
-            std::f32::consts::PI / 2.
+            std::f64::consts::PI / 2.
         );
 
         let automation = Automation(tiny_vec![
             Anchor::default(),
-            Anchor { x: length, val: t32(1.), weight: Weight::Quadratic(r32(0.)) }
+            Anchor { x: length, val: t64(1.), weight: Weight::Quadratic(r64(0.)) }
         ]);
 
         let covals = [
@@ -307,8 +311,8 @@ mod tests {
         ];
 
         covals.iter().for_each(|((x, y), displacement)| {
-            let position = spline.play(automation.play(ClampedTime::new(p32(*displacement))));
-            let expected = Vec2::new(*x, *y);
+            let position = spline.play(automation.play(ClampedTime::new(p64(*displacement))));
+            let expected = DVec2::new(*x, *y);
             let distance = position.distance(expected);
             assert!(
                 distance < 0.001,

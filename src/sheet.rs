@@ -13,7 +13,7 @@ use core::iter::once as iter_once;
 
 use std::ops::RangeInclusive;
 
-use bevy::ecs::system::SystemParam;
+use bevy::{ecs::system::SystemParam, math::DVec2};
 use derive_more::Deref;
 use noisy_float::prelude::*;
 use tap::TapOptional;
@@ -36,8 +36,8 @@ impl<T: Default> Default for Table<T> {
 }
 
 pub struct TimeTables {
-    pub song_time: P32,
-    pub seek_times: Table<P32>,
+    pub song_time: P64,
+    pub seek_times: Table<P64>,
     pub clamped_times: Table<ClampedTime>,
     pub delegations: Table<Delegated>,
 }
@@ -45,10 +45,10 @@ pub struct TimeTables {
 impl Default for TimeTables {
     fn default() -> Self {
         TimeTables {
-            song_time: p32(0.),
-            seek_times: Table([(); MAX_CHANNELS].map(|_| p32(0.))),
+            song_time: p64(0.),
+            seek_times: Table([(); MAX_CHANNELS].map(|_| p64(0.))),
             delegations: Table([(); MAX_CHANNELS].map(|_| Delegated(false))),
-            clamped_times: Table([(); MAX_CHANNELS].map(|_| ClampedTime::new(p32(0.)))),
+            clamped_times: Table([(); MAX_CHANNELS].map(|_| ClampedTime::new(p64(0.)))),
         }
     }
 }
@@ -58,8 +58,8 @@ pub struct Coverage(pub u8, pub u8);
 
 #[derive(Component)]
 pub struct Sheet {
-    pub start: P32,
-    pub duration: P32,
+    pub start: P64,
+    pub duration: P64,
     pub coverage: Coverage,
 }
 
@@ -72,12 +72,12 @@ impl Sheet {
         (self.coverage.1 - self.coverage.0).into()
     }
 
-    pub fn scheduled_at(&self, time: P32) -> bool {
+    pub fn scheduled_at(&self, time: P64) -> bool {
         (self.start.raw()..(self.start + self.duration).raw()).contains(&time.raw())
     }
 
-    pub fn playable_at(&self, time: P32) -> bool {
-        f32::EPSILON < self.duration.raw() && self.scheduled_at(time)
+    pub fn playable_at(&self, time: P64) -> bool {
+        f64::EPSILON < self.duration.raw() && self.scheduled_at(time)
     }
 }
 
@@ -99,15 +99,15 @@ impl<T> Sources<T> {
 
 pub enum Modulation {
     None,
-    Rgba([T32; 4]),
-    Luminosity(T32),
-    Rotation { theta: R32, ctrl: Option<Vec2> },
-    Scale { magnitude: R32, ctrl: Option<Vec2> },
-    Position { shift: Vec2, start: Option<Vec2> },
+    Rgba([T64; 4]),
+    Luminosity(T64),
+    Rotation { theta: R64, ctrl: Option<DVec2> },
+    Scale { magnitude: R64, ctrl: Option<DVec2> },
+    Position { shift: DVec2, start: Option<DVec2> },
 }
 
-impl From<Vec2> for Modulation {
-    fn from(point: Vec2) -> Self {
+impl From<DVec2> for Modulation {
+    fn from(point: DVec2) -> Self {
         Self::Position {
             shift: point,
             start: None,
@@ -146,7 +146,7 @@ impl From<Rotation> for Modulation {
 }
 
 pub struct Arrangement<T> {
-    offset: P32,
+    offset: P64,
     primary: T,
     secondary: Option<T>,
 }
@@ -201,7 +201,7 @@ impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
 
 impl<'w, 's> Ensemble<'w, 's, Sequence<Spline>> {
     #[rustfmt::skip]
-    fn play(&self, channel: usize,  t: T32) -> Option<Modulation> {
+    fn play(&self, channel: usize,  t: T64) -> Option<Modulation> {
         self.get(channel).and_then(|arrangement| arrangement
             .secondary
             .is_none()
@@ -216,7 +216,7 @@ where
     T: Default + Component + Clone + Copy + Lerp<Output = T>,
     Modulation: From<T>,
 {
-    fn play(&self, channel: usize, t: T32) -> Option<Modulation> {
+    fn play(&self, channel: usize, t: T64) -> Option<Modulation> {
         self.get(channel).and_then(|arrangement| arrangement
             .secondary
             .map(|secondary| arrangement
@@ -252,14 +252,14 @@ pub fn harmonize(
     time_tables: ResMut<TimeTables>,
     performers: Performers,
     geom_ctrl_sources: Query<&GeometryCtrl>,
-    automation_sources: Query<&Automation<T32>>,
+    automation_sources: Query<&Automation<T64>>,
     geom_ctrls: Query<(
         &Sheet,
         &GenID<GeometryCtrl>
     )>,
     automations: Query<(
         &Sheet,
-        &Sources<Automation<T32>>,
+        &Sources<Automation<T64>>,
         Option<&RepeaterAffinity>
     )>,
 ) {

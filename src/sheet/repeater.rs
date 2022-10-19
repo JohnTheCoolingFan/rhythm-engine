@@ -4,20 +4,20 @@ use crate::{sheet::*, utils::*, *};
 use noisy_float::prelude::*;
 
 pub struct RepeaterClamp {
-    start: T32,
-    end: T32,
+    start: T64,
+    end: T64,
     weight: Weight,
 }
 
 impl RepeaterClamp {
-    pub fn eval(&self, t: T32) -> T32 {
+    pub fn eval(&self, t: T64) -> T64 {
         self.start.lerp(&self.end, self.weight.eval(t))
     }
 }
 
 #[derive(Component)]
 pub struct Repeater {
-    period: P32,
+    period: P64,
     ping_pong: bool,
     ceil: RepeaterClamp,
     floor: RepeaterClamp,
@@ -25,15 +25,15 @@ pub struct Repeater {
 
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct ClampedTime {
-    pub offset: P32,
-    pub lower_clamp: T32,
-    pub upper_clamp: T32,
+    pub offset: P64,
+    pub lower_clamp: T64,
+    pub upper_clamp: T64,
 }
 
 impl ClampedTime {
     #[rustfmt::skip]
-    pub fn new(offset: P32) -> Self {
-        Self { offset, upper_clamp: t32(1.), lower_clamp: t32(0.) }
+    pub fn new(offset: P64) -> Self {
+        Self { offset, upper_clamp: t64(1.), lower_clamp: t64(0.) }
     }
 }
 
@@ -50,8 +50,8 @@ pub fn produce_repetitions(
 
     repeaters
         .iter()
-        .filter(|(sheet, _)| f32::EPSILON < sheet.duration.raw())
-        .filter(|(_, Repeater { period, .. })| f32::EPSILON < period.raw())
+        .filter(|(sheet, _)| f64::EPSILON < sheet.duration.raw())
+        .filter(|(_, Repeater { period, .. })| f64::EPSILON < period.raw())
         .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| {
             sheet.coverage().for_each(|index| {
                 if let Some(time) = [seek_times[index], *song_time]
@@ -61,8 +61,8 @@ pub fn produce_repetitions(
                     let relative_time = *time - sheet.start;
                     let remainder_time = relative_time % period;
                     let division = (relative_time / period).floor();
-                    let parity = division.raw() as i32 % 2;
-                    let clamp_time = t32(((division * period) / sheet.duration).raw());
+                    let parity = division.raw() as i64 % 2;
+                    let clamp_time = t64(((division * period) / sheet.duration).raw());
 
                     clamped_times[index] = ClampedTime {
                         upper_clamp: ceil.eval(clamp_time),
