@@ -5,8 +5,7 @@ use derive_more::{Deref, DerefMut};
 use noisy_float::prelude::*;
 use tap::Pipe;
 
-use super::automation::*;
-use crate::{sheet::spline::*, utils::*};
+use super::{spline::*, *};
 
 #[derive(Deref, DerefMut, Default, Component, Clone, Copy)]
 pub struct Scalar<Marker, Type = R64> {
@@ -74,6 +73,8 @@ impl<T: Default + Clone + Copy + Lerp<Output = T>> Sequence<T> {
     }
 }
 
+// Sequences can either be simple sequences in which case they are enough to produce modulations.
+// Or the can be composed of 2 sequences. They then require an Automation to produce modulations.
 #[derive(Deref, DerefMut, Component)]
 pub struct PrimarySequence<T>(T);
 

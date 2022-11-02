@@ -156,7 +156,6 @@ pub trait OrientationExt: Iterator<Item = DVec2> + Clone {
         }
     }
 }
-
 #[derive(Component, Deref)]
 pub struct GenID<T> {
     #[deref]

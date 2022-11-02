@@ -3,8 +3,11 @@ use noisy_float::prelude::*;
 use tap::Pipe;
 use tinyvec::*;
 
-use super::repeater::*;
+use crate::harmonizer::repeater::*;
 use crate::utils::*;
+
+pub mod sequence;
+pub mod spline;
 
 #[derive(Clone)]
 pub enum Weight {

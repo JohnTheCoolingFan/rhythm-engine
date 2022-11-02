@@ -749,6 +749,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_system_graph"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01982006dc7d468bc38c6362066299bcffeb742066483b131cd1acc3648ecb5f"
+dependencies = [
+ "bevy_ecs",
+ "bevy_utils",
+]
+
+[[package]]
 name = "bevy_tasks"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3015,6 +3025,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_egui",
+ "bevy_system_graph",
  "derive_more",
  "itertools",
  "lyon_geom",

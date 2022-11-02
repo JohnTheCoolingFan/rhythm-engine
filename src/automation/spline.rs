@@ -11,7 +11,7 @@ use lyon_geom::*;
 use noisy_float::prelude::*;
 use tap::Pipe;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleKind {
     Point,
     CWArc,
@@ -46,7 +46,7 @@ impl Lerp for Sample {
 
     #[rustfmt::skip]
     fn lerp(&self, next: &Self, t: T64) -> Self::Output {
-        if !matches!(self.kind, SampleKind::Point) { unreachable!() };
+        debug_assert!(self.kind == SampleKind::Point);
 
         match next.kind {
             SampleKind::Point => self.position.lerp(next.position, t.raw()),
@@ -248,10 +248,7 @@ impl Spline {
 
 #[cfg(test)]
 mod tests {
-    use super::super::automation::*;
-    use super::super::repeater::*;
-    use super::*;
-    use tinyvec::*;
+    use super::{super::*, *};
     use Curvature::*;
 
     #[test]

@@ -7,14 +7,13 @@ use bevy::{ecs::schedule::ShouldRun, prelude::*};
 use bevy_egui::{egui, EguiContext, EguiPlugin};
 use derive_more::From;
 
+mod automation;
 mod editor;
+mod harmonizer;
 mod hit;
 mod serialization;
-mod sheet;
 mod timing;
 mod utils;
-
-use sheet::SheetPlugin;
 
 struct Settings {
     ui_scale: f32,
@@ -46,7 +45,7 @@ fn main() {
 
     game.add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
-        .add_plugin(SheetPlugin)
+        //.add_plugin(SheetPlugin)
         .init_resource::<Settings>();
 
     #[cfg(debug_assertions)]
