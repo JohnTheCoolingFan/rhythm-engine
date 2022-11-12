@@ -16,7 +16,6 @@ use core::iter::once as iter_once;
 use bevy::prelude::*;
 use bevy::{ecs::system::SystemParam, math::DVec2};
 use bevy_system_graph::*;
-use derive_more::Deref;
 use noisy_float::prelude::*;
 use tap::{Conv, Pipe, Tap, TapOptional};
 
@@ -69,14 +68,14 @@ impl From<Rotation> for Modulation {
 }
 
 #[derive(SystemParam)]
-pub struct Ensemble<'w, 's, T: Component> {
-    sources: Query<'w, 's, &'static T>,
-    arrangements: Res<'w, Table<Option<Arrangement<GenID<T>>>>>,
+pub struct Ensemble<'w, 's, T: Component + Default> {
+    sources: Query<'w, 's, &'static Sequence<T>>,
+    arrangements: Res<'w, SequenceArrangements<T>>,
 }
 
-impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
+impl<'w, 's, T: Component + Default> Ensemble<'w, 's, T> {
     #[rustfmt::skip]
-    fn get(&self, channel: usize) -> Option<Arrangement<&T>> {
+    fn get(&self, channel: usize) -> Option<Arrangement<&Sequence<T>>> {
         self.arrangements[channel].as_ref().map(|arrangement| Arrangement {
             offset: arrangement.offset,
             primary: self.sources.get(*arrangement.primary).unwrap(),
@@ -89,7 +88,7 @@ impl<'w, 's, T: Component> Ensemble<'w, 's, T> {
     }
 }
 
-impl<'w, 's> Ensemble<'w, 's, Sequence<Spline>> {
+impl<'w, 's> Ensemble<'w, 's, Spline> {
     #[rustfmt::skip]
     fn play(&self, channel: usize,  t: T64) -> Option<Modulation> {
         self.get(channel).and_then(|arrangement| arrangement
@@ -101,7 +100,7 @@ impl<'w, 's> Ensemble<'w, 's, Sequence<Spline>> {
 }
 
 #[rustfmt::skip]
-impl<'w, 's, T> Ensemble<'w, 's, Sequence<T>>
+impl<'w, 's, T> Ensemble<'w, 's, T>
 where
     T: Default + Component + Clone + Copy + Lerp<Output = T>,
     Modulation: From<T>,
@@ -129,11 +128,11 @@ where
 
 #[derive(SystemParam)]
 pub struct Performers<'w, 's> {
-    splines: Ensemble<'w, 's, Sequence<Spline>>,
-    colors: Ensemble<'w, 's, Sequence<Rgba>>,
-    luminosities: Ensemble<'w, 's, Sequence<Luminosity>>,
-    scales: Ensemble<'w, 's, Sequence<Scale>>,
-    rotations: Ensemble<'w, 's, Sequence<Rotation>>,
+    splines: Ensemble<'w, 's, Spline>,
+    colors: Ensemble<'w, 's, Rgba>,
+    luminosities: Ensemble<'w, 's, Luminosity>,
+    scales: Ensemble<'w, 's, Scale>,
+    rotations: Ensemble<'w, 's, Rotation>,
 }
 
 #[rustfmt::skip]
@@ -234,22 +233,22 @@ impl Plugin for SheetPlugin {
     fn build(&self, game: &mut App) {
         game.init_resource::<TimeTables>()
             .init_resource::<HitRegister>()
-            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Spline>>>>>>()
-            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Rgba>>>>>>()
-            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Luminosity>>>>>>()
-            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Scale>>>>>>()
-            .init_resource::<Table<Option<Arrangement<GenID<Sequence<Rotation>>>>>>()
+            .init_resource::<SequenceArrangements<Spline>>()
+            .init_resource::<SequenceArrangements<Rgba>>()
+            .init_resource::<SequenceArrangements<Luminosity>>()
+            .init_resource::<SequenceArrangements<Scale>>()
+            .init_resource::<SequenceArrangements<Rotation>>()
             .init_resource::<Table<Option<Modulation>>>()
             .add_system_set(
                 SystemGraph::new().tap(|sysg| {
                     sysg.root(respond_to_hits)
                         .then(repeater::produce_repetitions)
                         .pipe(|sysg| (
-                            sysg.then(arrange::<Sequence<Spline>>),
-                            sysg.then(arrange::<Sequence<Rgba>>),
-                            sysg.then(arrange::<Sequence<Luminosity>>),
-                            sysg.then(arrange::<Sequence<Scale>>),
-                            sysg.then(arrange::<Sequence<Rotation>>)
+                            sysg.then(arrange_sequences::<Spline>),
+                            sysg.then(arrange_sequences::<Rgba>),
+                            sysg.then(arrange_sequences::<Luminosity>),
+                            sysg.then(arrange_sequences::<Scale>),
+                            sysg.then(arrange_sequences::<Rotation>)
                         ))
                         .join(harmonize);
                 })

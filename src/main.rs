@@ -1,6 +1,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 
+use harmonizer::SheetPlugin;
 use utils::*;
 
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
@@ -45,7 +46,7 @@ fn main() {
 
     game.add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
-        //.add_plugin(SheetPlugin)
+        .add_plugin(SheetPlugin)
         .init_resource::<Settings>();
 
     #[cfg(debug_assertions)]
@@ -62,20 +63,3 @@ fn ui_example(mut egui_context: ResMut<EguiContext>) {
         ui.label("world");
     });
 }
-/*fn setup_system(mut commands: Commands) {
-    let shape = shapes::RegularPolygon {
-        sides: 6,
-        feature: shapes::RegularPolygonFeature::Radius(200.0),
-        ..shapes::RegularPolygon::default()
-    };
-
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
-    commands.spawn_bundle(GeometryBuilder::build_as(
-        &shape,
-        DrawMode::Outlined {
-            fill_mode: FillMode::color(Color::CYAN),
-            outline_mode: StrokeMode::new(Color::BLACK, 10.0),
-        },
-        Transform::default(),
-    ));
-}*/

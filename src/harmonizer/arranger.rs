@@ -54,10 +54,6 @@ impl Sheet {
         self.coverage.0.into()..=self.coverage.1.into()
     }
 
-    pub fn span<T: From<u8>>(&self) -> T {
-        (self.coverage.1 - self.coverage.0).into()
-    }
-
     pub fn scheduled_at(&self, time: P64) -> bool {
         (self.start.raw()..(self.start + self.duration).raw()).contains(&time.raw())
     }
@@ -89,14 +85,16 @@ pub struct Arrangement<T> {
     pub secondary: Option<T>,
 }
 
+pub type SequenceArrangements<T> = Table<Option<Arrangement<GenID<Sequence<T>>>>>;
+
 #[rustfmt::skip]
-pub fn arrange<T: Default + Component>(
-    mut arrangements: ResMut<Table<Option<Arrangement<GenID<T>>>>>,
+pub fn arrange_sequences<T: Default + Component>(
+    mut arrangements: ResMut<SequenceArrangements<T>>,
     time_tables: ResMut<TimeTables>,
     instances: Query<(
         &Sheet,
-        &PrimarySequence<Sources<T>>,
-        Option<&SecondarySequence<Sources<T>>>,
+        &PrimarySequence<Sources<Sequence<T>>>,
+        Option<&SecondarySequence<Sources<Sequence<T>>>>,
         Option<&RepeaterAffinity>,
     )>,
 ) {
