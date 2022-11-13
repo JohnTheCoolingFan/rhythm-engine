@@ -42,7 +42,7 @@ impl Default for TimeTables {
 #[derive(Clone, Copy)]
 pub struct Coverage(pub u8, pub u8);
 
-#[derive(Clone, Component)]
+#[derive(Component)]
 pub struct Sheet {
     pub start: P64,
     pub duration: P64,

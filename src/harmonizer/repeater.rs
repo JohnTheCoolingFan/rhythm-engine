@@ -29,13 +29,13 @@ impl Repeater {
             period,
             ping_pong: false,
             ceil: RepeaterClamp {
-                start: t64(0.),
-                end: t64(0.),
+                start: t64(1.),
+                end: t64(1.),
                 weight: Weight::Quadratic(r64(0.)),
             },
             floor: RepeaterClamp {
-                start: t64(1.),
-                end: t64(1.),
+                start: t64(0.),
+                end: t64(0.),
                 weight: Weight::Quadratic(r64(0.)),
             },
         }
@@ -100,13 +100,14 @@ pub fn produce_repetitions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy_system_graph::*;
     use pretty_assertions::assert_eq;
     use test_case::test_case;
 
     fn sheet() -> Sheet {
         Sheet {
             start: p64(0.),
-            duration: p64(1000.),
+            duration: p64(2000.),
             coverage: Coverage(0, 0),
         }
     }
@@ -115,22 +116,118 @@ mod tests {
     #[test_case(
         sheet(),
         Repeater::new(p64(500.)),
-        &[(p64(250.), ClampedTime::new(p64(500.)))];
-        "test"
+        p64(250.),
+        ClampedTime::new(p64(250.));
+        "simple division 0.5"
     )]
-    fn repetition_logic(sheet: Sheet, repeater: Repeater, co_vals: &[(P64, ClampedTime)]) {
+    #[test_case(
+        sheet(),
+        Repeater::new(p64(500.)),
+        p64(750.),
+        ClampedTime::new(p64(250.));
+        "simple division 1.5"
+    )]
+    #[test_case(
+        sheet(),
+        Repeater::new(p64(500.)),
+        p64(750.),
+        ClampedTime::new(p64(250.));
+        "simple division 2.5"
+    )]
+    #[test_case(
+        sheet(),
+        Repeater {
+            ceil: RepeaterClamp {
+                weight: Weight::Quadratic(r64(0.)),
+                start: t64(1.),
+                end: t64(0.),
+            },
+            ..Repeater::new(p64(500.))
+        },
+        p64(250.),
+        ClampedTime::new(p64(250.));
+        "linear decreasing ceil division 0.5"
+    )]
+    #[test_case(
+        sheet(),
+        Repeater {
+            ceil: RepeaterClamp {
+                weight: Weight::Quadratic(r64(0.)),
+                start: t64(1.),
+                end: t64(0.),
+            },
+            ..Repeater::new(p64(500.))
+        },
+        p64(750.),
+        ClampedTime {
+            upper_clamp: t64(0.75),
+            lower_clamp: t64(0.0),
+            ..ClampedTime::new(p64(250.))
+        };
+        "linear decreasing ceil division 1.5"
+    )]
+    #[test_case(
+        sheet(),
+        Repeater { ping_pong: true, ..Repeater::new(p64(500.)) },
+        p64(400.),
+        ClampedTime::new(p64(400.));
+        "pingpong division 0.5"
+    )]
+    #[test_case(
+        sheet(),
+        Repeater { ping_pong: true, ..Repeater::new(p64(500.)) },
+        p64(600.),
+        ClampedTime::new(p64(400.));
+        "pingpong division 1.5"
+    )]
+    #[test_case(
+        sheet(),
+        Repeater { ping_pong: true, ..Repeater::new(p64(500.)) },
+        p64(1100.),
+        ClampedTime::new(p64(100.));
+        "pingpong division 2.5"
+    )]
+    #[test_case(
+        Sheet { start: p64(1000.), ..sheet() },
+        Repeater::new(p64(500.)),
+        p64(500.),
+        ClampedTime::new(p64(500.));
+        "shifted division -0.5"
+    )]
+    #[test_case(
+        Sheet { start: p64(1000.), ..sheet() },
+        Repeater::new(p64(500.)),
+        p64(2000.),
+        ClampedTime::new(p64(1000.));
+        "shifted division 1."
+    )]
+    #[test_case(
+        Sheet { start: p64(1000.), ..sheet() },
+        Repeater::new(p64(500.)),
+        p64(4000.),
+        ClampedTime::new(p64(4000.));
+        "shifted division overshoot 1."
+    )]
+    fn repetition_logic(sheet: Sheet, repeater: Repeater, time: P64, expected: ClampedTime) {
         let mut game = App::new();
-        game.add_system(produce_repetitions);
-        game.world.spawn().insert_bundle((sheet.clone(), repeater));
+        game.init_resource::<HitRegister>();
+        game.insert_resource(TimeTables { song_time: time, ..Default::default() });
+        game.add_system_set(
+            SystemGraph::new().tap(|sysg| {
+                sysg.root(respond_to_hits)
+                    .then(produce_repetitions);
+            })
+            .conv::<SystemSet>()
+        );
 
-        co_vals.iter().for_each(|(time, expected)| {
-            game.insert_resource(TimeTables { song_time: *time, ..Default::default() });
-            game.update();
-            game.world
-                .resource::<TimeTables>()
-                .clamped_times[sheet.coverage()]
-                .iter()
-                .for_each(|clamped_time| assert_eq!(expected, clamped_time));
-        });
+        let coverage = sheet.coverage();
+        game.world.spawn().insert_bundle((sheet, repeater));
+
+        game.update();
+        game.world
+            .resource::<TimeTables>()
+            .clamped_times[coverage]
+            .iter()
+            .for_each(|clamped_time| assert_eq!(expected, *clamped_time));
     }
 }
