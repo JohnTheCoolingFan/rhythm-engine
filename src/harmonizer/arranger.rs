@@ -42,7 +42,7 @@ impl Default for TimeTables {
 #[derive(Clone, Copy)]
 pub struct Coverage(pub u8, pub u8);
 
-#[derive(Component)]
+#[derive(Clone, Component)]
 pub struct Sheet {
     pub start: P64,
     pub duration: P64,
@@ -88,15 +88,18 @@ pub struct Arrangement<T> {
 pub type SequenceArrangements<T> = Table<Option<Arrangement<GenID<Sequence<T>>>>>;
 
 #[rustfmt::skip]
+pub type SequenceSheets<'w, 's, T> = Query<'w, 's, (
+    &'static Sheet,
+    &'static PrimarySequence<Sources<Sequence<T>>>,
+    Option<&'static SecondarySequence<Sources<Sequence<T>>>>,
+    Option<&'static RepeaterAffinity>,
+)>;
+
+#[rustfmt::skip]
 pub fn arrange_sequences<T: Default + Component>(
     mut arrangements: ResMut<SequenceArrangements<T>>,
     time_tables: ResMut<TimeTables>,
-    instances: Query<(
-        &Sheet,
-        &PrimarySequence<Sources<Sequence<T>>>,
-        Option<&SecondarySequence<Sources<Sequence<T>>>>,
-        Option<&RepeaterAffinity>,
-    )>,
+    instances: SequenceSheets<T>,
 ) {
     arrangements.fill_with(|| None);
     instances.iter().for_each(|(sheet, primary, secondary, affinity)| {
