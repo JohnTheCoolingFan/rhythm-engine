@@ -23,11 +23,30 @@ pub struct Repeater {
     floor: RepeaterClamp,
 }
 
+impl Repeater {
+    fn new(period: P64) -> Self {
+        Repeater {
+            period,
+            ping_pong: false,
+            ceil: RepeaterClamp {
+                start: t64(0.),
+                end: t64(0.),
+                weight: Weight::Quadratic(r64(0.)),
+            },
+            floor: RepeaterClamp {
+                start: t64(1.),
+                end: t64(1.),
+                weight: Weight::Quadratic(r64(0.)),
+            },
+        }
+    }
+}
+
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct ClampedTime {
     pub offset: P64,
-    pub lower_clamp: T64,
     pub upper_clamp: T64,
+    pub lower_clamp: T64,
 }
 
 impl ClampedTime {
@@ -76,4 +95,42 @@ pub fn produce_repetitions(
                 }
             })
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use test_case::test_case;
+
+    fn sheet() -> Sheet {
+        Sheet {
+            start: p64(0.),
+            duration: p64(1000.),
+            coverage: Coverage(0, 0),
+        }
+    }
+
+    #[rustfmt::skip]
+    #[test_case(
+        sheet(),
+        Repeater::new(p64(500.)),
+        &[(p64(250.), ClampedTime::new(p64(500.)))];
+        "test"
+    )]
+    fn repetition_logic(sheet: Sheet, repeater: Repeater, co_vals: &[(P64, ClampedTime)]) {
+        let mut game = App::new();
+        game.add_system(produce_repetitions);
+        game.world.spawn().insert_bundle((sheet.clone(), repeater));
+
+        co_vals.iter().for_each(|(time, expected)| {
+            game.insert_resource(TimeTables { song_time: *time, ..Default::default() });
+            game.update();
+            game.world
+                .resource::<TimeTables>()
+                .clamped_times[sheet.coverage()]
+                .iter()
+                .for_each(|clamped_time| assert_eq!(expected, clamped_time));
+        });
+    }
 }
