@@ -5,7 +5,7 @@ use harmonizer::SheetPlugin;
 use utils::*;
 
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
-use bevy_egui::{egui, EguiContext, EguiPlugin};
+use bevy_egui::EguiPlugin;
 use derive_more::From;
 
 mod automation;
@@ -56,10 +56,4 @@ fn main() {
     game.add_state(GameState::Browse);
 
     game.run()
-}
-
-fn ui_example(mut egui_context: ResMut<EguiContext>) {
-    egui::Window::new("Hello").show(egui_context.ctx_mut(), |ui| {
-        ui.label("world");
-    });
 }

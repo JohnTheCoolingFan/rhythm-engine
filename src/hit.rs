@@ -71,7 +71,7 @@ pub enum ResponseState {
 #[derive(Default, Debug, PartialEq, From, Deref, DerefMut, Clone, Copy)]
 pub struct Delegated(pub bool);
 
-fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
+pub fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
     instances
         .iter_mut()
         .for_each(|(_, mut response_state)| *response_state = ResponseState::None);
