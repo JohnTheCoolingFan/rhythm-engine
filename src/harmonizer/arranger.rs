@@ -6,7 +6,7 @@ use derive_more::Deref;
 
 pub const MAX_CHANNELS: usize = 256;
 
-#[derive(Deref, DerefMut, From, Clone, Copy)]
+#[derive(Deref, DerefMut, From, Clone, Copy, Resource)]
 pub struct Table<T>(pub [T; MAX_CHANNELS]);
 
 impl<T> Table<T> {
@@ -21,6 +21,7 @@ impl<T: Default> Default for Table<T> {
     }
 }
 
+#[derive(Resource)]
 pub struct TimeTables {
     pub song_time: P64,
     pub seek_times: Table<P64>,

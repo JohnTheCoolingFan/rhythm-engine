@@ -1,9 +1,6 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 
-use harmonizer::SheetPlugin;
-use utils::*;
-
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
 use bevy_egui::EguiPlugin;
 use derive_more::From;
@@ -16,6 +13,11 @@ mod serialization;
 mod timing;
 mod utils;
 
+use editor::*;
+use harmonizer::HarmonizerPlugin;
+use utils::*;
+
+#[derive(Resource)]
 struct Settings {
     ui_scale: f32,
 }
@@ -46,7 +48,8 @@ fn main() {
 
     game.add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
-        .add_plugin(SheetPlugin)
+        .add_plugin(HarmonizerPlugin)
+        .add_plugin(EditorPlugin)
         .init_resource::<Settings>();
 
     #[cfg(debug_assertions)]

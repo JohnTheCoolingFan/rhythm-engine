@@ -221,7 +221,7 @@ mod tests {
         );
 
         let coverage = sheet.coverage();
-        game.world.spawn().insert_bundle((sheet, repeater));
+        game.world.spawn((sheet, repeater));
 
         game.update();
         game.world

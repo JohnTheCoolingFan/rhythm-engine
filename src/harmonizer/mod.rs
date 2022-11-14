@@ -226,10 +226,10 @@ pub fn harmonize(
     })
 }
 
-pub struct SheetPlugin;
+pub struct HarmonizerPlugin;
 
 #[rustfmt::skip]
-impl Plugin for SheetPlugin {
+impl Plugin for HarmonizerPlugin {
     fn build(&self, game: &mut App) {
         game.init_resource::<TimeTables>()
             .init_resource::<HitRegister>()
@@ -243,12 +243,12 @@ impl Plugin for SheetPlugin {
                 SystemGraph::new().tap(|sysg| {
                     sysg.root(respond_to_hits)
                         .then(repeater::produce_repetitions)
-                        .pipe(|sysg| (
-                            sysg.then(arrange_sequences::<Spline>),
-                            sysg.then(arrange_sequences::<Rgba>),
-                            sysg.then(arrange_sequences::<Luminosity>),
-                            sysg.then(arrange_sequences::<Scale>),
-                            sysg.then(arrange_sequences::<Rotation>)
+                        .fork((
+                            arrange_sequences::<Spline>,
+                            arrange_sequences::<Rgba>,
+                            arrange_sequences::<Luminosity>,
+                            arrange_sequences::<Scale>,
+                            arrange_sequences::<Rotation>
                         ))
                         .join(harmonize);
                 })

@@ -31,7 +31,7 @@ pub struct HitInfo {
     pub layer: u8,
 }
 
-#[derive(Deref, DerefMut, From)]
+#[derive(Deref, DerefMut, From, Resource)]
 pub struct HitRegister(pub [Option<HitInfo>; 4]);
 
 impl Default for HitRegister {
@@ -141,7 +141,7 @@ mod tests {
         let mut game = App::new();
         game.add_system(respond_to_hits);
         game.insert_resource(TimeTables { song_time: p64(time), ..Default::default() });
-        game.world.spawn().insert_bundle((
+        game.world.spawn((
             Sheet { start: p64(0.), duration:  p64(1000.), coverage: Coverage(0, 0) },
             Response { kind: ResponseKind::Commence, layer: 0 },
             ResponseState::None
