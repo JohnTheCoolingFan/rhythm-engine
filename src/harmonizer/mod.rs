@@ -8,6 +8,7 @@ use crate::{
     automation::{sequence::*, spline::*, *},
     hit::*,
     map_selected,
+    timing::*,
     utils::*,
 };
 
@@ -17,7 +18,7 @@ use bevy::prelude::*;
 use bevy::{ecs::system::SystemParam, math::DVec2};
 use bevy_system_graph::*;
 use noisy_float::prelude::*;
-use tap::{Conv, Pipe, Tap, TapOptional};
+use tap::{Conv, Tap, TapOptional};
 
 pub enum Modulation {
     None,

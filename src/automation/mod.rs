@@ -3,7 +3,7 @@ use noisy_float::prelude::*;
 use tap::Pipe;
 use tinyvec::*;
 
-use crate::harmonizer::repeater::*;
+use crate::timing::*;
 use crate::utils::*;
 
 pub mod sequence;

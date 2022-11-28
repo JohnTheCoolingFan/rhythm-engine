@@ -1,4 +1,4 @@
-use crate::{harmonizer::arranger::*, utils::*};
+use crate::{harmonizer::arranger::*, timing::*, utils::*};
 use bevy::prelude::*;
 
 use derive_more::From;
@@ -31,14 +31,8 @@ pub struct HitInfo {
     pub layer: u8,
 }
 
-#[derive(Deref, DerefMut, From, Resource)]
+#[derive(Default, Deref, DerefMut, From, Resource)]
 pub struct HitRegister(pub [Option<HitInfo>; 4]);
-
-impl Default for HitRegister {
-    fn default() -> Self {
-        HitRegister([None; 4])
-    }
-}
 
 #[derive(Debug, Component)]
 pub enum ResponseKind {
@@ -61,14 +55,14 @@ pub struct Response {
     pub layer: u8,
 }
 
-#[derive(Debug, PartialEq, Component)]
+#[derive(Debug, PartialEq, Eq, Component)]
 pub enum ResponseState {
     None,
     Hit(P64),
     Active(bool),
 }
 
-#[derive(Default, Debug, PartialEq, From, Deref, DerefMut, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Eq, From, Deref, DerefMut, Clone, Copy)]
 pub struct Delegated(pub bool);
 
 pub fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {

@@ -1,5 +1,5 @@
 use bevy::{math::f64::DVec2, prelude::*};
-use derive_more::Deref;
+use derive_more::{Deref, From};
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
 use tap::Pipe;
@@ -181,3 +181,20 @@ impl<T> Clone for GenID<T> {
 impl<T> Copy for GenID<T> {}
 
 impl<T: Iterator<Item = DVec2> + Clone> OrientationExt for T {}
+
+pub const MAX_CHANNELS: usize = 256;
+
+#[derive(Deref, DerefMut, From, Clone, Copy, Resource)]
+pub struct Table<T>(pub [T; MAX_CHANNELS]);
+
+impl<T> Table<T> {
+    pub fn fill_with(&mut self, func: impl Fn() -> T) {
+        self.0 = [(); MAX_CHANNELS].map(|_| func());
+    }
+}
+
+impl<T: Default> Default for Table<T> {
+    fn default() -> Self {
+        Self([(); MAX_CHANNELS].map(|_| T::default()))
+    }
+}

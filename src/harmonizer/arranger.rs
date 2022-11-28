@@ -1,44 +1,6 @@
 use super::{repeater::*, *};
-use crate::{hit::*, utils::*, *};
+use crate::{timing::*, utils::*, *};
 use std::ops::RangeInclusive;
-
-use derive_more::Deref;
-
-pub const MAX_CHANNELS: usize = 256;
-
-#[derive(Deref, DerefMut, From, Clone, Copy, Resource)]
-pub struct Table<T>(pub [T; MAX_CHANNELS]);
-
-impl<T> Table<T> {
-    pub fn fill_with(&mut self, func: impl Fn() -> T) {
-        self.0 = [(); MAX_CHANNELS].map(|_| func());
-    }
-}
-
-impl<T: Default> Default for Table<T> {
-    fn default() -> Self {
-        Self([(); MAX_CHANNELS].map(|_| T::default()))
-    }
-}
-
-#[derive(Resource)]
-pub struct TimeTables {
-    pub song_time: P64,
-    pub seek_times: Table<P64>,
-    pub clamped_times: Table<ClampedTime>,
-    pub delegations: Table<Delegated>,
-}
-
-impl Default for TimeTables {
-    fn default() -> Self {
-        TimeTables {
-            song_time: p64(0.),
-            seek_times: Table([(); MAX_CHANNELS].map(|_| p64(0.))),
-            delegations: Table([(); MAX_CHANNELS].map(|_| Delegated(false))),
-            clamped_times: Table([(); MAX_CHANNELS].map(|_| ClampedTime::new(p64(0.)))),
-        }
-    }
-}
 
 #[derive(Clone, Copy)]
 pub struct Coverage(pub u8, pub u8);

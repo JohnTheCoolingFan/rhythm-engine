@@ -1,9 +1,6 @@
-use crate::map_selected;
-use bevy::{ecs::schedule::ShouldRun, prelude::*};
+use crate::{utils::*, GameState};
+use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
-use bevy_system_graph::*;
-use leafwing_input_manager::prelude::*;
-use tap::{Conv, Tap};
 
 #[derive(Default)]
 enum Selection {
@@ -18,38 +15,56 @@ enum Selection {
 #[derive(Default, Deref)]
 struct ClipBoard(Selection);
 
-#[derive(Default, Deref)]
-struct Seeker(f64);
-
-#[derive(Default, Deref, Resource)]
-struct ChannelFocus(Option<u8>);
-
 #[derive(Default)]
 struct ChannelScroll(u8);
 
-enum Action {
-    Click,
+#[derive(Default)]
+struct ChannelSize(P64);
+
+#[derive(Default, Resource)]
+enum Focus {
+    #[default]
+    Polygons,
+    Playlist {
+        channel: Option<u8>,
+    },
 }
 
-fn sheet_arrangements(mut egui_context: ResMut<EguiContext>, focus: Res<ChannelFocus>) {
-    if let None = **focus {
-        egui::Window::new("Hello").show(egui_context.ctx_mut(), |ui| {
-            ui.label("world");
+struct Seeker {
+    screen_shift: T64,
+}
+
+struct Opacity {
+    background: P64,
+    background_participant: P64,
+}
+
+fn tools(mut egui_context: ResMut<EguiContext>) {
+    egui::SidePanel::left("tools")
+        .resizable(false)
+        .show(egui_context.ctx_mut(), |ui| {
+            ui.label("tools");
         });
-    }
+}
+
+fn sheets(mut egui_context: ResMut<EguiContext>, focus: Res<Focus>) {}
+
+fn playlist(mut egui_context: ResMut<EguiContext>, focus: Res<Focus>) {
+    egui::TopBottomPanel::bottom("playlist")
+        .resizable(true)
+        .show(egui_context.ctx_mut(), |ui| {
+            ui.label("playlist");
+        });
 }
 
 pub struct EditorPlugin;
 
 impl Plugin for EditorPlugin {
     fn build(&self, game: &mut App) {
-        game.init_resource::<ChannelFocus>().add_system_set(
-            SystemGraph::new()
-                .tap(|sysg| {
-                    sysg.root(sheet_arrangements);
-                })
-                .conv::<SystemSet>()
-                .with_run_criteria(map_selected),
+        game.init_resource::<Focus>().add_system_set(
+            SystemSet::on_update(GameState::Edit)
+                .with_system(playlist)
+                .with_system(tools),
         );
     }
 }

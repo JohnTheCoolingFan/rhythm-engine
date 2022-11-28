@@ -3,7 +3,6 @@
 
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
 use bevy_egui::EguiPlugin;
-use derive_more::From;
 
 mod automation;
 mod editor;
