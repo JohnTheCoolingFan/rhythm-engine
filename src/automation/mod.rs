@@ -1,10 +1,9 @@
+use crate::timing::*;
+use crate::utils::*;
 use bevy::prelude::*;
 use noisy_float::prelude::*;
 use tap::Pipe;
 use tinyvec::*;
-
-use crate::timing::*;
-use crate::utils::*;
 
 pub mod sequence;
 pub mod spline;

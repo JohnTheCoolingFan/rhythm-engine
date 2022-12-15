@@ -1,3 +1,7 @@
+mod playlist;
+mod poly_entities;
+mod tools;
+
 use crate::{utils::*, GameState};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
@@ -23,15 +27,15 @@ struct ChannelSize(P64);
 
 #[derive(Default, Resource)]
 enum Focus {
-    #[default]
     Polygons,
-    Playlist {
-        channel: Option<u8>,
-    },
+    #[default]
+    Playlist,
+    Channel(u8),
+    Sheet(Entity),
 }
 
 struct Seeker {
-    screen_shift: T64,
+    window_shift: T64,
 }
 
 struct Opacity {
@@ -47,9 +51,7 @@ fn tools(mut egui_context: ResMut<EguiContext>) {
         });
 }
 
-fn sheets(mut egui_context: ResMut<EguiContext>, focus: Res<Focus>) {}
-
-fn playlist(mut egui_context: ResMut<EguiContext>, focus: Res<Focus>) {
+fn playlist(mut egui_context: ResMut<EguiContext>) {
     egui::TopBottomPanel::bottom("playlist")
         .resizable(true)
         .show(egui_context.ctx_mut(), |ui| {

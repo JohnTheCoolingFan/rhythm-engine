@@ -246,6 +246,14 @@ impl Spline {
     }
 }
 
+struct Sampled;
+
+impl Property<Spline> for Sampled {
+    fn ensure(target: &mut Spline) {
+        target.resample()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{super::*, *};

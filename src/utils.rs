@@ -198,3 +198,39 @@ impl<T: Default> Default for Table<T> {
         Self([(); MAX_CHANNELS].map(|_| T::default()))
     }
 }
+
+pub trait Property<Target> {
+    fn ensure(target: &mut Target);
+}
+
+pub struct Ensured<T, P: Property<T>> {
+    data: T,
+    _phantom: PhantomData<P>,
+}
+
+impl<T, P: Property<T>> Ensured<T, P> {
+    fn new(mut data: T) -> Self {
+        P::ensure(&mut data);
+        Self {
+            data,
+            _phantom: PhantomData,
+        }
+    }
+
+    fn get(&self) -> &T {
+        &self.data
+    }
+
+    fn tap(&mut self, func: impl Fn(&mut T)) {
+        func(&mut self.data);
+        P::ensure(&mut self.data);
+    }
+}
+
+pub struct Deduped;
+
+impl<T: PartialEq> Property<Vec<T>> for Deduped {
+    fn ensure(target: &mut Vec<T>) {
+        target.dedup()
+    }
+}
