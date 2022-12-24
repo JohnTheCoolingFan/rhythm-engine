@@ -7,7 +7,7 @@ pub struct Coverage(pub u8, pub u8);
 
 #[derive(Component)]
 pub struct Sheet {
-    pub interval: TemporalInterval,
+    pub offsets: TemporalOffsets,
     pub coverage: Coverage,
 }
 
@@ -61,9 +61,9 @@ pub fn arrange_sequences<T: Default + Component>(
             .map(|_| time_tables.clamped_times[index].offset)
             .into_iter()
             .chain(iter_once(time_tables.seek_times[index]))
-            .find(|time| sheet.interval.playable_at(*time))
+            .find(|time| sheet.offsets.playable_at(*time))
             .map(|time| Arrangement {
-                offset: time - sheet.interval.start,
+                offset: time - sheet.offsets.start,
                 primary: primary.pick(*time_tables.delegations[index]),
                 secondary: secondary.map(|sources| sources.pick(*time_tables.delegations[index])),
             })

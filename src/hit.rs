@@ -17,6 +17,7 @@ enum PressStrength {
 }
 
 pub struct HitPrompt {
+    offsets: TemporalOffsets,
     press_kind: PressKind,
     press_strength: PressStrength,
     press_phat_key: bool,
@@ -88,14 +89,14 @@ pub fn respond_to_hits(
 
     responses
         .iter_mut()
-        .filter(|(sheet, ..)| sheet.interval.playable_at(song_time))
+        .filter(|(sheet, ..)| sheet.offsets.playable_at(song_time))
         .for_each(|(sheet, Response { kind, layer }, mut state)| {
             use ResponseKind::*;
             use ResponseState::*;
 
             hits.iter()
                 .flatten()
-                .filter(|hit| sheet.interval.scheduled_at(hit.hit_time) && hit.layer == *layer)
+                .filter(|hit| sheet.offsets.scheduled_at(hit.hit_time) && hit.layer == *layer)
                 .for_each(|hit| match (kind, &mut *state) {
                     (Toggle, Active(active)) => *active = !*active,
                     (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
@@ -104,7 +105,7 @@ pub fn respond_to_hits(
                 });
 
             let adjusted_offset = match (kind, &*state) {
-                (Commence, Active(active)) if !active => sheet.interval.start,
+                (Commence, Active(active)) if !active => sheet.offsets.start,
                 (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&song_time) => hit + ex,
                 _ => song_time
             };
@@ -140,7 +141,7 @@ mod tests {
             Response { kind: ResponseKind::Commence, layer: 0 },
             Sheet {
                 coverage: Coverage(0, 0),
-                interval: TemporalInterval { start: p64(0.), duration:  p64(1000.) }
+                offsets: TemporalOffsets { start: p64(0.), duration:  p64(1000.) }
             },
         ));
 
@@ -170,7 +171,7 @@ mod tests {
                 Response { kind: ResponseKind::Commence, layer: 0 },
                 Sheet {
                     coverage: Coverage(0, 0),
-                    interval: TemporalInterval { start: p64(0.), duration:  p64(400.) },
+                    offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
                 },
             ),
             (
@@ -178,7 +179,7 @@ mod tests {
                 Response { kind: ResponseKind::Switch, layer: 0 },
                 Sheet {
                     coverage: Coverage(1, 1),
-                    interval: TemporalInterval { start: p64(0.), duration:  p64(400.) },
+                    offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
                 },
             ),
             (
@@ -186,7 +187,7 @@ mod tests {
                 Response { kind: ResponseKind::Toggle, layer: 0 },
                 Sheet {
                     coverage: Coverage(2, 2),
-                    interval: TemporalInterval { start: p64(0.), duration:  p64(400.) },
+                    offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
                 },
             ),
             (
@@ -194,7 +195,7 @@ mod tests {
                 Response { kind: ResponseKind::Follow(p64(50.)), layer: 0 },
                 Sheet {
                     coverage: Coverage(3, 3),
-                    interval: TemporalInterval { start: p64(0.), duration:  p64(400.) },
+                    offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
                 },
             ),
         ]);

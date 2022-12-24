@@ -40,12 +40,12 @@ impl Default for TimeTables {
 }
 
 #[derive(Component)]
-pub struct TemporalInterval {
+pub struct TemporalOffsets {
     pub start: P64,
     pub duration: P64,
 }
 
-impl TemporalInterval {
+impl TemporalOffsets {
     pub fn scheduled_at(&self, time: P64) -> bool {
         (self.start.raw()..(self.start + self.duration).raw()).contains(&time.raw())
     }

@@ -169,8 +169,8 @@ pub fn harmonize(
                 .map(|_| clamped_times[index])
                 .into_iter()
                 .chain(iter_once(ClampedTime::new(seek_times[index])))
-                .find(|ClampedTime { offset, .. }| sheet.interval.playable_at(*offset))
-                .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.interval.start)
+                .find(|ClampedTime { offset, .. }| sheet.offsets.playable_at(*offset))
+                .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.offsets.start)
                 .and_then(|time| automation_sources
                     .get(*automation.pick(*delegations[index]))
                     .map(|automation| automation.play(time))
@@ -215,7 +215,7 @@ pub fn harmonize(
     // Finaly add geometry control information to modulations that can be controlled by points
     geom_ctrls
         .iter()
-        .filter(|(sheet, ..)| sheet.interval.playable_at(song_time))
+        .filter(|(sheet, ..)| sheet.offsets.playable_at(song_time))
         .for_each(|(sheet, genid)| {
             modulations[sheet.coverage()].iter_mut().flatten().for_each(|modulation| {
                 if let

@@ -8,7 +8,7 @@ mod automation;
 mod editor;
 mod harmonizer;
 mod hit;
-mod poly_entity;
+mod silhouettes;
 mod serialization;
 mod timing;
 mod utils;
