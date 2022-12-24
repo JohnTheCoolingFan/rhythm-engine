@@ -1,31 +1,48 @@
-use crate::{harmonizer::*, utils::*};
+use crate::{harmonizer::*, hit::*, timing::*, utils::*};
 use bevy::{math::DVec2, prelude::*};
 use noisy_float::prelude::*;
+use tinyvec::TinyVec;
 
-enum GeomCtrl {
-    Point(DVec2),
-    Line { point: DVec2, angle: R64 },
+#[derive(Component)]
+struct StaticPointCloud {
+    points: Vec<DVec2>,
+    groups: Vec<TinyVec<[usize; 6]>>,
 }
 
-enum VertexGroup {
-    All,
-    Select(Vec<usize>),
+#[derive(Default)]
+struct Route {
+    channel: u8,
+    group: usize,
+    local_ctrl: usize,
+    offest_angle: R32,
 }
 
-struct GroupRoutings {
-    group: VertexGroup,
-    geom_ctrl: GeomCtrl,
-    routings: Ensured<Vec<u8>, Deduped>,
+#[derive(Component)]
+struct Routing {
+    target: GenID<StaticPointCloud>,
+    routes: TinyVec<[Route; 1]>,
 }
 
-struct PolyEntity {
-    vetices: Vec<DVec2>,
-    routings: Vec<GroupRoutings>,
+struct Activation {
+    paths: TinyVec<[usize; 6]>,
+    interval: TemporalInterval,
+    hit_prompt: Vec<HitPrompt>,
 }
 
-impl PolyEntity {
-    fn modulate(&self, modulations: Table<Option<Modulation>>) -> Vec<DVec2> {
-        // Propogate modulations to geom ctrl points in route queue
-        todo!()
-    }
+#[derive(Component)]
+struct ModulatedPointCloud {
+    vertices: Vec<DVec2>,
+    interval: TemporalInterval,
+    activations: Vec<Activation>,
+}
+
+#[rustfmt::skip]
+fn modulate(
+    time_tables: ResMut<TimeTables>,
+    modulations: Res<Table<Option<Modulation>>>,
+    static_clouds: Query<&StaticPointCloud>,
+    routing: Query<&Routing>,
+    modulated_clouds: Query<&ModulatedPointCloud>,
+) {
+    todo!()
 }

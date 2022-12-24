@@ -5,8 +5,8 @@ use derive_more::From;
 use noisy_float::prelude::*;
 
 enum PressKind {
-    Press(N64),
-    Hold(N64, N64),
+    Press(P64),
+    Hold(P64, P64),
 }
 
 #[repr(u8)]
@@ -88,14 +88,14 @@ pub fn respond_to_hits(
 
     responses
         .iter_mut()
-        .filter(|(sheet, ..)| sheet.playable_at(song_time))
+        .filter(|(sheet, ..)| sheet.interval.playable_at(song_time))
         .for_each(|(sheet, Response { kind, layer }, mut state)| {
             use ResponseKind::*;
             use ResponseState::*;
 
             hits.iter()
                 .flatten()
-                .filter(|hit| sheet.scheduled_at(hit.hit_time) && hit.layer == *layer)
+                .filter(|hit| sheet.interval.scheduled_at(hit.hit_time) && hit.layer == *layer)
                 .for_each(|hit| match (kind, &mut *state) {
                     (Toggle, Active(active)) => *active = !*active,
                     (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
@@ -104,7 +104,7 @@ pub fn respond_to_hits(
                 });
 
             let adjusted_offset = match (kind, &*state) {
-                (Commence, Active(active)) if !active => sheet.start,
+                (Commence, Active(active)) if !active => sheet.interval.start,
                 (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&song_time) => hit + ex,
                 _ => song_time
             };
@@ -136,9 +136,12 @@ mod tests {
         game.add_system(respond_to_hits);
         game.insert_resource(TimeTables { song_time: p64(time), ..Default::default() });
         game.world.spawn((
-            Sheet { start: p64(0.), duration:  p64(1000.), coverage: Coverage(0, 0) },
+            ResponseState::None,
             Response { kind: ResponseKind::Commence, layer: 0 },
-            ResponseState::None
+            Sheet {
+                coverage: Coverage(0, 0),
+                interval: TemporalInterval { start: p64(0.), duration:  p64(1000.) }
+            },
         ));
 
         game.insert_resource(HitRegister([
@@ -163,24 +166,36 @@ mod tests {
         game.add_system(respond_to_hits);
         game.world.spawn_batch([
             (
-                Sheet { start: p64(0.), duration:  p64(400.), coverage: Coverage(0, 0) },
+                ResponseState::None,
                 Response { kind: ResponseKind::Commence, layer: 0 },
-                ResponseState::None,
+                Sheet {
+                    coverage: Coverage(0, 0),
+                    interval: TemporalInterval { start: p64(0.), duration:  p64(400.) },
+                },
             ),
             (
-                Sheet { start: p64(0.), duration:  p64(400.), coverage: Coverage(1, 1) },
+                ResponseState::None,
                 Response { kind: ResponseKind::Switch, layer: 0 },
-                ResponseState::None,
+                Sheet {
+                    coverage: Coverage(1, 1),
+                    interval: TemporalInterval { start: p64(0.), duration:  p64(400.) },
+                },
             ),
             (
-                Sheet { start: p64(0.), duration:  p64(400.), coverage: Coverage(2, 2) },
+                ResponseState::None,
                 Response { kind: ResponseKind::Toggle, layer: 0 },
-                ResponseState::None,
+                Sheet {
+                    coverage: Coverage(2, 2),
+                    interval: TemporalInterval { start: p64(0.), duration:  p64(400.) },
+                },
             ),
             (
-                Sheet { start: p64(0.), duration:  p64(400.), coverage: Coverage(3, 3) },
-                Response { kind: ResponseKind::Follow(p64(50.)), layer: 0 },
                 ResponseState::None,
+                Response { kind: ResponseKind::Follow(p64(50.)), layer: 0 },
+                Sheet {
+                    coverage: Coverage(3, 3),
+                    interval: TemporalInterval { start: p64(0.), duration:  p64(400.) },
+                },
             ),
         ]);
 

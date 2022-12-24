@@ -55,24 +55,24 @@ pub fn produce_repetitions(
 
     repeaters
         .iter()
-        .filter(|(sheet, _)| f64::EPSILON < sheet.duration.raw())
+        .filter(|(sheet, _)| f64::EPSILON < sheet.interval.duration.raw())
         .filter(|(_, Repeater { period, .. })| f64::EPSILON < period.raw())
         .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| {
             sheet.coverage().for_each(|index| {
                 if let Some(time) = [seek_times[index], *song_time]
                     .iter()
-                    .find(|time| sheet.scheduled_at(**time))
+                    .find(|time| sheet.interval.scheduled_at(**time))
                 {
-                    let relative_time = *time - sheet.start;
+                    let relative_time = *time - sheet.interval.start;
                     let remainder_time = relative_time % period;
                     let division = (relative_time / period).floor();
                     let parity = division.raw() as i64 % 2;
-                    let clamp_time = t64(((division * period) / sheet.duration).raw());
+                    let clamp_time = t64(((division * period) / sheet.interval.duration).raw());
 
                     clamped_times[index] = ClampedTime {
                         upper_clamp: ceil.eval(clamp_time),
                         lower_clamp: floor.eval(clamp_time),
-                        offset: sheet.start + if *ping_pong && parity == 1 {
+                        offset: sheet.interval.start + if *ping_pong && parity == 1 {
                             *period - remainder_time
                         } else {
                             remainder_time
@@ -92,9 +92,11 @@ mod tests {
 
     fn sheet() -> Sheet {
         Sheet {
-            start: p64(0.),
-            duration: p64(2000.),
             coverage: Coverage(0, 0),
+            interval: TemporalInterval {
+                start: p64(0.),
+                duration: p64(2000.),
+            },
         }
     }
 
@@ -174,21 +176,21 @@ mod tests {
         "pingpong division 2.5"
     )]
     #[test_case(
-        Sheet { start: p64(1000.), ..sheet() },
+        Sheet { interval: TemporalInterval { start: p64(1000.), ..sheet().interval }, ..sheet() },
         Repeater::new(p64(500.)),
         p64(500.),
         ClampedTime::new(p64(500.));
         "shifted division -0.5"
     )]
     #[test_case(
-        Sheet { start: p64(1000.), ..sheet() },
+        Sheet { interval: TemporalInterval { start: p64(1000.), ..sheet().interval }, ..sheet() },
         Repeater::new(p64(500.)),
         p64(2000.),
         ClampedTime::new(p64(1000.));
         "shifted division 1."
     )]
     #[test_case(
-        Sheet { start: p64(1000.), ..sheet() },
+        Sheet { interval: TemporalInterval { start: p64(1000.), ..sheet().interval }, ..sheet() },
         Repeater::new(p64(500.)),
         p64(4000.),
         ClampedTime::new(p64(4000.));

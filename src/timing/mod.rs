@@ -38,3 +38,19 @@ impl Default for TimeTables {
         }
     }
 }
+
+#[derive(Component)]
+pub struct TemporalInterval {
+    pub start: P64,
+    pub duration: P64,
+}
+
+impl TemporalInterval {
+    pub fn scheduled_at(&self, time: P64) -> bool {
+        (self.start.raw()..(self.start + self.duration).raw()).contains(&time.raw())
+    }
+
+    pub fn playable_at(&self, time: P64) -> bool {
+        f64::EPSILON < self.duration.raw() && self.scheduled_at(time)
+    }
+}

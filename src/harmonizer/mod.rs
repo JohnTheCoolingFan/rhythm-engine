@@ -169,8 +169,8 @@ pub fn harmonize(
                 .map(|_| clamped_times[index])
                 .into_iter()
                 .chain(iter_once(ClampedTime::new(seek_times[index])))
-                .find(|ClampedTime { offset, .. }| sheet.playable_at(*offset))
-                .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.start)
+                .find(|ClampedTime { offset, .. }| sheet.interval.playable_at(*offset))
+                .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.interval.start)
                 .and_then(|time| automation_sources
                     .get(*automation.pick(*delegations[index]))
                     .map(|automation| automation.play(time))
@@ -213,18 +213,21 @@ pub fn harmonize(
         });
 
     // Finaly add geometry control information to modulations that can be controlled by points
-    geom_ctrls.iter().filter(|(sheet, ..)| sheet.playable_at(song_time)).for_each(|(sheet, genid)| {
-        modulations[sheet.coverage()].iter_mut().flatten().for_each(|modulation| {
-            if let
-                | Modulation::Scale { ctrl: point, .. }
-                | Modulation::Rotation { ctrl: point, .. }
-                | Modulation::Position { start: point, .. }
-                = modulation
-            {
-                *point = geom_ctrl_sources.get(**genid).ok().map(|ctrl| **ctrl)
-            }
+    geom_ctrls
+        .iter()
+        .filter(|(sheet, ..)| sheet.interval.playable_at(song_time))
+        .for_each(|(sheet, genid)| {
+            modulations[sheet.coverage()].iter_mut().flatten().for_each(|modulation| {
+                if let
+                    | Modulation::Scale { ctrl: point, .. }
+                    | Modulation::Rotation { ctrl: point, .. }
+                    | Modulation::Position { start: point, .. }
+                    = modulation
+                {
+                    *point = geom_ctrl_sources.get(**genid).ok().map(|ctrl| **ctrl)
+                }
+            })
         })
-    })
 }
 
 pub struct HarmonizerPlugin;

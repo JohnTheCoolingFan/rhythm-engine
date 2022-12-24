@@ -7,22 +7,13 @@ pub struct Coverage(pub u8, pub u8);
 
 #[derive(Component)]
 pub struct Sheet {
-    pub start: P64,
-    pub duration: P64,
+    pub interval: TemporalInterval,
     pub coverage: Coverage,
 }
 
 impl Sheet {
     pub fn coverage(&self) -> RangeInclusive<usize> {
         self.coverage.0.into()..=self.coverage.1.into()
-    }
-
-    pub fn scheduled_at(&self, time: P64) -> bool {
-        (self.start.raw()..(self.start + self.duration).raw()).contains(&time.raw())
-    }
-
-    pub fn playable_at(&self, time: P64) -> bool {
-        f64::EPSILON < self.duration.raw() && self.scheduled_at(time)
     }
 }
 
@@ -70,9 +61,9 @@ pub fn arrange_sequences<T: Default + Component>(
             .map(|_| time_tables.clamped_times[index].offset)
             .into_iter()
             .chain(iter_once(time_tables.seek_times[index]))
-            .find(|time| sheet.playable_at(*time))
+            .find(|time| sheet.interval.playable_at(*time))
             .map(|time| Arrangement {
-                offset: time - sheet.start,
+                offset: time - sheet.interval.start,
                 primary: primary.pick(*time_tables.delegations[index]),
                 secondary: secondary.map(|sources| sources.pick(*time_tables.delegations[index])),
             })

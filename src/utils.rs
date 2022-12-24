@@ -203,13 +203,14 @@ pub trait Property<Target> {
     fn ensure(target: &mut Target);
 }
 
+#[derive(Clone, Copy)]
 pub struct Ensured<T, P: Property<T>> {
     data: T,
     _phantom: PhantomData<P>,
 }
 
 impl<T, P: Property<T>> Ensured<T, P> {
-    fn new(mut data: T) -> Self {
+    pub fn new(mut data: T) -> Self {
         P::ensure(&mut data);
         Self {
             data,
@@ -217,16 +218,17 @@ impl<T, P: Property<T>> Ensured<T, P> {
         }
     }
 
-    fn get(&self) -> &T {
+    pub fn get(&self) -> &T {
         &self.data
     }
 
-    fn tap(&mut self, func: impl Fn(&mut T)) {
+    pub fn apply(&mut self, func: impl Fn(&mut T)) {
         func(&mut self.data);
         P::ensure(&mut self.data);
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Deduped;
 
 impl<T: PartialEq> Property<Vec<T>> for Deduped {
