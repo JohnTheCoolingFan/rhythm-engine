@@ -21,20 +21,17 @@ use noisy_float::prelude::*;
 use tap::{Conv, Tap, TapOptional};
 
 pub enum Modulation {
-    None,
+    Invalid,
     Rgba([T64; 4]),
     Luminosity(T64),
-    Rotation { theta: R64, ctrl: Option<DVec2> },
-    Scale { magnitude: R64, ctrl: Option<DVec2> },
-    Position { shift: DVec2, start: Option<DVec2> },
+    Rotation(R64),
+    Scale(R64),
+    Translation(DVec2),
 }
 
 impl From<DVec2> for Modulation {
     fn from(point: DVec2) -> Self {
-        Self::Position {
-            shift: point,
-            start: None,
-        }
+        Self::Translation(point)
     }
 }
 
@@ -52,19 +49,13 @@ impl From<Luminosity> for Modulation {
 
 impl From<Scale> for Modulation {
     fn from(scale: Scale) -> Self {
-        Self::Scale {
-            magnitude: *scale,
-            ctrl: None,
-        }
+        Self::Scale(*scale)
     }
 }
 
 impl From<Rotation> for Modulation {
     fn from(theta: Rotation) -> Self {
-        Self::Rotation {
-            theta: *theta,
-            ctrl: None,
-        }
+        Self::Rotation(*theta)
     }
 }
 
@@ -141,12 +132,7 @@ pub fn harmonize(
     mut modulations: ResMut<Table<Option<Modulation>>>,
     time_tables: ResMut<TimeTables>,
     performers: Performers,
-    geom_ctrl_sources: Query<&GeometryCtrl>,
     automation_sources: Query<&Automation<T64>>,
-    geom_ctrls: Query<(
-        &Sheet,
-        &GenID<GeometryCtrl>
-    )>,
     // Automations have to be arranged seperately because their offset has to be shifted
     // And because they do not have primary and secondary smenatics like sequences
     automations: Query<(
@@ -155,7 +141,7 @@ pub fn harmonize(
         Option<&RepeaterAffinity>
     )>,
 ) {
-    let TimeTables { song_time, seek_times, clamped_times, delegations } = *time_tables;
+    let TimeTables { seek_times, clamped_times, delegations, .. } = *time_tables;
 
     modulations.fill_with(|| None);
 
@@ -188,7 +174,7 @@ pub fn harmonize(
                 modulations[index] = performances
                     .into_iter()
                     .find(Option::is_some)
-                    .unwrap_or(Some(Modulation::None))
+                    .unwrap_or(Some(Modulation::Invalid))
             }
         })
     });
@@ -211,23 +197,6 @@ pub fn harmonize(
                 .find(Option::is_some)
                 .flatten()
         });
-
-    // Finaly add geometry control information to modulations that can be controlled by points
-    geom_ctrls
-        .iter()
-        .filter(|(sheet, ..)| sheet.offsets.playable_at(song_time))
-        .for_each(|(sheet, genid)| {
-            modulations[sheet.coverage()].iter_mut().flatten().for_each(|modulation| {
-                if let
-                    | Modulation::Scale { ctrl: point, .. }
-                    | Modulation::Rotation { ctrl: point, .. }
-                    | Modulation::Position { start: point, .. }
-                    = modulation
-                {
-                    *point = geom_ctrl_sources.get(**genid).ok().map(|ctrl| **ctrl)
-                }
-            })
-        })
 }
 
 pub struct HarmonizerPlugin;

@@ -80,6 +80,3 @@ pub struct PrimarySequence<T>(T);
 
 #[derive(Deref, DerefMut, Component)]
 pub struct SecondarySequence<T>(T);
-
-#[derive(Deref, DerefMut, Component)]
-pub struct GeometryCtrl(DVec2);
