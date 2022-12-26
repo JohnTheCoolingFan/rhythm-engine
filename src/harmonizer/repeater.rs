@@ -1,6 +1,5 @@
 use super::*;
 use crate::{automation::*, utils::*};
-
 use noisy_float::prelude::*;
 
 pub struct RepeaterClamp {
@@ -41,9 +40,6 @@ impl Repeater {
         }
     }
 }
-
-#[derive(Component, Clone, Copy)]
-pub struct RepeaterAffinity;
 
 #[rustfmt::skip]
 pub fn produce_repetitions(
@@ -88,11 +84,12 @@ mod tests {
     use super::*;
     use bevy_system_graph::*;
     use pretty_assertions::assert_eq;
+    use tap::Pipe;
     use test_case::test_case;
 
     fn sheet() -> Sheet {
         Sheet {
-            coverage: Coverage(0, 0),
+            coverage: vec![SheetRange(0, 0)].into(),
             offsets: TemporalOffsets {
                 start: p64(0.),
                 duration: p64(2000.),
@@ -208,14 +205,13 @@ mod tests {
             .conv::<SystemSet>()
         );
 
-        let coverage = sheet.coverage();
-        game.world.spawn((sheet, repeater));
-
+        game.world.spawn((sheet.clone(), repeater));
         game.update();
+
         game.world
             .resource::<TimeTables>()
-            .clamped_times[coverage]
-            .iter()
-            .for_each(|clamped_time| assert_eq!(expected, *clamped_time));
+            .clamped_times
+            .pipe_ref(|clamped_times| sheet.coverage().map(|index| clamped_times[index]))
+            .for_each(|clamped_time| assert_eq!(expected, clamped_time));
     }
 }

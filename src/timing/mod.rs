@@ -39,7 +39,7 @@ impl Default for TimeTables {
     }
 }
 
-#[derive(Component)]
+#[derive(Clone, Copy, Component)]
 pub struct TemporalOffsets {
     pub start: P64,
     pub duration: P64,

@@ -2,7 +2,6 @@ pub mod arranger;
 pub mod repeater;
 
 use arranger::*;
-use repeater::*;
 
 use crate::{
     automation::{sequence::*, spline::*, *},
@@ -138,7 +137,6 @@ pub fn harmonize(
     automations: Query<(
         &Sheet,
         &Sources<Automation<T64>>,
-        Option<&RepeaterAffinity>
     )>,
 ) {
     let TimeTables { seek_times, clamped_times, delegations, .. } = *time_tables;
@@ -149,11 +147,9 @@ pub fn harmonize(
     //  - Primary sequence
     //  - Secondary sequence
     //  - Automation
-    automations.iter().for_each(|(sheet, automation, affinity)| {
+    automations.iter().for_each(|(sheet, automation)| {
         sheet.coverage().for_each(|index| {
-            if let Some(t) = affinity
-                .map(|_| clamped_times[index])
-                .into_iter()
+            if let Some(t) = iter_once(clamped_times[index])
                 .chain(iter_once(ClampedTime::new(seek_times[index])))
                 .find(|ClampedTime { offset, .. }| sheet.offsets.playable_at(*offset))
                 .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.offsets.start)

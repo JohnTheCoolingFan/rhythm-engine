@@ -228,6 +228,12 @@ impl<T, P: Property<T>> Ensured<T, P> {
     }
 }
 
+impl<T, P: Property<T>> From<T> for Ensured<T, P> {
+    fn from(value: T) -> Self {
+        Ensured::new(value)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct Deduped;
 

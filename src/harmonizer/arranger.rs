@@ -1,19 +1,31 @@
-use super::{repeater::*, *};
+use super::*;
 use crate::{timing::*, utils::*, *};
-use std::ops::RangeInclusive;
+use tap::Pipe;
 
 #[derive(Clone, Copy)]
-pub struct Coverage(pub u8, pub u8);
+pub struct SheetRange(pub u8, pub u8);
 
-#[derive(Component)]
+#[derive(Clone, Copy)]
+pub struct Condensed;
+
+impl Property<Vec<SheetRange>> for Condensed {
+    fn ensure(target: &mut Vec<SheetRange>) {
+        todo!()
+    }
+}
+
+#[derive(Clone, Component)]
 pub struct Sheet {
     pub offsets: TemporalOffsets,
-    pub coverage: Coverage,
+    pub coverage: Ensured<Vec<SheetRange>, Condensed>,
 }
 
 impl Sheet {
-    pub fn coverage(&self) -> RangeInclusive<usize> {
-        self.coverage.0.into()..=self.coverage.1.into()
+    pub fn coverage(&self) -> impl '_ + Clone + Iterator<Item = usize> {
+        self.coverage
+            .get()
+            .iter()
+            .flat_map(|SheetRange(start, end)| (*start as usize)..=(*end as usize))
     }
 }
 
@@ -46,7 +58,6 @@ pub type SequenceSheets<'w, 's, T> = Query<'w, 's, (
     &'static Sheet,
     &'static PrimarySequence<Sources<Sequence<T>>>,
     Option<&'static SecondarySequence<Sources<Sequence<T>>>>,
-    Option<&'static RepeaterAffinity>,
 )>;
 
 #[rustfmt::skip]
@@ -56,10 +67,11 @@ pub fn arrange_sequences<T: Default + Component>(
     instances: SequenceSheets<T>,
 ) {
     arrangements.fill_with(|| None);
-    instances.iter().for_each(|(sheet, primary, secondary, affinity)| {
-        sheet.coverage().for_each(|index| arrangements[index] = affinity
-            .map(|_| time_tables.clamped_times[index].offset)
-            .into_iter()
+    instances.iter().for_each(|(sheet, primary, secondary)| {
+        sheet.coverage().for_each(|index| arrangements[index] = time_tables
+            .clamped_times[index]
+            .offset
+            .pipe(iter_once)
             .chain(iter_once(time_tables.seek_times[index]))
             .find(|time| sheet.offsets.playable_at(*time))
             .map(|time| Arrangement {
