@@ -1,31 +1,56 @@
 use super::*;
 use crate::{timing::*, utils::*, *};
-use tap::Pipe;
+use itertools::Itertools;
+use tap::{Pipe, Tap};
 
-#[derive(Clone, Copy)]
-pub struct SheetRange(pub u8, pub u8);
+#[derive(Clone, Copy, PartialEq)]
+pub struct CoverageRange(u8, u8);
+
+impl CoverageRange {
+    pub fn new(start: u8, end: u8) -> Self {
+        assert!(start <= end);
+        CoverageRange(start, end)
+    }
+
+    pub fn contains(&self, value: u8) -> bool {
+        (self.0..=self.1).contains(&value)
+    }
+
+    pub fn contiguous_union(&self, other: Self) -> Option<Self> {
+        [(*self, other), (other, *self)]
+            .into_iter()
+            .map(|(a, b)| a.0 as i16 - b.1 as i16)
+            .any(|diff| diff.abs() <= 1)
+            .then(|| CoverageRange(self.0.min(other.0), self.1.max(other.1)))
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct Condensed;
 
-impl Property<Vec<SheetRange>> for Condensed {
-    fn ensure(target: &mut Vec<SheetRange>) {
-        todo!()
+impl Property<Vec<CoverageRange>> for Condensed {
+    fn ensure(target: &mut Vec<CoverageRange>) {
+        *target = target
+            .tap_mut(|vec| vec.dedup())
+            .tap_mut(|vec| vec.sort_by_key(|coverage| coverage.0))
+            .iter()
+            .copied()
+            .coalesce(|prev, curr| prev.contiguous_union(curr).ok_or((prev, curr)))
+            .collect::<Vec<_>>();
     }
 }
 
 #[derive(Clone, Component)]
 pub struct Sheet {
     pub offsets: TemporalOffsets,
-    pub coverage: Ensured<Vec<SheetRange>, Condensed>,
+    pub coverage: Ensured<Vec<CoverageRange>, Condensed>,
 }
 
 impl Sheet {
     pub fn coverage(&self) -> impl '_ + Clone + Iterator<Item = usize> {
         self.coverage
-            .get()
             .iter()
-            .flat_map(|SheetRange(start, end)| (*start as usize)..=(*end as usize))
+            .flat_map(|CoverageRange(start, end)| (*start as usize)..=(*end as usize))
     }
 }
 

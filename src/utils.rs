@@ -164,6 +164,12 @@ pub struct GenID<T> {
     _phantom: PhantomData<T>,
 }
 
+impl<T> PartialEq for GenID<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+    }
+}
+
 #[rustfmt::skip]
 impl<T> GenID<T> {
     pub fn new(id: Entity) -> Self {
@@ -203,8 +209,9 @@ pub trait Property<Target> {
     fn ensure(target: &mut Target);
 }
 
-#[derive(Clone, Copy)]
+#[derive(Deref, Clone, Copy)]
 pub struct Ensured<T, P: Property<T>> {
+    #[deref]
     data: T,
     _phantom: PhantomData<P>,
 }
@@ -216,10 +223,6 @@ impl<T, P: Property<T>> Ensured<T, P> {
             data,
             _phantom: PhantomData,
         }
-    }
-
-    pub fn get(&self) -> &T {
-        &self.data
     }
 
     pub fn apply(&mut self, func: impl Fn(&mut T)) {

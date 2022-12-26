@@ -89,7 +89,7 @@ mod tests {
 
     fn sheet() -> Sheet {
         Sheet {
-            coverage: vec![SheetRange(0, 0)].into(),
+            coverage: vec![CoverageRange::new(0, 0)].into(),
             offsets: TemporalOffsets {
                 start: p64(0.),
                 duration: p64(2000.),

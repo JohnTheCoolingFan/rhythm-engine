@@ -140,7 +140,7 @@ mod tests {
             ResponseState::None,
             Response { kind: ResponseKind::Commence, layer: 0 },
             Sheet {
-                coverage: vec![SheetRange(0, 0)].into(),
+                coverage: vec![CoverageRange::new(0, 0)].into(),
                 offsets: TemporalOffsets { start: p64(0.), duration:  p64(1000.) }
             },
         ));
@@ -170,7 +170,7 @@ mod tests {
                 ResponseState::None,
                 Response { kind: ResponseKind::Commence, layer: 0 },
                 Sheet {
-                    coverage: vec![SheetRange(0, 0)].into(),
+                    coverage: vec![CoverageRange::new(0, 0)].into(),
                     offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
                 },
             ),
@@ -178,7 +178,7 @@ mod tests {
                 ResponseState::None,
                 Response { kind: ResponseKind::Switch, layer: 0 },
                 Sheet {
-                    coverage: vec![SheetRange(1, 1)].into(),
+                    coverage: vec![CoverageRange::new(1, 1)].into(),
                     offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
                 },
             ),
@@ -186,7 +186,7 @@ mod tests {
                 ResponseState::None,
                 Response { kind: ResponseKind::Toggle, layer: 0 },
                 Sheet {
-                    coverage: vec![SheetRange(2, 2)].into(),
+                    coverage: vec![CoverageRange::new(2, 2)].into(),
                     offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
                 },
             ),
@@ -194,7 +194,7 @@ mod tests {
                 ResponseState::None,
                 Response { kind: ResponseKind::Follow(p64(50.)), layer: 0 },
                 Sheet {
-                    coverage: vec![SheetRange(3, 3)].into(),
+                    coverage: vec![CoverageRange::new(3, 3)].into(),
                     offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
                 },
             ),
