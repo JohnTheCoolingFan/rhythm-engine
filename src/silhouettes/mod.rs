@@ -3,62 +3,75 @@ use bevy::{
     math::{DMat3, DVec2},
     prelude::*,
 };
+use educe::*;
 use noisy_float::prelude::*;
-use std::cmp::PartialEq;
 use tap::Pipe;
 
+#[derive(Educe)]
+#[educe(PartialEq, Ord, Eq, PartialOrd)]
+#[derive(Clone)]
 struct Group {
     label: String,
-    vertices: Ensured<Vec<usize>, Deduped>,
-}
-
-impl PartialEq for Group {
-    fn eq(&self, other: &Self) -> bool {
-        self.label.eq(&other.label)
-    }
+    #[educe(PartialEq(ignore), Ord(ignore), Eq(ignore), PartialOrd(ignore))]
+    vertices: Ensured<Vec<usize>, FrontDupsDropped>,
 }
 
 #[derive(Component)]
 struct StencilCloud {
     points: Vec<DVec2>,
-    groups: Ensured<Vec<Group>, Deduped>,
+    groups: Ensured<Vec<Group>, FrontDupsDropped>,
 }
 
-enum Silhouette {
-    Ngon(Vec<HitPrompt>),
-    MultiNgon(u8),
+#[derive(Clone, Copy)]
+struct Regulations {
+    translation_magnification: R64,
+    translation_rotation: R64,
+    scale_magnification: R64,
+    rotation_offset: R64,
 }
 
-enum Listener {
-    Rgba,
-    Luminosity,
-    Translation {
-        scale: Option<R64>,
-        rotation: Option<R64>,
-    },
-    Scale {
-        limit: Option<T64>,
-        ctrl: Option<usize>,
-    },
-    Rotation {
-        offset: Option<R64>,
-        ctrl: Option<usize>,
-    },
+impl Default for Regulations {
+    fn default() -> Self {
+        Self {
+            translation_magnification: r64(1.),
+            translation_rotation: r64(0.),
+            scale_magnification: r64(1.),
+            rotation_offset: r64(0.),
+        }
+    }
+}
+
+#[derive(Educe)]
+#[educe(PartialEq, Ord, Eq, PartialOrd)]
+#[derive(Clone)]
+struct Regulator {
+    target_group: usize,
+    #[educe(PartialEq(ignore), Ord(ignore), Eq(ignore), PartialOrd(ignore))]
+    regulations: Regulations,
 }
 
 struct Routing {
     channel: u8,
-    listener: Listener,
     target_group: usize,
+    ctrl: Option<usize>,
 }
 
 #[derive(Component)]
 struct DormantCloud {
     parent: GenID<StencilCloud>,
     routings: Vec<Routing>,
+    regulators: Ensured<Vec<Regulator>, FrontDupsDropped>,
     point_cache: Vec<DVec2>,
     transform: DMat3,
-    children: Ensured<Vec<GenID<Activation>>, Deduped>,
+    children: Ensured<Vec<GenID<Activation>>, FrontDupsDropped>,
+}
+
+enum Silhouette {
+    MultiNgon(usize),
+    Ngon {
+        prompts: Vec<HitPrompt>,
+        ctrl: usize,
+    },
 }
 
 #[derive(Component)]
@@ -95,27 +108,4 @@ fn modulate(
             .offsets
             .playable_at(time_tables.song_time)
         );
-
-    dormant_clouds.iter_mut().filter(|cloud| is_active(cloud)).for_each(|mut dormant| {
-        let stencil = stencil_clouds.get(*dormant.parent).expect("Hierarchy should be valid");
-
-        dormant.reset_cache(stencil);
-
-        let StencilCloud { groups, .. } = stencil;
-        let DormantCloud { routings, point_cache, transform, .. } = &*dormant;
-
-        routings.iter().for_each(|Routing { channel, listener, target_group }| {
-            let Some((group, modulation)) = groups
-                .get(*target_group)
-                .zip(modulations[*channel as usize].as_ref())
-            else {
-                return
-            };
-
-            match (listener, modulation) {
-                (Listener::Rgba, Modulation::Rgba(color)) => todo!("Make vertex cache with colors"),
-                _ => todo!()
-            }
-        })
-    })
 }

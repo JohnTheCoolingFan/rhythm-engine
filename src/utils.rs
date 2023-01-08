@@ -1,8 +1,9 @@
 use bevy::{math::f64::DVec2, prelude::*};
 use derive_more::{Deref, From};
+use educe::*;
 use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
-use tap::Pipe;
+use tap::{Pipe, Tap};
 
 use std::marker::PhantomData;
 
@@ -156,18 +157,14 @@ pub trait OrientationExt: Iterator<Item = DVec2> + Clone {
         }
     }
 }
-
+#[derive(Educe)]
+#[educe(PartialEq, Ord, Eq, PartialOrd)]
 #[derive(Component, Deref)]
 pub struct GenID<T> {
     #[deref]
     id: Entity,
+    #[educe(PartialEq(ignore), Ord(ignore), Eq(ignore), PartialOrd(ignore))]
     _phantom: PhantomData<T>,
-}
-
-impl<T> PartialEq for GenID<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.id.eq(&other.id)
-    }
 }
 
 #[rustfmt::skip]
@@ -238,10 +235,15 @@ impl<T, P: Property<T>> From<T> for Ensured<T, P> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Deduped;
+pub struct FrontDupsDropped;
 
-impl<T: PartialEq> Property<Vec<T>> for Deduped {
+impl<T: PartialEq + Ord + Clone> Property<Vec<T>> for FrontDupsDropped {
     fn ensure(target: &mut Vec<T>) {
-        target.dedup()
+        *target = target
+            .tap_mut(|target| target.sort())
+            .iter()
+            .cloned()
+            .coalesce(|prev, curr| prev.eq(&curr).then_some(curr.clone()).ok_or((prev, curr)))
+            .collect::<Vec<_>>()
     }
 }

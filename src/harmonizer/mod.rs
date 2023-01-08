@@ -149,13 +149,13 @@ pub fn harmonize(
     //  - Automation
     automations.iter().for_each(|(sheet, automation)| {
         sheet.coverage().for_each(|index| {
-            if let Some(t) = iter_once(clamped_times[index])
-                .chain(iter_once(ClampedTime::new(seek_times[index])))
-                .find(|ClampedTime { offset, .. }| sheet.offsets.playable_at(*offset))
+            if let Some(t) = [clamped_times[index], ClampedTime::new(seek_times[index])]
+                .iter_mut()
+                .find(|clamped_time| sheet.offsets.playable_at(clamped_time.offset))
                 .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.offsets.start)
                 .and_then(|time| automation_sources
                     .get(*automation.pick(*delegations[index]))
-                    .map(|automation| automation.play(time))
+                    .map(|automation| automation.play(*time))
                     .ok()
                 )
             {
