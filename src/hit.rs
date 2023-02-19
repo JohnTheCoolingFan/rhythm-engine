@@ -5,8 +5,8 @@ use derive_more::From;
 use noisy_float::prelude::*;
 
 enum PressKind {
-    Press(P64),
-    Hold(P64, P64),
+    Press(P32),
+    Hold(P32, P32),
 }
 
 #[repr(u8)]
@@ -27,8 +27,8 @@ pub struct HitPrompt {
 #[derive(Clone, Copy)]
 pub struct HitInfo {
     /// Object time is used instead of hit time to keep animations synced with music
-    pub object_time: P64,
-    pub hit_time: P64,
+    pub object_time: P32,
+    pub hit_time: P32,
     pub layer: u8,
 }
 
@@ -47,7 +47,7 @@ pub enum ResponseKind {
     Toggle,
     /// Will stay at 0 state with no hit, for each hit it will play the automation
     /// from the hit time to hit time + excess.
-    Follow(P64),
+    Follow(P32),
 }
 
 #[derive(Component)]
@@ -59,7 +59,7 @@ pub struct Response {
 #[derive(Debug, PartialEq, Eq, Component)]
 pub enum ResponseState {
     None,
-    Hit(P64),
+    Hit(P32),
     Active(bool),
 }
 
@@ -132,16 +132,16 @@ mod tests {
     #[test_case(300., 3, ResponseState::None; "wrong Layer")]
     #[test_case(1100., 0, ResponseState::None; "wrong scheduling")]
     #[test_case(300., 0, ResponseState::Active(true); "correct layer and scheduling")]
-    fn hit_layers_and_scheduling(time: f64, layer: u8, expected: ResponseState) {
+    fn hit_layers_and_scheduling(time: f32, layer: u8, expected: ResponseState) {
         let mut game = App::new();
         game.add_system(respond_to_hits);
-        game.insert_resource(TimeTables { song_time: p64(time), ..Default::default() });
+        game.insert_resource(TimeTables { song_time: p32(time), ..Default::default() });
         game.world.spawn((
             ResponseState::None,
             Response { kind: ResponseKind::Commence, layer: 0 },
             Sheet {
                 coverage: vec![CoverageRange::new(0, 0)].into(),
-                offsets: TemporalOffsets { start: p64(0.), duration:  p64(1000.) }
+                offsets: TemporalOffsets { start: p32(0.), duration:  p32(1000.) }
             },
         ));
 
@@ -150,8 +150,8 @@ mod tests {
             None,
             None,
             Some(HitInfo {
-                object_time: p64(time),
-                hit_time: p64(time),
+                object_time: p32(time),
+                hit_time: p32(time),
                 layer,
             })
         ]));
@@ -171,7 +171,7 @@ mod tests {
                 Response { kind: ResponseKind::Commence, layer: 0 },
                 Sheet {
                     coverage: vec![CoverageRange::new(0, 0)].into(),
-                    offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
+                    offsets: TemporalOffsets { start: p32(0.), duration:  p32(400.) },
                 },
             ),
             (
@@ -179,7 +179,7 @@ mod tests {
                 Response { kind: ResponseKind::Switch, layer: 0 },
                 Sheet {
                     coverage: vec![CoverageRange::new(1, 1)].into(),
-                    offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
+                    offsets: TemporalOffsets { start: p32(0.), duration:  p32(400.) },
                 },
             ),
             (
@@ -187,24 +187,24 @@ mod tests {
                 Response { kind: ResponseKind::Toggle, layer: 0 },
                 Sheet {
                     coverage: vec![CoverageRange::new(2, 2)].into(),
-                    offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
+                    offsets: TemporalOffsets { start: p32(0.), duration:  p32(400.) },
                 },
             ),
             (
                 ResponseState::None,
-                Response { kind: ResponseKind::Follow(p64(50.)), layer: 0 },
+                Response { kind: ResponseKind::Follow(p32(50.)), layer: 0 },
                 Sheet {
                     coverage: vec![CoverageRange::new(3, 3)].into(),
-                    offsets: TemporalOffsets { start: p64(0.), duration:  p64(400.) },
+                    offsets: TemporalOffsets { start: p32(0.), duration:  p32(400.) },
                 },
             ),
         ]);
 
         // First hit
-        game.insert_resource(TimeTables { song_time: p64(100.), ..Default::default() });
+        game.insert_resource(TimeTables { song_time: p32(100.), ..Default::default() });
         game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
-            object_time: p64(100.),
-            hit_time: p64(100.),
+            object_time: p32(100.),
+            hit_time: p32(100.),
             layer: 0,
         })]));
 
@@ -214,7 +214,7 @@ mod tests {
         });
         assert_eq!(
             game.world.resource::<TimeTables>().seek_times[..4],
-            [100.; 4].map(p64)
+            [100.; 4].map(p32)
         );
         assert_eq!(
             game.world.resource::<TimeTables>().delegations[..4],
@@ -222,27 +222,27 @@ mod tests {
         );
 
         // State after first hit and before second
-        game.insert_resource(TimeTables { song_time: p64(200.), ..Default::default() });
+        game.insert_resource(TimeTables { song_time: p32(200.), ..Default::default() });
         game.insert_resource(HitRegister([None, None, None, None]));
 
         game.update();
         assert_eq!(
             game.world.resource::<TimeTables>().seek_times[..4],
-            [200., 200., 200., 150.].map(p64)
+            [200., 200., 200., 150.].map(p32)
         );
 
         // Second hit
-        game.insert_resource(TimeTables { song_time: p64(300.), ..Default::default() });
+        game.insert_resource(TimeTables { song_time: p32(300.), ..Default::default() });
         game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
-            object_time: p64(300.),
-            hit_time: p64(300.),
+            object_time: p32(300.),
+            hit_time: p32(300.),
             layer: 0,
         })]));
 
         game.update();
         assert_eq!(
             game.world.resource::<TimeTables>().seek_times[..4],
-            [300., 300., 300., 300.].map(p64)
+            [300., 300., 300., 300.].map(p32)
         );
         assert_eq!(
             game.world.resource::<TimeTables>().delegations[..4],

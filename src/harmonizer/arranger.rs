@@ -71,7 +71,7 @@ impl<T> Sources<T> {
 }
 
 pub struct Arrangement<T> {
-    pub offset: P64,
+    pub offset: P32,
     pub primary: T,
     pub secondary: Option<T>,
 }

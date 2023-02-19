@@ -13,23 +13,23 @@ use crate::{
 
 use core::iter::once as iter_once;
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use bevy::{ecs::system::SystemParam, math::DVec2};
 use bevy_system_graph::*;
 use noisy_float::prelude::*;
 use tap::{Conv, Tap, TapOptional};
 
 pub enum Modulation {
     Invalid,
-    Rgba([T64; 4]),
-    Luminosity(T64),
-    Rotation(R64),
-    Scale(R64),
-    Translation(DVec2),
+    Rgba([T32; 4]),
+    Luminosity(T32),
+    Rotation(R32),
+    Scale(R32),
+    Translation(Vec2),
 }
 
-impl From<DVec2> for Modulation {
-    fn from(point: DVec2) -> Self {
+impl From<Vec2> for Modulation {
+    fn from(point: Vec2) -> Self {
         Self::Translation(point)
     }
 }
@@ -81,7 +81,7 @@ impl<'w, 's, T: Component + Default> Ensemble<'w, 's, T> {
 
 impl<'w, 's> Ensemble<'w, 's, Spline> {
     #[rustfmt::skip]
-    fn play(&self, channel: usize,  t: T64) -> Option<Modulation> {
+    fn play(&self, channel: usize,  t: T32) -> Option<Modulation> {
         self.get(channel).and_then(|arrangement| arrangement
             .secondary
             .is_none()
@@ -96,7 +96,7 @@ where
     T: Default + Component + Clone + Copy + Lerp<Output = T>,
     Modulation: From<T>,
 {
-    fn play(&self, channel: usize, t: T64) -> Option<Modulation> {
+    fn play(&self, channel: usize, t: T32) -> Option<Modulation> {
         self.get(channel).and_then(|arrangement| arrangement
             .secondary
             .map(|secondary| arrangement
@@ -131,12 +131,12 @@ pub fn harmonize(
     mut modulations: ResMut<Table<Option<Modulation>>>,
     time_tables: ResMut<TimeTables>,
     performers: Performers,
-    automation_sources: Query<&Automation<T64>>,
+    automation_sources: Query<&Automation<T32>>,
     // Automations have to be arranged seperately because their offset has to be shifted
     // And because they do not have primary and secondary smenatics like sequences
     automations: Query<(
         &Sheet,
-        &Sources<Automation<T64>>,
+        &Sources<Automation<T32>>,
     )>,
 ) {
     let TimeTables { seek_times, clamped_times, delegations, .. } = *time_tables;

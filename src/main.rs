@@ -1,18 +1,27 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::upper_case_acronyms)]
+#![allow(dead_code)]
 
-use bevy::{ecs::schedule::ShouldRun, prelude::*};
+use bevy::{
+    core_pipeline::bloom::BloomSettings,
+    ecs::schedule::ShouldRun,
+    prelude::*,
+    render::{mesh::Indices, render_resource::PrimitiveTopology::TriangleList},
+    sprite::MaterialMesh2dBundle,
+};
 use bevy_egui::EguiPlugin;
 
 mod automation;
 mod editor;
 mod harmonizer;
 mod hit;
-mod silhouettes;
 mod serialization;
+mod silhouettes;
 mod timing;
 mod utils;
 
+use bevy::core_pipeline::clear_color::ClearColorConfig;
 use editor::*;
 use harmonizer::HarmonizerPlugin;
 use utils::*;
@@ -43,6 +52,50 @@ fn map_selected(game_state: Res<State<GameState>>) -> ShouldRun {
     }
 }
 
+fn setup(mut commands: Commands) {
+    commands.spawn((
+        BloomSettings::default(),
+        Camera2dBundle {
+            camera: Camera {
+                hdr: true,
+                ..default()
+            },
+            camera_2d: Camera2d {
+                clear_color: ClearColorConfig::Custom(Color::rgb(0.0, 0.0, 0.0)),
+            },
+            ..default()
+        },
+    ));
+}
+
+fn debug_setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let mut mesh = Mesh::new(TriangleList);
+    mesh.insert_attribute(
+        Mesh::ATTRIBUTE_POSITION,
+        vec![[-0.5, -0.5, 0.0], [0.0, 0.5, 0.0], [0.5, -0.5, 0.0]],
+    );
+
+    let vertex_colors: Vec<[f32; 4]> = vec![
+        Color::rgba(2.0, 1.0, 1.0, 1.).into(),
+        Color::rgba(1.0, 2.0, 1.0, 1.).into(),
+        Color::rgba(1.0, 1.0, 2.0, 1.).into(),
+    ];
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
+    mesh.set_indices(Some(Indices::U32(vec![0, 2, 1])));
+
+    commands.spawn(MaterialMesh2dBundle {
+        mesh: meshes.add(mesh).into(),
+        transform: Transform::default().with_scale(Vec3::splat(200.)),
+        material: materials.add(ColorMaterial::default()),
+        ..default()
+    });
+}
+
 fn main() {
     let mut game = App::new();
 
@@ -50,10 +103,12 @@ fn main() {
         .add_plugin(EguiPlugin)
         .add_plugin(HarmonizerPlugin)
         .add_plugin(EditorPlugin)
-        .init_resource::<Settings>();
+        .init_resource::<Settings>()
+        .add_startup_system(setup);
 
     #[cfg(debug_assertions)]
-    game.add_state(GameState::Edit);
+    game.add_startup_system(debug_setup)
+        .add_state(GameState::Edit);
 
     #[cfg(not(debug_assertions))]
     game.add_state(GameState::Browse);

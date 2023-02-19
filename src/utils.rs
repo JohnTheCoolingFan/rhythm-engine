@@ -1,4 +1,4 @@
-use bevy::{math::f64::DVec2, prelude::*};
+use bevy::prelude::*;
 use derive_more::{Deref, From};
 use educe::*;
 use itertools::Itertools;
@@ -10,88 +10,88 @@ use std::marker::PhantomData;
 #[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;
 
-impl FloatChecker<f64> for UnitIntervalChecker {
+impl FloatChecker<f32> for UnitIntervalChecker {
     #[inline]
-    fn check(value: f64) -> bool {
+    fn check(value: f32) -> bool {
         (0.0..=1.0).contains(&value)
     }
 
     #[inline]
-    fn assert(value: f64) {
+    fn assert(value: f32) {
         debug_assert!(Self::check(value), "Unexpected non-unit float: {value}");
     }
 }
 
-pub type T64 = NoisyFloat<f64, UnitIntervalChecker>;
+pub type T32 = NoisyFloat<f32, UnitIntervalChecker>;
 
-pub fn t64(value: f64) -> T64 {
-    T64::new(value)
+pub fn t32(value: f32) -> T32 {
+    T32::new(value)
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct PositiveFloatChecker;
 
-impl FloatChecker<f64> for PositiveFloatChecker {
+impl FloatChecker<f32> for PositiveFloatChecker {
     #[inline]
-    fn check(value: f64) -> bool {
+    fn check(value: f32) -> bool {
         (0.0..).contains(&value)
     }
 
     #[inline]
-    fn assert(value: f64) {
+    fn assert(value: f32) {
         debug_assert!(Self::check(value), "Unexpected non-positive float: {value}");
     }
 }
 
-pub type P64 = NoisyFloat<f64, PositiveFloatChecker>;
+pub type P32 = NoisyFloat<f32, PositiveFloatChecker>;
 
-pub fn p64(value: f64) -> P64 {
-    P64::new(value)
+pub fn p32(value: f32) -> P32 {
+    P32::new(value)
 }
 
 pub trait Quantify {
-    fn quantify(&self) -> P64;
+    fn quantify(&self) -> P32;
 }
 
 pub trait Lerp {
     type Output;
-    fn lerp(&self, next: &Self, t: T64) -> Self::Output;
+    fn lerp(&self, next: &Self, t: T32) -> Self::Output;
 }
 
 pub trait CompletionRatio {
-    fn completion_ratio(self, start: Self, end: Self) -> T64;
+    fn completion_ratio(self, start: Self, end: Self) -> T32;
 }
 
 pub trait Vec2Ext {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
-    fn rotate_about(&self, vec: Self, theta: R64) -> Self;
+    fn rotate_about(&self, vec: Self, theta: R32) -> Self;
 }
 
-impl Quantify for P64 {
-    fn quantify(&self) -> P64 {
+impl Quantify for P32 {
+    fn quantify(&self) -> P32 {
         *self
     }
 }
 
-impl<Checker: FloatChecker<f64>> Lerp for NoisyFloat<f64, Checker> {
+impl<Checker: FloatChecker<f32>> Lerp for NoisyFloat<f32, Checker> {
     type Output = Self;
-    fn lerp(&self, next: &Self, t: T64) -> Self::Output {
+    fn lerp(&self, next: &Self, t: T32) -> Self::Output {
         Self::new(self.raw() + (next.raw() - self.raw()) * t.raw())
     }
 }
 
-impl<Checker: FloatChecker<f64>> CompletionRatio for NoisyFloat<f64, Checker> {
-    fn completion_ratio(self, start: Self, end: Self) -> T64 {
-        t64((self.raw() - start.raw()) / (end.raw() - start.raw()))
+impl<Checker: FloatChecker<f32>> CompletionRatio for NoisyFloat<f32, Checker> {
+    fn completion_ratio(self, start: Self, end: Self) -> T32 {
+        t32((self.raw() - start.raw()) / (end.raw() - start.raw()))
     }
 }
 
-impl Vec2Ext for DVec2 {
+impl Vec2Ext for Vec2 {
     fn is_left(&self, start: &Self, end: &Self) -> bool {
         0. < (end.x - start.x) * (self.y - start.y) - (end.y - start.y) * (self.x - start.x)
     }
 
-    fn rotate_about(&self, vec: Self, radians: R64) -> Self {
+    fn rotate_about(&self, vec: Self, radians: R32) -> Self {
         let c = radians.raw().cos();
         let s = radians.raw().sin();
 
@@ -103,15 +103,15 @@ impl Vec2Ext for DVec2 {
 }
 
 pub trait ControlTable<'a, T> {
-    fn at_or_after(self, offset: P64) -> &'a [T];
-    fn interp(self, offset: P64) -> Result<<T as Lerp>::Output, &'a T>
+    fn at_or_after(self, offset: P32) -> &'a [T];
+    fn interp(self, offset: P32) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp;
 }
 
 /// Must be non-empty and sorted
 impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
-    fn at_or_after(self, offset: P64) -> &'a [T] {
+    fn at_or_after(self, offset: P32) -> &'a [T] {
         self.iter()
             .take_while(|item| item.quantify() < offset)
             .count()
@@ -119,7 +119,7 @@ impl<'a, T: Quantify> ControlTable<'a, T> for &'a [T] {
             .pipe(|start| &self[start..])
     }
 
-    fn interp(self, offset: P64) -> Result<<T as Lerp>::Output, &'a T>
+    fn interp(self, offset: P32) -> Result<<T as Lerp>::Output, &'a T>
     where
         T: Lerp,
     {
@@ -141,22 +141,23 @@ pub enum Orientation {
     ClockWise,
 }
 
-pub trait OrientationExt: Iterator<Item = DVec2> + Clone {
+pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
     fn orientation(self) -> Orientation {
         match self
             .clone()
             .chain(self.take(1))
             .tuple_windows::<(_, _)>()
             .map(|(p, q)| (q.x - p.x) * (q.y + p.y))
-            .sum::<f64>()
+            .sum::<f32>()
         {
-            sum if sum.abs() <= f64::EPSILON => Orientation::CoLinear,
+            sum if sum.abs() <= f32::EPSILON => Orientation::CoLinear,
             sum if sum < 0. => Orientation::CounterClockWise,
             sum if 0. < sum => Orientation::ClockWise,
             _ => unreachable!(),
         }
     }
 }
+
 #[derive(Educe)]
 #[educe(PartialEq, Ord, Eq, PartialOrd)]
 #[derive(Component, Deref)]
@@ -183,7 +184,7 @@ impl<T> Clone for GenID<T> {
 
 impl<T> Copy for GenID<T> {}
 
-impl<T: Iterator<Item = DVec2> + Clone> OrientationExt for T {}
+impl<T: Iterator<Item = Vec2> + Clone> OrientationExt for T {}
 
 pub const MAX_CHANNELS: usize = 256;
 
@@ -234,13 +235,20 @@ impl<T, P: Property<T>> From<T> for Ensured<T, P> {
     }
 }
 
+// First encountered duplicates will be dropped
+//
+//      0, 0, 1, 2, 2, 3
+//      X        X
+//
+// Allows for contiguous unique storage with modifications via a `push_back`
+// Good for structures with infrequent mutation and frequent reads
 #[derive(Clone, Copy)]
 pub struct FrontDupsDropped;
 
 impl<T: PartialEq + Ord + Clone> Property<Vec<T>> for FrontDupsDropped {
     fn ensure(target: &mut Vec<T>) {
         *target = target
-            .tap_mut(|target| target.sort())
+            .tap_mut(|target| target.sort()) // Must be stable!
             .iter()
             .cloned()
             .coalesce(|prev, curr| prev.eq(&curr).then_some(curr.clone()).ok_or((prev, curr)))

@@ -23,7 +23,7 @@ struct ClipBoard(Selection);
 struct ChannelScroll(u8);
 
 #[derive(Default)]
-struct ChannelSize(P64);
+struct ChannelSize(P32);
 
 #[derive(Default, Resource)]
 enum Focus {
@@ -35,12 +35,12 @@ enum Focus {
 }
 
 struct Seeker {
-    window_shift: T64,
+    window_shift: T32,
 }
 
 struct Opacity {
-    background: P64,
-    background_participant: P64,
+    background: P32,
+    background_participant: P32,
 }
 
 fn tools(mut egui_context: ResMut<EguiContext>) {
