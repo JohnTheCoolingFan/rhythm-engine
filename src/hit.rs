@@ -66,12 +66,6 @@ pub enum ResponseState {
 #[derive(Default, Debug, PartialEq, Eq, From, Deref, DerefMut, Clone, Copy)]
 pub struct Delegated(pub bool);
 
-/*pub fn clear_hit_responses(mut instances: Query<&mut ResponseState>) {
-    instances
-        .iter_mut()
-        .for_each(|(_, mut response_state)| *response_state = ResponseState::None);
-}*/
-
 #[rustfmt::skip]
 pub fn respond_to_hits(
     hits: Res<HitRegister>,
@@ -130,7 +124,7 @@ mod tests {
     use test_case::test_case;
 
     #[rustfmt::skip]
-    #[test_case(300., 3, ResponseState::None; "wrong Layer")]
+    #[test_case(300., 3, ResponseState::None; "wrong layer")]
     #[test_case(1100., 0, ResponseState::None; "wrong scheduling")]
     #[test_case(300., 0, ResponseState::Active(true); "correct layer and scheduling")]
     fn hit_layers_and_scheduling(time: f32, layer: u8, expected: ResponseState) {

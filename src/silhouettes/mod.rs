@@ -5,8 +5,8 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
 };
 use educe::*;
-use noisy_float::prelude::*;
-use tap::Pipe;
+use noisy_float::{prelude::*, NoisyFloat};
+use tap::{Conv, Pipe};
 
 // This idea needs to cook more
 // enum Tuning {
@@ -39,6 +39,7 @@ struct Group {
 struct Routing {
     channel: u8,
     target_group: usize,
+    ctrl: Option<usize>,
     delimiter: bool,
 }
 
@@ -51,8 +52,10 @@ struct PointCloud {
 
 struct DormantPoint {
     pos: Vec2,
+    // Blending can get complicated with multiple routings.
+    // Just Interpret the last 2 seen color and bloom values.
     color: Option<Color>,
-    bloom: Option<R32>,
+    bloom: Option<T32>,
 }
 
 impl DormantPoint {
@@ -65,7 +68,7 @@ impl DormantPoint {
     }
 }
 
-#[derive(Component)]
+#[derive(Deref, DerefMut, Component)]
 struct ModulationCache(Vec<DormantPoint>);
 
 enum Silhouette {
@@ -89,24 +92,64 @@ struct Activation {
     z_offset: R32,
     base_color: Color,
     silhouette: Silhouette,
-    cloud: Entity,
-    geometry: Entity,
 }
 
 #[rustfmt::skip]
 fn modulate(
     time_tables: ResMut<TimeTables>,
     modulations: Res<Table<Option<Modulation>>>,
-    activations: Query<(&TemporalOffsets, &Activation)>,
-    mut clouds: Query<(&PointCloud, &mut ModulationCache)>,
+    activations: Query<&TemporalOffsets, With<Activation>>,
+    mut clouds: Query<(&PointCloud, &mut ModulationCache, &Children)>,
 ) {
-    activations
-        .iter()
-        .filter(|(offsets, _)| offsets.playable_at(time_tables.song_time))
-        .for_each(|(offsets, activation)| {
-            if let Ok(cloud) = clouds.get_mut(activation.cloud) {
+    clouds
+        .iter_mut()
+        .filter(|(.., children)| children
+            .iter()
+            .flat_map(|entity| activations.get(*entity).ok())
+            .any(|offsets| offsets.playable_at(time_tables.song_time))
+        )
+        .for_each(|(PointCloud { points, groups, routings }, mut cache, _)| {
+            cache.clear();
 
-            }
+            **cache = points
+                .iter()
+                .copied()
+                .map(DormantPoint::new)
+                .collect();
+
+            routings.iter().for_each(|Routing { channel, target_group, ctrl, .. }| {
+                let Some((indices, modulation)) = groups
+                    .get(*target_group)
+                    .map(|group| group.vertices.iter().copied())
+                    .zip(modulations[*channel as usize].as_ref())
+                else {
+                    return
+                };
+
+                indices.clone().for_each(|index| match modulation {
+                    Modulation::Luminosity(bloom) => {
+                        cache[index].bloom = Some(*bloom)
+                    },
+                    Modulation::RGBA(color) => {
+                        cache[index].color = color
+                            .map(NoisyFloat::raw)
+                            .conv::<Color>()
+                            .pipe(Some)
+                    },
+                    Modulation::Rotation(deg) => {
+                        cache[index].pos = ctrl
+                            .map(|ctrl| cache[ctrl].pos)
+                            .unwrap_or_else(|| indices.clone().map(|i| cache[i].pos).centroid())
+                            .pipe(|pos| deg
+                                .raw()
+                                .to_radians()
+                                .pipe(r32)
+                                .pipe(|rad| cache[index].pos.rotate_about(pos, rad))
+                            );
+                    },
+                    _ => {}
+                })
+            })
         });
 }
 

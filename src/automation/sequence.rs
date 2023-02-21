@@ -37,9 +37,9 @@ pub type Rotation = Scalar<MarkerRotation>;
 pub type Scale = Scalar<MarkerScale>;
 
 #[derive(Deref, DerefMut, Default, Component, Clone, Copy)]
-pub struct Rgba([T32; 4]);
+pub struct RGBA([T32; 4]);
 
-impl Lerp for Rgba {
+impl Lerp for RGBA {
     type Output = Self;
 
     fn lerp(&self, other: &Self, t: T32) -> Self::Output {
@@ -47,7 +47,7 @@ impl Lerp for Rgba {
             .zip(other.iter())
             .map(|(from, to)| from.lerp(to, t))
             .pipe_ref_mut(|iter| [(); 4].map(|_| iter.next().unwrap()))
-            .pipe(Rgba)
+            .pipe(RGBA)
     }
 }
 

@@ -141,7 +141,7 @@ pub enum Orientation {
     ClockWise,
 }
 
-pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
+pub trait Vec2IterExt: Iterator<Item = Vec2> + Clone {
     fn orientation(self) -> Orientation {
         match self
             .clone()
@@ -156,7 +156,19 @@ pub trait OrientationExt: Iterator<Item = Vec2> + Clone {
             _ => unreachable!(),
         }
     }
+
+    fn centroid(self) -> Vec2 {
+        match self.clone().count() {
+            0 => Vec2::default(),
+            n => self.sum::<Vec2>().pipe(|sum| Vec2 {
+                x: sum.x / n as f32,
+                y: sum.y / n as f32,
+            }),
+        }
+    }
 }
+
+impl<T: Iterator<Item = Vec2> + Clone> Vec2IterExt for T {}
 
 #[derive(Educe)]
 #[educe(PartialEq, Ord, Eq, PartialOrd)]
@@ -183,8 +195,6 @@ impl<T> Clone for GenID<T> {
 }
 
 impl<T> Copy for GenID<T> {}
-
-impl<T: Iterator<Item = Vec2> + Clone> OrientationExt for T {}
 
 pub const MAX_CHANNELS: usize = 256;
 

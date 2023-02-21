@@ -21,7 +21,7 @@ use tap::{Conv, Tap, TapOptional};
 
 pub enum Modulation {
     Invalid,
-    Rgba([T32; 4]),
+    RGBA([T32; 4]),
     Luminosity(T32),
     Rotation(R32),
     Scale(R32),
@@ -34,9 +34,9 @@ impl From<Vec2> for Modulation {
     }
 }
 
-impl From<Rgba> for Modulation {
-    fn from(color: Rgba) -> Self {
-        Self::Rgba(*color)
+impl From<RGBA> for Modulation {
+    fn from(color: RGBA) -> Self {
+        Self::RGBA(*color)
     }
 }
 
@@ -120,7 +120,7 @@ where
 #[derive(SystemParam)]
 pub struct Performers<'w, 's> {
     splines: Ensemble<'w, 's, Spline>,
-    colors: Ensemble<'w, 's, Rgba>,
+    colors: Ensemble<'w, 's, RGBA>,
     luminosities: Ensemble<'w, 's, Luminosity>,
     scales: Ensemble<'w, 's, Scale>,
     rotations: Ensemble<'w, 's, Rotation>,
@@ -204,7 +204,7 @@ impl Plugin for HarmonizerPlugin {
         game.init_resource::<TimeTables>()
             .init_resource::<HitRegister>()
             .init_resource::<SequenceArrangements<Spline>>()
-            .init_resource::<SequenceArrangements<Rgba>>()
+            .init_resource::<SequenceArrangements<RGBA>>()
             .init_resource::<SequenceArrangements<Luminosity>>()
             .init_resource::<SequenceArrangements<Scale>>()
             .init_resource::<SequenceArrangements<Rotation>>()
@@ -215,7 +215,7 @@ impl Plugin for HarmonizerPlugin {
                         .then(repeater::produce_repetitions)
                         .fork((
                             arrange_sequences::<Spline>,
-                            arrange_sequences::<Rgba>,
+                            arrange_sequences::<RGBA>,
                             arrange_sequences::<Luminosity>,
                             arrange_sequences::<Scale>,
                             arrange_sequences::<Rotation>
