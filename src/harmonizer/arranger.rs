@@ -40,15 +40,12 @@ impl Property<Vec<CoverageRange>> for Condensed {
     }
 }
 
-#[derive(Clone, Component)]
-pub struct Sheet {
-    pub offsets: TemporalOffsets,
-    pub coverage: Ensured<Vec<CoverageRange>, Condensed>,
-}
+#[derive(Deref, DerefMut, Clone, Component)]
+pub struct ChannelCoverage(pub Ensured<Vec<CoverageRange>, Condensed>);
 
-impl Sheet {
-    pub fn coverage(&self) -> impl '_ + Clone + Iterator<Item = usize> {
-        self.coverage
+impl ChannelCoverage {
+    pub fn iter(&self) -> impl '_ + Clone + Iterator<Item = usize> {
+        self.0
             .iter()
             .flat_map(|CoverageRange(start, end)| (*start as usize)..=(*end as usize))
     }
@@ -80,7 +77,8 @@ pub type SequenceArrangements<T> = Table<Option<Arrangement<GenID<Sequence<T>>>>
 
 #[rustfmt::skip]
 pub type SequenceSheets<'w, 's, T> = Query<'w, 's, (
-    &'static Sheet,
+    &'static TemporalOffsets,
+    &'static ChannelCoverage,
     &'static PrimarySequence<Sources<Sequence<T>>>,
     Option<&'static SecondarySequence<Sources<Sequence<T>>>>,
 )>;
@@ -92,15 +90,15 @@ pub fn arrange_sequences<T: Default + Component>(
     instances: SequenceSheets<T>,
 ) {
     arrangements.fill_with(|| None);
-    instances.iter().for_each(|(sheet, primary, secondary)| {
-        sheet.coverage().for_each(|index| arrangements[index] = time_tables
+    instances.iter().for_each(|(offsets, coverage, primary, secondary)| {
+        coverage.iter().for_each(|index| arrangements[index] = time_tables
             .clamped_times[index]
             .offset
             .pipe(iter_once)
             .chain(iter_once(time_tables.seek_times[index]))
-            .find(|time| sheet.offsets.playable_at(*time))
+            .find(|time| offsets.playable_at(*time))
             .map(|time| Arrangement {
-                offset: time - sheet.offsets.start,
+                offset: time - offsets.start,
                 primary: primary.pick(*time_tables.delegations[index]),
                 secondary: secondary.map(|sources| sources.pick(*time_tables.delegations[index])),
             })

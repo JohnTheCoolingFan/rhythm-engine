@@ -66,18 +66,19 @@ pub enum ResponseState {
 #[derive(Default, Debug, PartialEq, Eq, From, Deref, DerefMut, Clone, Copy)]
 pub struct Delegated(pub bool);
 
-pub fn clear_hit_responses(mut instances: Query<(&Sheet, &mut ResponseState)>) {
+/*pub fn clear_hit_responses(mut instances: Query<&mut ResponseState>) {
     instances
         .iter_mut()
         .for_each(|(_, mut response_state)| *response_state = ResponseState::None);
-}
+}*/
 
 #[rustfmt::skip]
 pub fn respond_to_hits(
     hits: Res<HitRegister>,
     mut time_tables: ResMut<TimeTables>,
     mut responses: Query<(
-        &Sheet,
+        &TemporalOffsets,
+        &ChannelCoverage,
         &Response,
         &mut ResponseState
     )>,
@@ -89,14 +90,14 @@ pub fn respond_to_hits(
 
     responses
         .iter_mut()
-        .filter(|(sheet, ..)| sheet.offsets.playable_at(song_time))
-        .for_each(|(sheet, Response { kind, layer }, mut state)| {
+        .filter(|(offsets, ..)| offsets.playable_at(song_time))
+        .for_each(|(offsets, coverage, Response { kind, layer }, mut state)| {
             use ResponseKind::*;
             use ResponseState::*;
 
             hits.iter()
                 .flatten()
-                .filter(|hit| sheet.offsets.scheduled_at(hit.hit_time) && hit.layer == *layer)
+                .filter(|hit| offsets.scheduled_at(hit.hit_time) && hit.layer == *layer)
                 .for_each(|hit| match (kind, &mut *state) {
                     (Toggle, Active(active)) => *active = !*active,
                     (Follow(_), last_hit) => *last_hit = Hit(hit.object_time),
@@ -105,7 +106,7 @@ pub fn respond_to_hits(
                 });
 
             let adjusted_offset = match (kind, &*state) {
-                (Commence, Active(active)) if !active => sheet.offsets.start,
+                (Commence, Active(active)) if !active => offsets.start,
                 (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&song_time) => hit + ex,
                 _ => song_time
             };
@@ -115,7 +116,7 @@ pub fn respond_to_hits(
                 _ => false
             };
 
-            sheet.coverage().for_each(|index| {
+            coverage.iter().for_each(|index| {
                 time_tables.seek_times[index] = adjusted_offset;
                 *time_tables.delegations[index] = delegation;
             })
@@ -139,10 +140,8 @@ mod tests {
         game.world.spawn((
             ResponseState::None,
             Response { kind: ResponseKind::Commence, layer: 0 },
-            Sheet {
-                coverage: vec![CoverageRange::new(0, 0)].into(),
-                offsets: TemporalOffsets { start: p32(0.), duration:  p32(1000.) }
-            },
+            ChannelCoverage(vec![CoverageRange::new(0, 0)].into()),
+            TemporalOffsets { start: p32(0.), duration:  p32(1000.) }
         ));
 
         game.insert_resource(HitRegister([
@@ -169,34 +168,26 @@ mod tests {
             (
                 ResponseState::None,
                 Response { kind: ResponseKind::Commence, layer: 0 },
-                Sheet {
-                    coverage: vec![CoverageRange::new(0, 0)].into(),
-                    offsets: TemporalOffsets { start: p32(0.), duration:  p32(400.) },
-                },
+                ChannelCoverage(vec![CoverageRange::new(0, 0)].into()),
+                TemporalOffsets { start: p32(0.), duration:  p32(400.) },
             ),
             (
                 ResponseState::None,
                 Response { kind: ResponseKind::Switch, layer: 0 },
-                Sheet {
-                    coverage: vec![CoverageRange::new(1, 1)].into(),
-                    offsets: TemporalOffsets { start: p32(0.), duration:  p32(400.) },
-                },
+                ChannelCoverage(vec![CoverageRange::new(1, 1)].into()),
+                TemporalOffsets { start: p32(0.), duration:  p32(400.) },
             ),
             (
                 ResponseState::None,
                 Response { kind: ResponseKind::Toggle, layer: 0 },
-                Sheet {
-                    coverage: vec![CoverageRange::new(2, 2)].into(),
-                    offsets: TemporalOffsets { start: p32(0.), duration:  p32(400.) },
-                },
+                ChannelCoverage(vec![CoverageRange::new(2, 2)].into()),
+                TemporalOffsets { start: p32(0.), duration:  p32(400.) },
             ),
             (
                 ResponseState::None,
                 Response { kind: ResponseKind::Follow(p32(50.)), layer: 0 },
-                Sheet {
-                    coverage: vec![CoverageRange::new(3, 3)].into(),
-                    offsets: TemporalOffsets { start: p32(0.), duration:  p32(400.) },
-                },
+                ChannelCoverage(vec![CoverageRange::new(3, 3)].into()),
+                TemporalOffsets { start: p32(0.), duration:  p32(400.) },
             ),
         ]);
 

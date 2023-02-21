@@ -135,7 +135,8 @@ pub fn harmonize(
     // Automations have to be arranged seperately because their offset has to be shifted
     // And because they do not have primary and secondary smenatics like sequences
     automations: Query<(
-        &Sheet,
+        &TemporalOffsets,
+        &ChannelCoverage,
         &Sources<Automation<T32>>,
     )>,
 ) {
@@ -147,12 +148,12 @@ pub fn harmonize(
     //  - Primary sequence
     //  - Secondary sequence
     //  - Automation
-    automations.iter().for_each(|(sheet, automation)| {
-        sheet.coverage().for_each(|index| {
+    automations.iter().for_each(|(offsets, coverage, automation)| {
+        coverage.iter().for_each(|index| {
             if let Some(t) = [clamped_times[index], ClampedTime::new(seek_times[index])]
                 .iter_mut()
-                .find(|clamped_time| sheet.offsets.playable_at(clamped_time.offset))
-                .tap_some_mut(|clamped_time| clamped_time.offset -= sheet.offsets.start)
+                .find(|clamped_time| offsets.playable_at(clamped_time.offset))
+                .tap_some_mut(|clamped_time| clamped_time.offset -= offsets.start)
                 .and_then(|time| automation_sources
                     .get(*automation.pick(*delegations[index]))
                     .map(|automation| automation.play(*time))

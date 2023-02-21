@@ -12,17 +12,17 @@ use tap::Pipe;
 // enum Tuning {
 //     Translation {
 //         mirror: bool,
-//         rotation: R64,
-//         magnification: R64,
+//         rotation: R32,
+//         magnification: R32,
 //         ctrl: Option<usize>,
 //     },
 //     Rotation {
-//         offset: R64,
+//         offset: R32,
 //         rotation_ctrl: Option<usize>,
 //         orientation_ctrl: Option<usize>,
 //     },
 //     Scale {
-//         magnification: R64,
+//         magnification: R32,
 //         ctrl: Option<usize>,
 //     },
 // }
@@ -86,25 +86,36 @@ enum Silhouette {
 #[derive(Component)]
 struct Activation {
     group: usize,
-    z_offset: R64,
+    z_offset: R32,
     base_color: Color,
-    offsets: TemporalOffsets,
     silhouette: Silhouette,
     cloud: Entity,
-    geometries: Vec<Entity>,
+    geometry: Entity,
 }
 
 #[rustfmt::skip]
 fn modulate(
     time_tables: ResMut<TimeTables>,
     modulations: Res<Table<Option<Modulation>>>,
-    activations: Query<&Activation>,
-    mut commands: Commands,
+    activations: Query<(&TemporalOffsets, &Activation)>,
     mut clouds: Query<(&PointCloud, &mut ModulationCache)>,
+) {
+    activations
+        .iter()
+        .filter(|(offsets, _)| offsets.playable_at(time_tables.song_time))
+        .for_each(|(offsets, activation)| {
+            if let Ok(cloud) = clouds.get_mut(activation.cloud) {
+
+            }
+        });
+}
+
+fn render(
+    mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList);
+    let mut mesh = Mesh::new(TriangleList);
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
         vec![[-0.5, -0.5, 0.0], [-0.5, 0.5, 0.0], [0.5, 0.5, 0.0]],
@@ -126,5 +137,4 @@ fn modulate(
         material: materials.add(ColorMaterial::default()),
         ..default()
     });
-
 }

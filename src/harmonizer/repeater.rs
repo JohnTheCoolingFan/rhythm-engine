@@ -43,7 +43,7 @@ impl Repeater {
 
 #[rustfmt::skip]
 pub fn produce_repetitions(
-    repeaters: Query<(&Sheet, &Repeater)>,
+    repeaters: Query<(&TemporalOffsets, &ChannelCoverage, &Repeater)>,
     mut time_tables: ResMut<TimeTables>,
 ) {
     let TimeTables { song_time, seek_times, clamped_times, .. } = &mut *time_tables;
@@ -51,24 +51,24 @@ pub fn produce_repetitions(
 
     repeaters
         .iter()
-        .filter(|(sheet, _)| f32::EPSILON < sheet.offsets.duration.raw())
-        .filter(|(_, Repeater { period, .. })| f32::EPSILON < period.raw())
-        .for_each(|(sheet, Repeater { ping_pong, period, floor, ceil })| {
-            sheet.coverage().for_each(|index| {
+        .filter(|(offsets, ..)| f32::EPSILON < offsets.duration.raw())
+        .filter(|(.., Repeater { period, .. })| f32::EPSILON < period.raw())
+        .for_each(|(offsets, coverage, Repeater { ping_pong, period, floor, ceil })| {
+            coverage.iter().for_each(|index| {
                 if let Some(time) = [seek_times[index], *song_time]
                     .iter()
-                    .find(|time| sheet.offsets.scheduled_at(**time))
+                    .find(|time| offsets.scheduled_at(**time))
                 {
-                    let relative_time = *time - sheet.offsets.start;
+                    let relative_time = *time - offsets.start;
                     let remainder_time = relative_time % period;
                     let division = (relative_time / period).floor();
                     let parity = division.raw() as i32 % 2;
-                    let clamp_time = t32(((division * period) / sheet.offsets.duration).raw());
+                    let clamp_time = t32(((division * period) / offsets.duration).raw());
 
                     clamped_times[index] = ClampedTime {
                         upper_clamp: ceil.eval(clamp_time),
                         lower_clamp: floor.eval(clamp_time),
-                        offset: sheet.offsets.start + if *ping_pong && parity == 1 {
+                        offset: offsets.start + if *ping_pong && parity == 1 {
                             *period - remainder_time
                         } else {
                             remainder_time
@@ -87,40 +87,40 @@ mod tests {
     use tap::Pipe;
     use test_case::test_case;
 
-    fn sheet() -> Sheet {
-        Sheet {
-            coverage: vec![CoverageRange::new(0, 0)].into(),
-            offsets: TemporalOffsets {
+    fn offset_coverage_bundle() -> (TemporalOffsets, ChannelCoverage) {
+        (
+            TemporalOffsets {
                 start: p32(0.),
                 duration: p32(2000.),
             },
-        }
+            ChannelCoverage(vec![CoverageRange::new(0, 0)].into()),
+        )
     }
 
     #[rustfmt::skip]
     #[test_case(
-        sheet(),
+        offset_coverage_bundle(),
         Repeater::new(p32(500.)),
         p32(250.),
         ClampedTime::new(p32(250.));
         "simple division 0.5"
     )]
     #[test_case(
-        sheet(),
+        offset_coverage_bundle(),
         Repeater::new(p32(500.)),
         p32(750.),
         ClampedTime::new(p32(250.));
         "simple division 1.5"
     )]
     #[test_case(
-        sheet(),
+        offset_coverage_bundle(),
         Repeater::new(p32(500.)),
         p32(750.),
         ClampedTime::new(p32(250.));
         "simple division 2.5"
     )]
     #[test_case(
-        sheet(),
+        offset_coverage_bundle(),
         Repeater {
             ceil: RepeaterClamp {
                 weight: Weight::Quadratic(r32(0.)),
@@ -134,7 +134,7 @@ mod tests {
         "linear decreasing ceil division 0.5"
     )]
     #[test_case(
-        sheet(),
+        offset_coverage_bundle(),
         Repeater {
             ceil: RepeaterClamp {
                 weight: Weight::Quadratic(r32(0.)),
@@ -152,48 +152,62 @@ mod tests {
         "linear decreasing ceil division 1.5"
     )]
     #[test_case(
-        sheet(),
+        offset_coverage_bundle(),
         Repeater { ping_pong: true, ..Repeater::new(p32(500.)) },
         p32(400.),
         ClampedTime::new(p32(400.));
         "pingpong division 0.5"
     )]
     #[test_case(
-        sheet(),
+        offset_coverage_bundle(),
         Repeater { ping_pong: true, ..Repeater::new(p32(500.)) },
         p32(600.),
         ClampedTime::new(p32(400.));
         "pingpong division 1.5"
     )]
     #[test_case(
-        sheet(),
+        offset_coverage_bundle(),
         Repeater { ping_pong: true, ..Repeater::new(p32(500.)) },
         p32(1100.),
         ClampedTime::new(p32(100.));
         "pingpong division 2.5"
     )]
     #[test_case(
-        Sheet { offsets: TemporalOffsets { start: p32(1000.), ..sheet().offsets }, ..sheet() },
+        (
+            TemporalOffsets { start: p32(1000.), ..offset_coverage_bundle().0 },
+            offset_coverage_bundle().1
+        ),
         Repeater::new(p32(500.)),
         p32(500.),
         ClampedTime::new(p32(500.));
         "shifted division -0.5"
     )]
     #[test_case(
-        Sheet { offsets: TemporalOffsets { start: p32(1000.), ..sheet().offsets }, ..sheet() },
+        (
+            TemporalOffsets { start: p32(1000.), ..offset_coverage_bundle().0 },
+            offset_coverage_bundle().1
+        ),
         Repeater::new(p32(500.)),
         p32(2000.),
         ClampedTime::new(p32(1000.));
         "shifted division 1."
     )]
     #[test_case(
-        Sheet { offsets: TemporalOffsets { start: p32(1000.), ..sheet().offsets }, ..sheet() },
+        (
+            TemporalOffsets { start: p32(1000.), ..offset_coverage_bundle().0 },
+            offset_coverage_bundle().1
+        ),
         Repeater::new(p32(500.)),
         p32(4000.),
         ClampedTime::new(p32(4000.));
         "shifted division overshoot 1."
     )]
-    fn repetition_logic(sheet: Sheet, repeater: Repeater, time: P32, expected: ClampedTime) {
+    fn repetition_logic(
+        (offsets, coverage): (TemporalOffsets, ChannelCoverage),
+        repeater: Repeater,
+        time: P32,
+        expected: ClampedTime
+    ) {
         let mut game = App::new();
         game.init_resource::<HitRegister>();
         game.insert_resource(TimeTables { song_time: time, ..Default::default() });
@@ -205,13 +219,13 @@ mod tests {
             .conv::<SystemSet>()
         );
 
-        game.world.spawn((sheet.clone(), repeater));
+        game.world.spawn((offsets.clone(), coverage.clone(), repeater));
         game.update();
 
         game.world
             .resource::<TimeTables>()
             .clamped_times
-            .pipe_ref(|clamped_times| sheet.coverage().map(|index| clamped_times[index]))
+            .pipe_ref(|clamped_times| coverage.iter().map(|index| clamped_times[index]))
             .for_each(|clamped_time| assert_eq!(expected, clamped_time));
     }
 }
