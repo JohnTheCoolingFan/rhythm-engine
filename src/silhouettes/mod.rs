@@ -128,6 +128,9 @@ fn modulate(
 
                 indices.clone().for_each(|index| match modulation {
                     Modulation::Luminosity(bloom) => {
+                        // Mix of Mul + Add?
+                        // K += K * T * L where (0.0..0.5).contains(L)
+                        // K += L where (0.5..1.0).contains(L)
                         cache[index].bloom = Some(*bloom)
                     },
                     Modulation::RGBA(color) => {

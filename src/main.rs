@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 use bevy::{
-    core_pipeline::bloom::BloomSettings,
+    core_pipeline::{bloom::BloomSettings, clear_color::ClearColorConfig},
     ecs::schedule::ShouldRun,
     prelude::*,
     render::{mesh::Indices, render_resource::PrimitiveTopology::TriangleList},
@@ -21,9 +21,11 @@ mod silhouettes;
 mod timing;
 mod utils;
 
-use bevy::core_pipeline::clear_color::ClearColorConfig;
+use automation::Weight;
 use editor::*;
 use harmonizer::HarmonizerPlugin;
+use noisy_float::prelude::*;
+use tap::Pipe;
 use utils::*;
 
 #[derive(Resource)]
@@ -73,27 +75,53 @@ fn debug_setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    let mut mesh = Mesh::new(TriangleList);
-    mesh.insert_attribute(
-        Mesh::ATTRIBUTE_POSITION,
-        vec![[-0.5, -0.5, 0.0], [0.0, 0.5, 0.0], [0.5, -0.5, 0.0]],
-    );
+    let mul_weight = Weight::Quadratic(r32(-5.0));
+    let add_weight = Weight::Quadratic(r32(5.0));
 
-    let vertex_colors: Vec<[f32; 4]> = vec![
-        Color::rgba(2.0, 1.0, 1.0, 1.).into(),
-        Color::rgba(1.0, 2.0, 1.0, 1.).into(),
-        Color::rgba(1.0, 1.0, 2.0, 1.).into(),
-    ];
+    let apply_bloom = |amount: f32, val: f32| -> f32 {
+        if amount != 0.0 {
+            val * mul_weight.eval(t32(amount)).raw() * 3.0 + add_weight.eval(t32(amount)).raw()
+        } else {
+            val
+        }
+    };
 
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
-    mesh.set_indices(Some(Indices::U32(vec![0, 2, 1])));
+    let add_alpha = |arr: [f32; 3]| -> [f32; 4] { [arr[0], arr[1], arr[2], 1.0] };
 
-    commands.spawn(MaterialMesh2dBundle {
-        mesh: meshes.add(mesh).into(),
-        transform: Transform::default().with_scale(Vec3::splat(200.)),
-        material: materials.add(ColorMaterial::default()),
-        ..default()
-    });
+    for t in 0..=10 {
+        let mut mesh = Mesh::new(TriangleList);
+        mesh.insert_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            vec![[-0.5, -0.5, 0.0], [0.0, 0.5, 0.0], [0.5, -0.5, 0.0]],
+        );
+
+        let vertex_colors: Vec<[f32; 4]> = vec![
+            [1.0, 0.0, 0.0]
+                .map(|v| apply_bloom(t as f32 / 10.0, v))
+                .pipe(add_alpha),
+            [0.0, 1.0, 0.0]
+                .map(|v| apply_bloom(t as f32 / 10.0, v))
+                .pipe(add_alpha),
+            [0.0, 0.0, 1.0]
+                .map(|v| apply_bloom(t as f32 / 10.0, v))
+                .pipe(add_alpha),
+        ];
+
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
+        mesh.set_indices(Some(Indices::U32(vec![0, 2, 1])));
+
+        commands.spawn(MaterialMesh2dBundle {
+            mesh: meshes.add(mesh).into(),
+            transform: Transform::default()
+                .with_scale(Vec3::splat(100.))
+                .with_translation(Vec3 {
+                    x: -450. + 100. * t as f32,
+                    ..Default::default()
+                }),
+            material: materials.add(ColorMaterial::default()),
+            ..default()
+        });
+    }
 }
 
 fn main() {
