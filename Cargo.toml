@@ -21,7 +21,7 @@ iyes_loopless = "0.8"
 noisy_float = "0.2.0"
 tinyvec = "1.5.1"
 itertools = "0.10.5"
-lyon_geom = "1.0.3"
+lyon = "1.0.1"
 tap = "1.0.1"
 
 [profile.dev.package."*"]

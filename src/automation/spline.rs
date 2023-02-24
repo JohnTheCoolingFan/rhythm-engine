@@ -4,7 +4,7 @@ use core::iter::once as iter_once;
 
 use bevy::{math::f32::Mat3, prelude::*};
 use itertools::Itertools;
-use lyon_geom::*;
+use lyon::tessellation::geom::*;
 use noisy_float::prelude::*;
 use tap::Pipe;
 

@@ -7,8 +7,11 @@ use crate::{
 };
 use bevy::{
     prelude::*,
-    render::{mesh::Indices, render_resource::PrimitiveTopology::TriangleList},
-    sprite::MaterialMesh2dBundle,
+    render::{
+        mesh::{Indices, MeshVertexAttribute},
+        render_resource::PrimitiveTopology::TriangleList,
+    },
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use educe::*;
 use noisy_float::{prelude::*, NoisyFloat};
@@ -96,7 +99,7 @@ enum Silhouette {
 struct Activation {
     group: usize,
     z_offset: R32,
-    base_color: Color,
+    base_color: [R32; 4],
     silhouette: Silhouette,
 }
 
@@ -188,46 +191,52 @@ impl Default for LuminositySettings {
 
 impl LuminositySettings {
     #[rustfmt::skip]
-    fn apply(&self, color: &mut [f32; 4], amount: T32) {
-        color.iter_mut().take(3).for_each(|val| {
+    fn apply_bloom(&self, color: [f32; 4], amount: T32) -> [f32; 4] {
+        color.tap_mut(|color| color.iter_mut().take(3).for_each(|val| {
             *val += *val
                 * self.vividness_curve.eval(amount).raw()
                 * self.vividness_threshold.raw()
                 + self.brightness_curve.eval(amount).raw()
                 * self.brightness_threshold.raw()
-        })
+        }))
     }
 }
+
+const ATTR_POS: MeshVertexAttribute = Mesh::ATTRIBUTE_POSITION;
+const ATTR_COL: MeshVertexAttribute = Mesh::ATTRIBUTE_COLOR;
 
 #[rustfmt::skip]
 fn render(
     time_tables: ResMut<TimeTables>,
     luminosity_settings: Res<LuminositySettings>,
-    activations: Query<(&TemporalOffsets, &Activation, &Parent)>,
+    activations: Query<(Entity, &TemporalOffsets, &Activation, &Parent)>,
     clouds: Query<(&PointCloud, &ModulationCache)>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    use Mesh::*;
 
     activations
         .iter()
-        .filter(|(offsets, ..)| offsets.playable_at(time_tables.song_time))
-        .flat_map(|(offsets, activation, parent)| clouds
+        .filter(|(_, offsets, ..)| offsets.playable_at(time_tables.song_time))
+        .flat_map(|(entity, offsets, activation, parent)| clouds
             .get(parent.get())
-            .map(|parent| (offsets, activation, parent))
+            .map(|parent| (entity, offsets, activation, parent))
         )
-        .for_each(|(_, activation, (cloud, cache))| {
-            let Some(vertices) = cloud
+        .for_each(|(entity, _, activation, (cloud, cache))| {
+            let compute_bloom = |color: Option<[f32; 4]>, bloom: Option<T32>| color
+                .unwrap_or_else(|| activation.base_color.map(NoisyFloat::raw))
+                .pipe(|color| luminosity_settings.apply_bloom(color, bloom.unwrap_or(t32(0.))));
+
+            let Some((vertices, colors)) = cloud
                 .groups
                 .get(activation.group)
                 .map(|group| group
                     .vertices
                     .iter()
-                    .map(|i| cache[*i].pos)
-                    .map(|v| [v.x, v.y, 0.])
-                    .collect::<Vec<_>>()
+                    .map(|index| &cache[*index])
+                    .map(|p| ([p.pos.x, p.pos.y, 0.], compute_bloom(p.color, p.bloom)))
+                    .unzip::<[f32; 3], [f32; 4], Vec<_>, Vec<_>>()
                 )
             else {
                 return
@@ -235,38 +244,22 @@ fn render(
 
             match &activation.silhouette {
                 Silhouette::Ngon { prompts, ctrl } => {
-                    commands.spawn(MaterialMesh2dBundle {
-                        mesh: Mesh::new(TriangleList)
-                            .tap_mut(|mesh| mesh.insert_attribute(ATTRIBUTE_POSITION, vertices)),
+                    // TODO: Indices
+                    commands.entity(entity).insert(MaterialMesh2dBundle {
                         transform: Transform::default()
-                            .with_translation(Vec3 { z: activation.z_offset, ..Default::default() })
+                            .with_translation(Vec3 { z: activation.z_offset.raw(), ..default() }),
+                        mesh: Mesh::new(TriangleList)
+                            .tap_mut(|mesh| mesh.insert_attribute(ATTR_POS, vertices))
+                            .tap_mut(|mesh| mesh.insert_attribute(ATTR_COL, colors))
+                            .pipe(|mesh| meshes.add(mesh))
+                            .conv::<Mesh2dHandle>(),
+                        material: materials.add(ColorMaterial::default()),
                         ..default()
                     });
                 },
-                Silhouette::RepeatingNgon { take, step } => todo!(),
+                Silhouette::RepeatingNgon { take, step } => {
+                    // TODO
+                },
             }
         });
-
-    let mut mesh = Mesh::new(TriangleList);
-    mesh.insert_attribute(
-        Mesh::ATTRIBUTE_POSITION,
-        vec![[-0.5, -0.5, 0.0], [-0.5, 0.5, 0.0], [0.5, 0.5, 0.0]],
-    );
-
-    let vertex_colors: Vec<[f32; 4]> = vec![
-        Color::RED.as_rgba_f32(),
-        Color::GREEN.as_rgba_f32(),
-        Color::BLUE.as_rgba_f32(),
-    ];
-
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
-    mesh.set_indices(Some(Indices::U32(vec![0, 2, 1])));
-
-    commands.spawn(MaterialMesh2dBundle {
-        mesh: meshes.add(mesh).into(),
-        transform: Transform::from_translation(Vec3::new(-96., 0., 0.))
-            .with_scale(Vec3::splat(128.)),
-        material: materials.add(ColorMaterial::default()),
-        ..default()
-    });
 }
