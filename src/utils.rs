@@ -65,6 +65,7 @@ pub trait CompletionRatio {
 pub trait Vec2Ext {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
     fn rotate_about(&self, vec: Self, theta: R32) -> Self;
+    fn scale_about(&self, vec: Self, factor: R32) -> Self;
 }
 
 impl Quantify for P32 {
@@ -99,6 +100,10 @@ impl Vec2Ext for Vec2 {
             c * (self.x - vec.x) - s * (self.y - vec.y) + vec.x,
             s * (self.x - vec.x) + c * (self.y - vec.y) + vec.y,
         )
+    }
+
+    fn scale_about(&self, vec: Self, factor: R32) -> Self {
+        (*self - vec) * factor.raw() + vec
     }
 }
 

@@ -1,4 +1,10 @@
-use crate::{harmonizer::*, hit::*, timing::*, utils::*};
+use crate::{
+    automation::{sequence::RGBA, Weight},
+    harmonizer::*,
+    hit::*,
+    timing::*,
+    utils::*,
+};
 use bevy::{
     prelude::*,
     render::{mesh::Indices, render_resource::PrimitiveTopology::TriangleList},
@@ -6,7 +12,7 @@ use bevy::{
 };
 use educe::*;
 use noisy_float::{prelude::*, NoisyFloat};
-use tap::{Conv, Pipe};
+use tap::{Conv, Pipe, Tap};
 
 // This idea needs to cook more
 // enum Tuning {
@@ -54,7 +60,7 @@ struct DormantPoint {
     pos: Vec2,
     // Blending can get complicated with multiple routings.
     // Just Interpret the last 2 seen color and bloom values.
-    color: Option<Color>,
+    color: Option<[f32; 4]>,
     bloom: Option<T32>,
 }
 
@@ -126,20 +132,16 @@ fn modulate(
                     return
                 };
 
-                indices.clone().for_each(|index| match modulation {
-                    Modulation::Luminosity(bloom) => {
-                        // Mix of Mul + Add?
-                        // K += K * T * L where (0.0..0.5).contains(L)
-                        // K += L where (0.5..1.0).contains(L)
-                        cache[index].bloom = Some(*bloom)
-                    },
-                    Modulation::RGBA(color) => {
+                match modulation {
+                    Modulation::RGBA(color) => indices.for_each(|index| {
                         cache[index].color = color
                             .map(NoisyFloat::raw)
-                            .conv::<Color>()
                             .pipe(Some)
-                    },
-                    Modulation::Rotation(deg) => {
+                    }),
+                    Modulation::Luminosity(bloom) => indices.for_each(|index| {
+                        cache[index].bloom = Some(*bloom)
+                    }),
+                    Modulation::Rotation(deg) => indices.clone().for_each(|index| {
                         cache[index].pos = ctrl
                             .map(|ctrl| cache[ctrl].pos)
                             .unwrap_or_else(|| indices.clone().map(|i| cache[i].pos).centroid())
@@ -149,18 +151,102 @@ fn modulate(
                                 .pipe(r32)
                                 .pipe(|rad| cache[index].pos.rotate_about(pos, rad))
                             );
-                    },
-                    _ => {}
-                })
+                    }),
+                    Modulation::Scale(factor) => indices.clone().for_each(|index| {
+                        cache[index].pos = ctrl
+                            .map(|ctrl| cache[ctrl].pos)
+                            .unwrap_or_else(|| indices.clone().map(|i| cache[i].pos).centroid())
+                            .pipe(|pos| cache[index].pos.rotate_about(pos, *factor))
+                    }),
+                    Modulation::Translation(vec) => indices.for_each(|index| {
+                        cache[index].pos += *vec
+                    }),
+                    Modulation::Invalid => {}
+                }
             })
         });
 }
 
+#[derive(Resource)]
+struct LuminositySettings {
+    vividness_curve: Weight,
+    vividness_threshold: R32,
+    brightness_curve: Weight,
+    brightness_threshold: R32,
+}
+
+impl Default for LuminositySettings {
+    fn default() -> Self {
+        Self {
+            vividness_curve: Weight::Quadratic(r32(-0.2)),
+            vividness_threshold: r32(3.0),
+            brightness_curve: Weight::Quadratic(r32(5.0)),
+            brightness_threshold: r32(1.0),
+        }
+    }
+}
+
+impl LuminositySettings {
+    #[rustfmt::skip]
+    fn apply(&self, color: &mut [f32; 4], amount: T32) {
+        color.iter_mut().take(3).for_each(|val| {
+            *val += *val
+                * self.vividness_curve.eval(amount).raw()
+                * self.vividness_threshold.raw()
+                + self.brightness_curve.eval(amount).raw()
+                * self.brightness_threshold.raw()
+        })
+    }
+}
+
+#[rustfmt::skip]
 fn render(
+    time_tables: ResMut<TimeTables>,
+    luminosity_settings: Res<LuminositySettings>,
+    activations: Query<(&TemporalOffsets, &Activation, &Parent)>,
+    clouds: Query<(&PointCloud, &ModulationCache)>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
+    use Mesh::*;
+
+    activations
+        .iter()
+        .filter(|(offsets, ..)| offsets.playable_at(time_tables.song_time))
+        .flat_map(|(offsets, activation, parent)| clouds
+            .get(parent.get())
+            .map(|parent| (offsets, activation, parent))
+        )
+        .for_each(|(_, activation, (cloud, cache))| {
+            let Some(vertices) = cloud
+                .groups
+                .get(activation.group)
+                .map(|group| group
+                    .vertices
+                    .iter()
+                    .map(|i| cache[*i].pos)
+                    .map(|v| [v.x, v.y, 0.])
+                    .collect::<Vec<_>>()
+                )
+            else {
+                return
+            };
+
+            match &activation.silhouette {
+                Silhouette::Ngon { prompts, ctrl } => {
+                    commands.spawn(MaterialMesh2dBundle {
+                        mesh: Mesh::new(TriangleList)
+                            .tap_mut(|mesh| mesh.insert_attribute(ATTRIBUTE_POSITION, vertices)),
+                        transform: Transform::default()
+                            .with_translation(Vec3 { z: activation.z_offset, ..Default::default() })
+                        ..default()
+                    });
+                },
+                Silhouette::RepeatingNgon { take, step } => todo!(),
+            }
+        });
+
     let mut mesh = Mesh::new(TriangleList);
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,

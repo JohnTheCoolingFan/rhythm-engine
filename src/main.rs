@@ -56,7 +56,11 @@ fn map_selected(game_state: Res<State<GameState>>) -> ShouldRun {
 
 fn setup(mut commands: Commands) {
     commands.spawn((
-        BloomSettings::default(),
+        BloomSettings {
+            intensity: 0.45,
+            knee: 0.1,
+            ..BloomSettings::default()
+        },
         Camera2dBundle {
             camera: Camera {
                 hdr: true,
@@ -75,15 +79,12 @@ fn debug_setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    let mul_weight = Weight::Quadratic(r32(-5.0));
+    let mul_weight = Weight::Quadratic(r32(-0.2));
     let add_weight = Weight::Quadratic(r32(5.0));
 
     let apply_bloom = |amount: f32, val: f32| -> f32 {
-        if amount != 0.0 {
-            val * mul_weight.eval(t32(amount)).raw() * 3.0 + add_weight.eval(t32(amount)).raw()
-        } else {
-            val
-        }
+        val + val * mul_weight.eval(t32(amount)).raw() * 3.0
+            + add_weight.eval(t32(amount)).raw() * 1.0
     };
 
     let add_alpha = |arr: [f32; 3]| -> [f32; 4] { [arr[0], arr[1], arr[2], 1.0] };
@@ -92,7 +93,7 @@ fn debug_setup(
         let mut mesh = Mesh::new(TriangleList);
         mesh.insert_attribute(
             Mesh::ATTRIBUTE_POSITION,
-            vec![[-0.5, -0.5, 0.0], [0.0, 0.5, 0.0], [0.5, -0.5, 0.0]],
+            vec![[-0.5, -0.5, 1.0], [0.0, 0.5, 1.0], [0.5, -0.5, 1.0]],
         );
 
         let vertex_colors: Vec<[f32; 4]> = vec![
@@ -116,6 +117,7 @@ fn debug_setup(
                 .with_scale(Vec3::splat(100.))
                 .with_translation(Vec3 {
                     x: -450. + 100. * t as f32,
+                    z: 1.0,
                     ..Default::default()
                 }),
             material: materials.add(ColorMaterial::default()),

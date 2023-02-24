@@ -132,8 +132,6 @@ pub fn harmonize(
     time_tables: ResMut<TimeTables>,
     performers: Performers,
     automation_sources: Query<&Automation<T32>>,
-    // Automations have to be arranged seperately because their offset has to be shifted
-    // And because they do not have primary and secondary smenatics like sequences
     automations: Query<(
         &TemporalOffsets,
         &ChannelCoverage,
@@ -148,6 +146,9 @@ pub fn harmonize(
     //  - Primary sequence
     //  - Secondary sequence
     //  - Automation
+
+    // Automations have to be arranged seperately because their offset has to be shifted
+    // And because they do not have primary and secondary smenatics like sequences
     automations.iter().for_each(|(offsets, coverage, automation)| {
         coverage.iter().for_each(|index| {
             if let Some(t) = [clamped_times[index], ClampedTime::new(seek_times[index])]
