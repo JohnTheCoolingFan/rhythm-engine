@@ -40,7 +40,7 @@ struct Group {
 
 #[derive(Educe)]
 #[educe(PartialEq, Ord, Eq, PartialOrd)]
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 enum Tuning {
     #[educe(Ord(rank = 0))]
     Scale {
@@ -55,8 +55,8 @@ enum Tuning {
     #[educe(Ord(rank = 2))]
     Translation {
         angle: R32,
-        mirror: bool,
         dilation: R32,
+        twist: bool,
     },
     #[educe(Ord(rank = 3))]
     Warp { target: GroupID },
@@ -124,7 +124,7 @@ fn modulate(
     activations: Query<&TemporalOffsets, With<Activation>>,
     mut clouds: Query<(&PointCloud, &mut ModulationCache, &Children)>,
 ) {
-    let mut joined = clouds.iter_mut().filter(|(.., children)| children
+    let joined = clouds.iter_mut().filter(|(.., children)| children
         .iter()
         .flat_map(|entity| activations.get(*entity).ok())
         .any(|offsets| offsets.playable_at(time_tables.song_time))
@@ -139,81 +139,87 @@ fn modulate(
             .map(DormantPoint::new)
             .collect();
 
-        routes.iter().for_each(|Route { channels, target_groups, tunings }| {
+        let flattened = routes.iter().flat_map(|Route { channels, target_groups, tunings }| {
             channels
                 .iter()
                 .cartesian_product(target_groups.iter())
-                .map(|(channel, (group, tunings))| (tunings, (channel, group)))
-                .flat_map(|(tunings, pairs)| tunings.iter().map(move |tuning| (tuning, pairs)))
-                .for_each(|(tuning, (channel, group))| {
-                    // TODO: Warping
+                .map(|(channel, (group, tuning_indices))| (tuning_indices, (channel, group)))
+                .flat_map(move |(indices, pairs)| indices.iter().map(move |i| (tunings[*i], pairs)))
+        });
 
+        flattened.for_each(|(tuning, (channel, group))| {
+            // TODO: Warping
 
-                    let Some((indices, modulation)) = groups
-                        .get(*group)
-                        .map(|group| group.vertices.iter().copied())
-                        .zip(modulations[*channel as usize].as_ref())
-                    else {
-                        return
+            let Some((indices, modulation)) = groups
+                .get(*group)
+                .map(|group| group.vertices.iter().copied())
+                .zip(modulations[*channel as usize].as_ref())
+            else {
+                return
+            };
+
+            match modulation {
+                Modulation::RGBA(color) => indices.for_each(|index| {
+                    cache[index].color = Some(color.map(NoisyFloat::raw))
+                }),
+                Modulation::Luminosity(bloom) => indices.for_each(|index| {
+                    cache[index].bloom = Some(*bloom)
+                }),
+                Modulation::Rotation(deg) => {
+                    let (ctrl, orient_ctrl) = match tuning {
+                        Tuning::Rotation { ctrl, orient_ctrl } => (ctrl, orient_ctrl),
+                        _ => (None, None)
                     };
 
-                    match modulation {
-                        Modulation::RGBA(color) => indices.for_each(|index| {
-                            cache[index].color = Some(color.map(NoisyFloat::raw))
-                        }),
-                        Modulation::Luminosity(bloom) => indices.for_each(|index| {
-                            cache[index].bloom = Some(*bloom)
-                        }),
-                        Modulation::Rotation(deg) => {
-                            let (ctrl, orient_ctrl) = match tunings[*tuning] {
-                                Tuning::Rotation { ctrl, orient_ctrl } => (ctrl, orient_ctrl),
-                                _ => (None, None)
-                            };
+                    let ctrl = ctrl.map(|ctrl| cache[ctrl].pos).unwrap_or_else(|| indices
+                        .clone()
+                        .map(|i| cache[i].pos)
+                        .centroid()
+                    );
 
-                            let ctrl = ctrl.map(|ctrl| cache[ctrl].pos).unwrap_or_else(|| indices
-                                .clone()
-                                .map(|i| cache[i].pos)
-                                .centroid()
-                            );
+                    let rad = r32(deg.raw().to_radians());
 
-                            let rad = r32(deg.raw().to_radians());
+                    indices.clone().for_each(|i| {
+                        cache[i].pos = cache[i].pos.rotate_about(ctrl, rad)
+                    });
 
-                            indices.clone().for_each(|i| {
-                                cache[i].pos = cache[i].pos.rotate_about(ctrl, rad)
-                            });
-
-                            if let Some(orient_ctrl) = orient_ctrl.map(|i| cache[i].pos) {
-                                indices.clone().for_each(|i| {
-                                    cache[i].pos = cache[i].pos.rotate_about(orient_ctrl, -rad)
-                                })
-                            }
-                        },
-                        Modulation::Scale(factor) => {
-                            let (ctrl, factor) = match tunings[*tuning] {
-                                Tuning::Scale { ctrl, dilation } => (ctrl, dilation * factor),
-                                _ => (None, *factor)
-                            };
-
-                            let ctrl = ctrl.map(|ctrl| cache[ctrl].pos).unwrap_or_else(|| indices
-                                .clone()
-                                .map(|i| cache[i].pos)
-                                .centroid()
-                            );
-
-                            indices.clone().for_each(|index| {
-                                cache[index].pos = cache[index].pos.scale_about(ctrl, factor)
-                            })
-                        },
-                        Modulation::Translation(vec) => indices.for_each(|index| {
-                            // TODO:
-                            //  - Angle
-                            //  - Mirror
-                            //  - Magnification
-                            cache[index].pos += *vec
-                        }),
-                        Modulation::Invalid => {}
+                    if let Some(orient_ctrl) = orient_ctrl.map(|i| cache[i].pos) {
+                        indices.clone().for_each(|i| {
+                            cache[i].pos = cache[i].pos.rotate_about(orient_ctrl, -rad)
+                        })
                     }
-                })
+                },
+                Modulation::Scale(factor) => {
+                    let (ctrl, dilation) = match tuning {
+                        Tuning::Scale { ctrl, dilation } => (ctrl, dilation),
+                        _ => (None, *factor)
+                    };
+
+                    let ctrl = ctrl.map(|ctrl| cache[ctrl].pos).unwrap_or_else(|| indices
+                        .clone()
+                        .map(|i| cache[i].pos)
+                        .centroid()
+                    );
+
+                    indices.clone().for_each(|index| {
+                        cache[index].pos = cache[index].pos.scale_about(ctrl, *factor * dilation)
+                    })
+                },
+                Modulation::Translation(shift) => {
+                    let (angle, dilation, twist) = match tuning {
+                        Tuning::Translation { angle, dilation, twist } => (angle, dilation, twist),
+                        _ => (r32(0.), r32(1.), false),
+                    };
+
+                    let tuned_shift = shift
+                        .rotate_about(Vec2::default(), r32(angle.raw().to_radians()))
+                        .scale_about(Vec2::default(), dilation)
+                        .tap_mut(|vec| if twist { vec.x = -vec.x });
+
+                    indices.for_each(|index| cache[index].pos += tuned_shift)
+                },
+                Modulation::Invalid => {}
+            }
         })
     });
 }

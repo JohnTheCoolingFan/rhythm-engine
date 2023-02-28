@@ -64,7 +64,9 @@ pub trait CompletionRatio {
 
 pub trait Vec2Ext {
     fn is_left(&self, start: &Self, end: &Self) -> bool;
+    #[must_use]
     fn rotate_about(&self, vec: Self, theta: R32) -> Self;
+    #[must_use]
     fn scale_about(&self, vec: Self, factor: R32) -> Self;
 }
 
