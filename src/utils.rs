@@ -5,7 +5,7 @@ use itertools::Itertools;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
 use tap::{Pipe, Tap};
 
-use std::marker::PhantomData;
+use std::{collections::HashSet, hash::Hash, marker::PhantomData};
 
 #[derive(Debug, Clone, Copy)]
 pub struct UnitIntervalChecker;
@@ -268,5 +268,15 @@ impl<T: PartialEq + Ord + Clone> Property<Vec<T>> for FrontDupsDropped {
             .cloned()
             .coalesce(|prev, curr| prev.eq(&curr).then_some(curr.clone()).ok_or((prev, curr)))
             .collect::<Vec<_>>()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct StableDeduped;
+
+impl<T: PartialEq + Ord + Clone + Hash> Property<Vec<T>> for StableDeduped {
+    fn ensure(target: &mut Vec<T>) {
+        let mut seen = HashSet::new();
+        target.retain(|val| seen.insert(val.clone()));
     }
 }

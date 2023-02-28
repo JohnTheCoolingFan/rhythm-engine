@@ -5,6 +5,7 @@ use crate::{
     timing::*,
     utils::*,
 };
+
 use bevy::{
     prelude::*,
     render::{
@@ -13,28 +14,20 @@ use bevy::{
     },
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
+
+use lyon::{
+    math::{point, Point},
+    path::{builder::*, Path},
+    tessellation::*,
+};
+
 use educe::*;
+use itertools::Itertools;
 use noisy_float::{prelude::*, NoisyFloat};
 use tap::{Conv, Pipe, Tap};
 
-// This idea needs to cook more
-// enum Tuning {
-//     Translation {
-//         mirror: bool,
-//         rotation: R32,
-//         magnification: R32,
-//         ctrl: Option<usize>,
-//     },
-//     Rotation {
-//         offset: R32,
-//         rotation_ctrl: Option<usize>,
-//         orientation_ctrl: Option<usize>,
-//     },
-//     Scale {
-//         magnification: R32,
-//         ctrl: Option<usize>,
-//     },
-// }
+type VertexID = usize;
+type GroupID = usize;
 
 #[derive(Educe)]
 #[educe(PartialEq, Ord, Eq, PartialOrd)]
@@ -42,27 +35,48 @@ use tap::{Conv, Pipe, Tap};
 struct Group {
     label: String,
     #[educe(PartialEq(ignore), Ord(ignore), Eq(ignore), PartialOrd(ignore))]
-    vertices: Ensured<Vec<usize>, FrontDupsDropped>,
+    vertices: Ensured<Vec<VertexID>, StableDeduped>,
 }
 
-struct Routing {
-    channel: u8,
-    target_group: usize,
-    ctrl: Option<usize>,
-    delimiter: bool,
+#[derive(Educe)]
+#[educe(PartialEq, Ord, Eq, PartialOrd)]
+#[derive(Clone)]
+enum Tuning {
+    #[educe(Ord(rank = 0))]
+    Scale {
+        ctrl: Option<VertexID>,
+        dilation: R32,
+    },
+    #[educe(Ord(rank = 1))]
+    Rotation {
+        ctrl: Option<VertexID>,
+        orient_ctrl: Option<VertexID>,
+    },
+    #[educe(Ord(rank = 2))]
+    Translation {
+        angle: R32,
+        mirror: bool,
+        dilation: R32,
+    },
+    #[educe(Ord(rank = 3))]
+    Warp { target: GroupID },
+}
+
+struct Route {
+    target_groups: Vec<(GroupID, Vec<usize>)>,
+    tunings: Vec<Tuning>,
+    channels: Vec<u8>,
 }
 
 #[derive(Component)]
 struct PointCloud {
     points: Vec<Vec2>,
     groups: Ensured<Vec<Group>, FrontDupsDropped>,
-    routings: Vec<Routing>,
+    routes: Vec<Route>,
 }
 
 struct DormantPoint {
     pos: Vec2,
-    // Blending can get complicated with multiple routings.
-    // Just Interpret the last 2 seen color and bloom values.
     color: Option<[f32; 4]>,
     bloom: Option<T32>,
 }
@@ -81,26 +95,26 @@ impl DormantPoint {
 struct ModulationCache(Vec<DormantPoint>);
 
 enum Silhouette {
-    RepeatingNgon {
-        take: usize,
-        step: usize,
-    },
-    Ngon {
-        prompts: Vec<HitPrompt>,
-        ctrl: usize,
+    Polygon,
+    Curves {
+        // TODO
     },
 }
 
-// Has to be its own component because this is what's responsible for play objects.
-// Currrently no 2 play should overlap, storing in cloud would make this difficult to check.
-// TODO:
-//  - Per vertex coloring.
+enum Property {
+    NA,
+    Prompt { prompts: Vec<HitPrompt> },
+    Repeat { take: usize, step: usize },
+}
+
 #[derive(Component)]
 struct Activation {
-    group: usize,
+    ctrl: VertexID,
+    group: GroupID,
     z_offset: R32,
     base_color: [R32; 4],
     silhouette: Silhouette,
+    property: Property,
 }
 
 #[rustfmt::skip]
@@ -110,64 +124,98 @@ fn modulate(
     activations: Query<&TemporalOffsets, With<Activation>>,
     mut clouds: Query<(&PointCloud, &mut ModulationCache, &Children)>,
 ) {
-    clouds
-        .iter_mut()
-        .filter(|(.., children)| children
+    let mut joined = clouds.iter_mut().filter(|(.., children)| children
+        .iter()
+        .flat_map(|entity| activations.get(*entity).ok())
+        .any(|offsets| offsets.playable_at(time_tables.song_time))
+    );
+
+    joined.for_each(|(PointCloud { points, groups, routes }, mut cache, _)| {
+        cache.clear();
+
+        **cache = points
             .iter()
-            .flat_map(|entity| activations.get(*entity).ok())
-            .any(|offsets| offsets.playable_at(time_tables.song_time))
-        )
-        .for_each(|(PointCloud { points, groups, routings }, mut cache, _)| {
-            cache.clear();
+            .copied()
+            .map(DormantPoint::new)
+            .collect();
 
-            **cache = points
+        routes.iter().for_each(|Route { channels, target_groups, tunings }| {
+            channels
                 .iter()
-                .copied()
-                .map(DormantPoint::new)
-                .collect();
+                .cartesian_product(target_groups.iter())
+                .map(|(channel, (group, tunings))| (tunings, (channel, group)))
+                .flat_map(|(tunings, pairs)| tunings.iter().map(move |tuning| (tuning, pairs)))
+                .for_each(|(tuning, (channel, group))| {
+                    // TODO: Warping
 
-            routings.iter().for_each(|Routing { channel, target_group, ctrl, .. }| {
-                let Some((indices, modulation)) = groups
-                    .get(*target_group)
-                    .map(|group| group.vertices.iter().copied())
-                    .zip(modulations[*channel as usize].as_ref())
-                else {
-                    return
-                };
 
-                match modulation {
-                    Modulation::RGBA(color) => indices.for_each(|index| {
-                        cache[index].color = color
-                            .map(NoisyFloat::raw)
-                            .pipe(Some)
-                    }),
-                    Modulation::Luminosity(bloom) => indices.for_each(|index| {
-                        cache[index].bloom = Some(*bloom)
-                    }),
-                    Modulation::Rotation(deg) => indices.clone().for_each(|index| {
-                        cache[index].pos = ctrl
-                            .map(|ctrl| cache[ctrl].pos)
-                            .unwrap_or_else(|| indices.clone().map(|i| cache[i].pos).centroid())
-                            .pipe(|pos| deg
-                                .raw()
-                                .to_radians()
-                                .pipe(r32)
-                                .pipe(|rad| cache[index].pos.rotate_about(pos, rad))
+                    let Some((indices, modulation)) = groups
+                        .get(*group)
+                        .map(|group| group.vertices.iter().copied())
+                        .zip(modulations[*channel as usize].as_ref())
+                    else {
+                        return
+                    };
+
+                    match modulation {
+                        Modulation::RGBA(color) => indices.for_each(|index| {
+                            cache[index].color = Some(color.map(NoisyFloat::raw))
+                        }),
+                        Modulation::Luminosity(bloom) => indices.for_each(|index| {
+                            cache[index].bloom = Some(*bloom)
+                        }),
+                        Modulation::Rotation(deg) => {
+                            let (ctrl, orient_ctrl) = match tunings[*tuning] {
+                                Tuning::Rotation { ctrl, orient_ctrl } => (ctrl, orient_ctrl),
+                                _ => (None, None)
+                            };
+
+                            let ctrl = ctrl.map(|ctrl| cache[ctrl].pos).unwrap_or_else(|| indices
+                                .clone()
+                                .map(|i| cache[i].pos)
+                                .centroid()
                             );
-                    }),
-                    Modulation::Scale(factor) => indices.clone().for_each(|index| {
-                        cache[index].pos = ctrl
-                            .map(|ctrl| cache[ctrl].pos)
-                            .unwrap_or_else(|| indices.clone().map(|i| cache[i].pos).centroid())
-                            .pipe(|pos| cache[index].pos.rotate_about(pos, *factor))
-                    }),
-                    Modulation::Translation(vec) => indices.for_each(|index| {
-                        cache[index].pos += *vec
-                    }),
-                    Modulation::Invalid => {}
-                }
-            })
-        });
+
+                            let rad = r32(deg.raw().to_radians());
+
+                            indices.clone().for_each(|i| {
+                                cache[i].pos = cache[i].pos.rotate_about(ctrl, rad)
+                            });
+
+                            if let Some(orient_ctrl) = orient_ctrl.map(|i| cache[i].pos) {
+                                indices.clone().for_each(|i| {
+                                    cache[i].pos = cache[i].pos.rotate_about(orient_ctrl, -rad)
+                                })
+                            }
+                        },
+                        Modulation::Scale(factor) => {
+                            let (ctrl, factor) = match tunings[*tuning] {
+                                Tuning::Scale { ctrl, dilation } => (ctrl, dilation * factor),
+                                _ => (None, *factor)
+                            };
+
+                            let ctrl = ctrl.map(|ctrl| cache[ctrl].pos).unwrap_or_else(|| indices
+                                .clone()
+                                .map(|i| cache[i].pos)
+                                .centroid()
+                            );
+
+                            indices.clone().for_each(|index| {
+                                cache[index].pos = cache[index].pos.scale_about(ctrl, factor)
+                            })
+                        },
+                        Modulation::Translation(vec) => indices.for_each(|index| {
+                            // TODO:
+                            //  - Angle
+                            //  - Mirror
+                            //  - Magnification
+                            cache[index].pos += *vec
+                        }),
+                        Modulation::Invalid => {}
+                    }
+                })
+        })
+    });
 }
 
 #[derive(Resource)]
@@ -228,22 +276,21 @@ fn render(
                 .unwrap_or_else(|| activation.base_color.map(NoisyFloat::raw))
                 .pipe(|color| luminosity_settings.apply_bloom(color, bloom.unwrap_or(t32(0.))));
 
-            let Some((vertices, colors)) = cloud
+            let Some(vertices) = cloud
                 .groups
                 .get(activation.group)
-                .map(|group| group
-                    .vertices
-                    .iter()
-                    .map(|index| &cache[*index])
-                    .map(|p| ([p.pos.x, p.pos.y, 0.], compute_bloom(p.color, p.bloom)))
-                    .unzip::<[f32; 3], [f32; 4], Vec<_>, Vec<_>>()
-                )
+                .map(|group| &group.vertices)
             else {
                 return
             };
 
-            match &activation.silhouette {
-                Silhouette::Ngon { prompts, ctrl } => {
+            let (take, step) = match activation.property {
+                Property::Repeat { take, step } => (take, step),
+                _ => (vertices.len(), vertices.len())
+            };
+
+            /*match &activation.silhouette {
+                Silhouette::Polygon => {
                     // TODO: Indices
                     commands.entity(entity).insert(MaterialMesh2dBundle {
                         transform: Transform::default()
@@ -260,6 +307,6 @@ fn render(
                 Silhouette::RepeatingNgon { take, step } => {
                     // TODO
                 },
-            }
+            }*/
         });
 }

@@ -93,7 +93,14 @@ fn debug_setup(
         let mut mesh = Mesh::new(TriangleList);
         mesh.insert_attribute(
             Mesh::ATTRIBUTE_POSITION,
-            vec![[-0.5, -0.5, 1.0], [0.0, 0.5, 1.0], [0.5, -0.5, 1.0]],
+            vec![
+                [-0.5, -0.5, 1.0],
+                [0.0, 0.5, 1.0],
+                [0.5, -0.5, 1.0],
+                [-0.4, -0.4, 1.5],
+                [0.0, 0.4, 1.5],
+                [0.4, -0.4, 1.5],
+            ],
         );
 
         let vertex_colors: Vec<[f32; 4]> = vec![
@@ -106,10 +113,13 @@ fn debug_setup(
             [0.0, 0.0, 1.0]
                 .map(|v| apply_bloom(t as f32 / 10.0, v))
                 .pipe(add_alpha),
+            [0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
         ];
 
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
-        mesh.set_indices(Some(Indices::U32(vec![0, 2, 1])));
+        mesh.set_indices(Some(Indices::U32(vec![0, 2, 1, 3, 5, 4])));
 
         commands.spawn(MaterialMesh2dBundle {
             mesh: meshes.add(mesh).into(),

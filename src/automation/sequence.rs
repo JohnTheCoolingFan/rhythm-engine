@@ -25,16 +25,21 @@ impl<Marker, Type: Lerp<Output = Type>> Lerp for Scalar<Marker, Type> {
     }
 }
 
-#[derive(Default, Clone, Copy)]
-pub struct MarkerLuminosity;
-#[derive(Default, Clone, Copy)]
-pub struct MarkerRotation;
-#[derive(Default, Clone, Copy)]
-pub struct MarkerScale;
+pub mod markers {
+    #[derive(Default, Clone, Copy)]
+    pub struct Luminosity;
+    #[derive(Default, Clone, Copy)]
+    pub struct Rotation;
+    #[derive(Default, Clone, Copy)]
+    pub struct Scale;
+    #[derive(Default, Clone, Copy)]
+    pub struct Warp;
+}
 
-pub type Luminosity = Scalar<MarkerLuminosity, T32>;
-pub type Rotation = Scalar<MarkerRotation>;
-pub type Scale = Scalar<MarkerScale>;
+pub type Luminosity = Scalar<markers::Luminosity, T32>;
+pub type Rotation = Scalar<markers::Rotation>;
+pub type Scale = Scalar<markers::Scale>;
+pub type Warp = Scalar<markers::Warp>;
 
 #[derive(Deref, DerefMut, Default, Component, Clone, Copy)]
 pub struct RGBA([T32; 4]);
@@ -51,6 +56,15 @@ impl Lerp for RGBA {
     }
 }
 
+#[derive(Default, Deref, DerefMut, Component)]
+pub struct Sequence<T: Default>(Automation<T>);
+
+impl<T: Default + Clone + Copy + Lerp<Output = T>> Sequence<T> {
+    pub fn play(&self, offset: P32) -> <T as Lerp>::Output {
+        self.interp(offset).unwrap_or_else(|anchor| anchor.val)
+    }
+}
+
 impl Sequence<Spline> {
     #[rustfmt::skip]
     pub fn play(&self, t: T32, offset: P32) -> Vec2 {
@@ -61,15 +75,6 @@ impl Sequence<Spline> {
             [single] => single.val.play(t),
             _ => panic!("Unexpected existing no item control table"),
         }
-    }
-}
-
-#[derive(Default, Deref, DerefMut, Component)]
-pub struct Sequence<T: Default>(Automation<T>);
-
-impl<T: Default + Clone + Copy + Lerp<Output = T>> Sequence<T> {
-    pub fn play(&self, offset: P32) -> <T as Lerp>::Output {
-        self.interp(offset).unwrap_or_else(|anchor| anchor.val)
     }
 }
 
