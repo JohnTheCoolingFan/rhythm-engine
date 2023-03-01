@@ -9,7 +9,7 @@ use crate::{
 use bevy::{
     prelude::*,
     render::{
-        mesh::{Indices, MeshVertexAttribute},
+        mesh::{Indices::U16, MeshVertexAttribute},
         render_resource::PrimitiveTopology::TriangleList,
     },
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
@@ -75,24 +75,25 @@ struct PointCloud {
     routes: Vec<Route>,
 }
 
-struct DormantPoint {
+#[derive(Clone, Copy)]
+struct InertPoint {
     pos: Vec2,
     color: Option<[f32; 4]>,
-    bloom: Option<T32>,
+    lumin: Option<T32>,
 }
 
-impl DormantPoint {
+impl InertPoint {
     fn new(pos: Vec2) -> Self {
         Self {
             pos,
             color: None,
-            bloom: None,
+            lumin: None,
         }
     }
 }
 
 #[derive(Deref, DerefMut, Component)]
-struct ModulationCache(Vec<DormantPoint>);
+struct ModulationCache(Vec<InertPoint>);
 
 enum Silhouette {
     Polygon,
@@ -104,14 +105,14 @@ enum Silhouette {
 enum Property {
     NA,
     Prompt { prompts: Vec<HitPrompt> },
-    Repeat { take: usize, step: usize },
+    Repeat { step: usize, take: usize },
 }
 
 #[derive(Component)]
 struct Activation {
+    z: R32,
     ctrl: VertexID,
     group: GroupID,
-    z_offset: R32,
     base_color: [R32; 4],
     silhouette: Silhouette,
     property: Property,
@@ -136,7 +137,7 @@ fn modulate(
         **cache = points
             .iter()
             .copied()
-            .map(DormantPoint::new)
+            .map(InertPoint::new)
             .collect();
 
         let flattened = routes.iter().flat_map(|Route { channels, target_groups, tunings }| {
@@ -163,9 +164,9 @@ fn modulate(
                     cache[index].color = Some(color.map(NoisyFloat::raw))
                 }),
                 Modulation::Luminosity(bloom) => indices.for_each(|index| {
-                    cache[index].bloom = Some(*bloom)
+                    cache[index].lumin = Some(*bloom)
                 }),
-                Modulation::Rotation(deg) => {
+                Modulation::Rotation(theta) => {
                     let (ctrl, orient_ctrl) = match tuning {
                         Tuning::Rotation { ctrl, orient_ctrl } => (ctrl, orient_ctrl),
                         _ => (None, None)
@@ -177,15 +178,15 @@ fn modulate(
                         .centroid()
                     );
 
-                    let rad = r32(deg.raw().to_radians());
+                    let theta = r32(theta.raw().to_radians());
 
                     indices.clone().for_each(|i| {
-                        cache[i].pos = cache[i].pos.rotate_about(ctrl, rad)
+                        cache[i].pos = cache[i].pos.rotate_about(ctrl, theta)
                     });
 
                     if let Some(orient_ctrl) = orient_ctrl.map(|i| cache[i].pos) {
                         indices.clone().for_each(|i| {
-                            cache[i].pos = cache[i].pos.rotate_about(orient_ctrl, -rad)
+                            cache[i].pos = cache[i].pos.rotate_about(orient_ctrl, -theta)
                         })
                     }
                 },
@@ -245,7 +246,7 @@ impl Default for LuminositySettings {
 
 impl LuminositySettings {
     #[rustfmt::skip]
-    fn apply_bloom(&self, color: [f32; 4], amount: T32) -> [f32; 4] {
+    fn apply(&self, color: [f32; 4], amount: T32) -> [f32; 4] {
         color.tap_mut(|color| color.iter_mut().take(3).for_each(|val| {
             *val += *val
                 * self.vividness_curve.eval(amount).raw()
@@ -278,11 +279,7 @@ fn render(
             .map(|parent| (entity, offsets, activation, parent))
         )
         .for_each(|(entity, _, activation, (cloud, cache))| {
-            let compute_bloom = |color: Option<[f32; 4]>, bloom: Option<T32>| color
-                .unwrap_or_else(|| activation.base_color.map(NoisyFloat::raw))
-                .pipe(|color| luminosity_settings.apply_bloom(color, bloom.unwrap_or(t32(0.))));
-
-            let Some(vertices) = cloud
+            let Some(members) = cloud
                 .groups
                 .get(activation.group)
                 .map(|group| &group.vertices)
@@ -290,29 +287,72 @@ fn render(
                 return
             };
 
+            let compute_luminosity = |color: Option<[f32; 4]>, luminosity: Option<T32>| color
+                .unwrap_or_else(|| activation.base_color.map(NoisyFloat::raw))
+                .pipe(|color| luminosity_settings.apply(color, luminosity.unwrap_or(t32(0.))));
+
             let (take, step) = match activation.property {
-                Property::Repeat { take, step } => (take, step),
-                _ => (vertices.len(), vertices.len())
+                Property::Repeat { step, take } => (step, take),
+                _ => (members.len(), members.len())
             };
 
-            /*match &activation.silhouette {
-                Silhouette::Polygon => {
-                    // TODO: Indices
-                    commands.entity(entity).insert(MaterialMesh2dBundle {
-                        transform: Transform::default()
-                            .with_translation(Vec3 { z: activation.z_offset.raw(), ..default() }),
-                        mesh: Mesh::new(TriangleList)
-                            .tap_mut(|mesh| mesh.insert_attribute(ATTR_POS, vertices))
-                            .tap_mut(|mesh| mesh.insert_attribute(ATTR_COL, colors))
-                            .pipe(|mesh| meshes.add(mesh))
-                            .conv::<Mesh2dHandle>(),
-                        material: materials.add(ColorMaterial::default()),
-                        ..default()
-                    });
-                },
-                Silhouette::RepeatingNgon { take, step } => {
+            assert!(0 < step);
+            assert!(3 <= take);
+
+            match &activation.silhouette {
+                Silhouette::Polygon => (0..)
+                    .step_by(step)
+                    .map_while(|start| members.get(start..start + take))
+                    .for_each(|indices| {
+                        let path = Path::builder_with_attributes(4).pipe(|mut builder| {
+                            let start = cache[indices[0]];
+                            builder.begin(
+                                Point::new(start.pos.x, start.pos.y),
+                                &compute_luminosity(start.color, start.lumin)
+                            );
+
+                            indices.iter().skip(1).map(|i| cache[indices[*i]]).for_each(|point| {
+                                builder.line_to(
+                                    Point::new(point.pos.x, point.pos.y),
+                                    &compute_luminosity(point.color, point.lumin)
+                                );
+                            });
+
+                            builder.line_to(
+                                Point::new(start.pos.x, start.pos.y),
+                                &compute_luminosity(start.color, start.lumin)
+                            );
+
+                            builder.close();
+                            builder.build()
+                        });
+
+                        let mut colors = Vec::<[f32; 4]>::new();
+
+                        let geometry = VertexBuffers::<[f32; 3], u16>::new().tap_mut(|geometry| {
+                            dbg!(FillTessellator::new().tessellate_path(
+                                &path,
+                                &FillOptions::default(),
+                                &mut BuffersBuilder::new(geometry, ColorCtor::<0>::new(&mut colors))
+                            ));
+                        });
+
+                        commands.entity(entity).insert(MaterialMesh2dBundle {
+                            transform: Transform::default()
+                                .with_translation(Vec3 { z: activation.z.raw(), ..default() }),
+                            mesh: Mesh::new(TriangleList)
+                                .tap_mut(|mesh| mesh.insert_attribute(ATTR_POS, geometry.vertices))
+                                .tap_mut(|mesh| mesh.set_indices(Some(U16(geometry.indices))))
+                                .tap_mut(|mesh| mesh.insert_attribute(ATTR_COL, colors))
+                                .pipe(|mesh| meshes.add(mesh))
+                                .conv::<Mesh2dHandle>(),
+                            material: materials.add(ColorMaterial::default()),
+                            ..default()
+                        });
+                    }),
+                Silhouette::Curves { .. } => {
                     // TODO
                 },
-            }*/
+            }
         });
 }

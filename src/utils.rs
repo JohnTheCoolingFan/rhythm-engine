@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use derive_more::{Deref, From};
 use educe::*;
 use itertools::Itertools;
+use lyon::tessellation::*;
 use noisy_float::{prelude::*, FloatChecker, NoisyFloat};
 use tap::{Pipe, Tap};
 
@@ -280,5 +281,23 @@ impl<T: PartialEq + Ord + Clone + Hash> Property<Vec<T>> for StableDeduped {
     fn ensure(target: &mut Vec<T>) {
         let mut seen = HashSet::new();
         target.retain(|val| seen.insert(val.clone()));
+    }
+}
+
+pub struct ColorCtor<'a, const Z: u8> {
+    pub colors: &'a mut Vec<[f32; 4]>,
+}
+
+impl<'a, const Z: u8> ColorCtor<'a, Z> {
+    pub fn new(colors: &'a mut Vec<[f32; 4]>) -> Self {
+        Self { colors }
+    }
+}
+
+impl<'a, const Z: u8> FillVertexConstructor<[f32; 3]> for ColorCtor<'a, Z> {
+    #[rustfmt::skip]
+    fn new_vertex(&mut self, mut vertex: FillVertex) -> [f32; 3] {
+        self.colors.push(vertex.interpolated_attributes().try_into().unwrap());
+        vertex.position().to_array().pipe(|[x, y]| [x, y, Z as f32])
     }
 }

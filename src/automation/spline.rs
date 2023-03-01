@@ -1,4 +1,4 @@
-use crate::utils::*;
+use crate::utils::{Orientation, *};
 
 use core::iter::once as iter_once;
 
