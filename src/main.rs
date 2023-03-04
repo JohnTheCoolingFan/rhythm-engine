@@ -7,9 +7,8 @@ use bevy::{
     core_pipeline::{bloom::BloomSettings, clear_color::ClearColorConfig},
     ecs::schedule::ShouldRun,
     prelude::*,
-    render::{mesh::Indices, render_resource::PrimitiveTopology::TriangleList},
-    sprite::MaterialMesh2dBundle,
 };
+
 use bevy_egui::EguiPlugin;
 
 mod automation;
@@ -21,12 +20,9 @@ mod silhouettes;
 mod timing;
 mod utils;
 
-use automation::Weight;
 use editor::*;
 use harmonizer::HarmonizerPlugin;
-use noisy_float::prelude::*;
-use tap::Pipe;
-use utils::*;
+use silhouettes::*;
 
 #[derive(Resource)]
 struct Settings {
@@ -74,66 +70,8 @@ fn setup(mut commands: Commands) {
     ));
 }
 
-fn debug_setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
-    let mul_weight = Weight::Quadratic(r32(-0.2));
-    let add_weight = Weight::Quadratic(r32(5.0));
-
-    let apply_bloom = |amount: f32, val: f32| -> f32 {
-        val + val * mul_weight.eval(t32(amount)).raw() * 3.0
-            + add_weight.eval(t32(amount)).raw() * 1.0
-    };
-
-    let add_alpha = |arr: [f32; 3]| -> [f32; 4] { [arr[0], arr[1], arr[2], 1.0] };
-
-    for t in 0..=10 {
-        let mut mesh = Mesh::new(TriangleList);
-        mesh.insert_attribute(
-            Mesh::ATTRIBUTE_POSITION,
-            vec![
-                [-0.5, -0.5, 1.0],
-                [0.0, 0.5, 1.0],
-                [0.5, -0.5, 1.0],
-                [-0.4, -0.4, 1.5],
-                [0.0, 0.4, 1.5],
-                [0.4, -0.4, 1.5],
-            ],
-        );
-
-        let vertex_colors: Vec<[f32; 4]> = vec![
-            [1.0, 0.0, 0.0]
-                .map(|v| apply_bloom(t as f32 / 10.0, v))
-                .pipe(add_alpha),
-            [0.0, 1.0, 0.0]
-                .map(|v| apply_bloom(t as f32 / 10.0, v))
-                .pipe(add_alpha),
-            [0.0, 0.0, 1.0]
-                .map(|v| apply_bloom(t as f32 / 10.0, v))
-                .pipe(add_alpha),
-            [0.0, 0.0, 0.0, 1.0],
-            [0.0, 0.0, 0.0, 1.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ];
-
-        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
-        mesh.set_indices(Some(Indices::U32(vec![0, 2, 1, 3, 5, 4])));
-
-        commands.spawn(MaterialMesh2dBundle {
-            mesh: meshes.add(mesh).into(),
-            transform: Transform::default()
-                .with_scale(Vec3::splat(100.))
-                .with_translation(Vec3 {
-                    x: -450. + 100. * t as f32,
-                    z: 1.0,
-                    ..Default::default()
-                }),
-            material: materials.add(ColorMaterial::default()),
-            ..default()
-        });
-    }
+fn debug_setup(commands: Commands) {
+    silhouettes::debug::silhouettes_debug_setup(commands)
 }
 
 fn main() {
@@ -143,6 +81,7 @@ fn main() {
         .add_plugin(EguiPlugin)
         .add_plugin(HarmonizerPlugin)
         .add_plugin(EditorPlugin)
+        .add_plugin(SilhouettePlugin)
         .init_resource::<Settings>()
         .add_startup_system(setup);
 

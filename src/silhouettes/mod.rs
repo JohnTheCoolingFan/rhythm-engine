@@ -1,10 +1,14 @@
 use crate::{
-    automation::{sequence::RGBA, Weight},
+    automation::Weight,
+    harmonizer::arranger::{ChannelCoverage, CoverageRange},
     harmonizer::*,
     hit::*,
+    map_selected,
     timing::*,
     utils::*,
 };
+
+use bevy_system_graph::SystemGraph;
 
 use bevy::{
     prelude::*,
@@ -16,7 +20,7 @@ use bevy::{
 };
 
 use lyon::{
-    math::{point, Point},
+    math::Point,
     path::{builder::*, Path},
     tessellation::*,
 };
@@ -69,13 +73,14 @@ struct Route {
 }
 
 #[derive(Component)]
-struct PointCloud {
+pub struct PointCloud {
     points: Vec<Vec2>,
-    groups: Ensured<Vec<Group>, FrontDupsDropped>,
+    groups: Vec<Group>,
     routes: Vec<Route>,
+    children: Vec<Entity>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default, Debug)]
 struct InertPoint {
     pos: Vec2,
     color: Option<[f32; 4]>,
@@ -92,7 +97,7 @@ impl InertPoint {
     }
 }
 
-#[derive(Deref, DerefMut, Component)]
+#[derive(Deref, DerefMut, Component, Default, Debug)]
 struct ModulationCache(Vec<InertPoint>);
 
 enum Silhouette {
@@ -109,13 +114,14 @@ enum Property {
 }
 
 #[derive(Component)]
-struct Activation {
+pub struct Activation {
     z: R32,
     ctrl: VertexID,
     group: GroupID,
     base_color: [R32; 4],
     silhouette: Silhouette,
     property: Property,
+    parent: Entity,
 }
 
 #[rustfmt::skip]
@@ -123,15 +129,15 @@ fn modulate(
     time_tables: ResMut<TimeTables>,
     modulations: Res<Table<Option<Modulation>>>,
     activations: Query<&TemporalOffsets, With<Activation>>,
-    mut clouds: Query<(&PointCloud, &mut ModulationCache, &Children)>,
+    mut clouds: Query<(&PointCloud, &mut ModulationCache)>,
 ) {
-    let joined = clouds.iter_mut().filter(|(.., children)| children
+    let joined = clouds.iter_mut().filter(|(cloud, _)| cloud.children
         .iter()
         .flat_map(|entity| activations.get(*entity).ok())
         .any(|offsets| offsets.playable_at(time_tables.song_time))
     );
 
-    joined.for_each(|(PointCloud { points, groups, routes }, mut cache, _)| {
+    joined.for_each(|(PointCloud { points, groups, routes, .. }, mut cache)| {
         cache.clear();
 
         **cache = points
@@ -257,14 +263,11 @@ impl LuminositySettings {
     }
 }
 
-const ATTR_POS: MeshVertexAttribute = Mesh::ATTRIBUTE_POSITION;
-const ATTR_COL: MeshVertexAttribute = Mesh::ATTRIBUTE_COLOR;
-
 #[rustfmt::skip]
 fn render(
     time_tables: ResMut<TimeTables>,
     luminosity_settings: Res<LuminositySettings>,
-    activations: Query<(Entity, &TemporalOffsets, &Activation, &Parent)>,
+    activations: Query<(Entity, &TemporalOffsets, &Activation)>,
     clouds: Query<(&PointCloud, &ModulationCache)>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -274,8 +277,8 @@ fn render(
     activations
         .iter()
         .filter(|(_, offsets, ..)| offsets.playable_at(time_tables.song_time))
-        .flat_map(|(entity, offsets, activation, parent)| clouds
-            .get(parent.get())
+        .flat_map(|(entity, offsets, activation)| clouds
+            .get(activation.parent)
             .map(|parent| (entity, offsets, activation, parent))
         )
         .for_each(|(entity, _, activation, (cloud, cache))| {
@@ -311,7 +314,7 @@ fn render(
                                 &compute_luminosity(start.color, start.lumin)
                             );
 
-                            indices.iter().skip(1).map(|i| cache[indices[*i]]).for_each(|point| {
+                            indices.iter().skip(1).map(|i| cache[*i]).for_each(|point| {
                                 builder.line_to(
                                     Point::new(point.pos.x, point.pos.y),
                                     &compute_luminosity(point.color, point.lumin)
@@ -330,20 +333,35 @@ fn render(
                         let mut colors = Vec::<[f32; 4]>::new();
 
                         let geometry = VertexBuffers::<[f32; 3], u16>::new().tap_mut(|geometry| {
-                            dbg!(FillTessellator::new().tessellate_path(
+                            Result::unwrap(FillTessellator::new().tessellate_path(
                                 &path,
                                 &FillOptions::default(),
                                 &mut BuffersBuilder::new(geometry, ColorCtor::<0>::new(&mut colors))
                             ));
                         });
 
+                        const POS: MeshVertexAttribute = Mesh::ATTRIBUTE_POSITION;
+                        const COLOR: MeshVertexAttribute = Mesh::ATTRIBUTE_COLOR;
+
                         commands.entity(entity).insert(MaterialMesh2dBundle {
                             transform: Transform::default()
                                 .with_translation(Vec3 { z: activation.z.raw(), ..default() }),
                             mesh: Mesh::new(TriangleList)
-                                .tap_mut(|mesh| mesh.insert_attribute(ATTR_POS, geometry.vertices))
-                                .tap_mut(|mesh| mesh.set_indices(Some(U16(geometry.indices))))
-                                .tap_mut(|mesh| mesh.insert_attribute(ATTR_COL, colors))
+                                .tap_mut(|mesh| mesh.insert_attribute(POS, geometry.vertices))
+                                .tap_mut(|mesh| mesh.insert_attribute(COLOR, colors))
+                                // TODO: Remove second collect when bumping to 0.10
+                                // - Backface culling removed in 0.10 for 2d
+                                // - Workaround for 0.9
+                                .tap_mut(|mesh| geometry
+                                    .indices
+                                    .iter()
+                                    .copied()
+                                    .rev()
+                                    .collect::<Vec<_>>()
+                                    .pipe(U16)
+                                    .pipe(Some)
+                                    .pipe(|indices| mesh.set_indices(indices))
+                                )
                                 .pipe(|mesh| meshes.add(mesh))
                                 .conv::<Mesh2dHandle>(),
                             material: materials.add(ColorMaterial::default()),
@@ -355,4 +373,72 @@ fn render(
                 },
             }
         });
+}
+
+pub struct SilhouettePlugin;
+
+#[rustfmt::skip]
+impl Plugin for SilhouettePlugin {
+    fn build(&self, game: &mut App) {
+        game.init_resource::<LuminositySettings>()
+            .add_system_set(SystemGraph::new()
+                .tap(|sysg| { sysg.root(modulate).then(render); })
+                .conv::<SystemSet>()
+                .with_run_criteria(map_selected)
+                .after("harmonizer")
+            );
+    }
+}
+
+#[cfg(debug_assertions)]
+pub mod debug {
+    use super::*;
+
+    #[rustfmt::skip]
+    pub fn silhouettes_debug_setup(mut commands: Commands) {
+        let [cloud, activation, source, instance] = [(); 4].map(|_| commands.spawn_empty().id());
+
+        commands.get_entity(cloud).unwrap().insert((
+            ModulationCache::default(),
+            PointCloud {
+                children: vec![activation],
+                points: [(0., 0.), (200., 0.), (0., 200.), (-200., 0.), (0., -200.)]
+                    .iter()
+                    .map(|(x, y)| Vec2::new(*x, *y))
+                    .collect::<Vec<_>>(),
+                groups: vec![
+                    Group { label: String::from("left"), vertices: vec![3].into() },
+                    Group { label: String::from("middle"), vertices: vec![2].into() },
+                    Group { label: String::from("right"), vertices: vec![1].into() },
+                    Group { label: String::from("quad"), vertices: vec![1, 2, 3, 4].into() },
+                ],
+                routes: vec![
+                    Route { target_groups: vec![(0, vec![])], channels: vec![0], tunings: vec![], },
+                    Route { target_groups: vec![(1, vec![])], channels: vec![1], tunings: vec![], },
+                    Route { target_groups: vec![(2, vec![])], channels: vec![2], tunings: vec![], },
+                ],
+            }
+        ));
+
+        commands.get_entity(activation).unwrap().insert((
+            TemporalOffsets { start: p32(0.), duration: p32(1000.) },
+            Activation {
+                z: r32(0.),
+                ctrl: 0,
+                group: 3,
+                base_color: [1., 1., 1., 1.].map(r32),
+                silhouette: Silhouette::Polygon,
+                property: Property::NA,
+                parent: cloud,
+            }
+        ));
+
+
+
+        commands.get_entity(instance).unwrap().insert((
+            TemporalOffsets { start: p32(0.), duration: p32(1000.) },
+            ChannelCoverage(vec![CoverageRange::new(0, 0)].into()),
+            //PrimarySequence(Sources)
+        ));
+    }
 }

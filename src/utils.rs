@@ -225,7 +225,7 @@ pub trait Property<Target> {
     fn ensure(target: &mut Target);
 }
 
-#[derive(Deref, Clone, Copy)]
+#[derive(Deref, Clone, Copy, Debug)]
 pub struct Ensured<T, P: Property<T>> {
     #[deref]
     data: T,
@@ -274,7 +274,7 @@ impl<T: PartialEq + Ord + Clone> Property<Vec<T>> for FrontDupsDropped {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct StableDeduped;
 
 impl<T: PartialEq + Ord + Clone + Hash> Property<Vec<T>> for StableDeduped {

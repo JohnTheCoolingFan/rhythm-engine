@@ -225,6 +225,7 @@ impl Plugin for HarmonizerPlugin {
                 })
                 .conv::<SystemSet>()
                 .with_run_criteria(map_selected)
+                .label("harmonizer")
             );
     }
 }
