@@ -53,8 +53,8 @@ impl ChannelCoverage {
 
 #[derive(Clone, Copy, Component)]
 pub struct Sources<T> {
-    main: GenID<T>,
-    delegation: Option<GenID<T>>,
+    pub main: GenID<T>,
+    pub delegation: Option<GenID<T>>,
 }
 
 impl<T> Sources<T> {

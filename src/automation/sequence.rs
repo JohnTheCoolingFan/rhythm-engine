@@ -7,12 +7,21 @@ use tap::Pipe;
 
 use super::{spline::*, *};
 
-#[derive(Deref, DerefMut, Default, Component, Clone, Copy)]
+#[derive(Deref, DerefMut, Default, Clone, Copy, Component)]
 pub struct Scalar<Marker, Type = R32> {
     #[deref]
     #[deref_mut]
     value: Type,
     _phantom: PhantomData<Marker>,
+}
+
+impl<Marker, Type> Scalar<Marker, Type> {
+    pub fn new(value: Type) -> Self {
+        Self {
+            value,
+            _phantom: PhantomData,
+        }
+    }
 }
 
 impl<Marker, Type: Lerp<Output = Type>> Lerp for Scalar<Marker, Type> {
@@ -25,7 +34,7 @@ impl<Marker, Type: Lerp<Output = Type>> Lerp for Scalar<Marker, Type> {
     }
 }
 
-pub mod markers {
+mod markers {
     #[derive(Default, Clone, Copy)]
     pub struct Luminosity;
     #[derive(Default, Clone, Copy)]
@@ -42,7 +51,7 @@ pub type Scale = Scalar<markers::Scale>;
 pub type Warp = Scalar<markers::Warp>;
 
 #[derive(Deref, DerefMut, Default, Component, Clone, Copy)]
-pub struct RGBA([T32; 4]);
+pub struct RGBA(pub [T32; 4]);
 
 impl Lerp for RGBA {
     type Output = Self;
@@ -57,7 +66,7 @@ impl Lerp for RGBA {
 }
 
 #[derive(Default, Deref, DerefMut, Component)]
-pub struct Sequence<T: Default>(Automation<T>);
+pub struct Sequence<T: Default>(pub Automation<T>);
 
 impl<T: Default + Clone + Copy + Lerp<Output = T>> Sequence<T> {
     pub fn play(&self, offset: P32) -> <T as Lerp>::Output {
@@ -80,8 +89,8 @@ impl Sequence<Spline> {
 
 // Sequences can either be simple sequences in which case they are enough to produce modulations.
 // Or the can be composed of 2 sequences. They then require an Automation to produce modulations.
-#[derive(Deref, DerefMut, Component)]
-pub struct PrimarySequence<T>(T);
+#[derive(Deref, DerefMut, Component, Debug)]
+pub struct PrimarySequence<T>(pub T);
 
-#[derive(Deref, DerefMut, Component)]
-pub struct SecondarySequence<T>(T);
+#[derive(Deref, DerefMut, Component, Debug)]
+pub struct SecondarySequence<T>(pub T);

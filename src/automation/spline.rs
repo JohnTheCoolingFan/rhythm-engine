@@ -292,7 +292,7 @@ mod tests {
             std::f32::consts::PI / 2.
         );
 
-        let automation = Automation(tiny_vec![
+        let automation = Automation(vec![
             Anchor::default(),
             Anchor { x: length, val: t32(1.), weight: Weight::Quadratic(r32(0.)) }
         ]);

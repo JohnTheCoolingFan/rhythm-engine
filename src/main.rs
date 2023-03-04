@@ -10,6 +10,7 @@ use bevy::{
 };
 
 use bevy_egui::EguiPlugin;
+use bevy_screen_diagnostics::{ScreenDiagnosticsPlugin, ScreenFrameDiagnosticsPlugin};
 
 mod automation;
 mod editor;
@@ -86,7 +87,9 @@ fn main() {
         .add_startup_system(setup);
 
     #[cfg(debug_assertions)]
-    game.add_startup_system(debug_setup)
+    game.add_plugin(ScreenDiagnosticsPlugin::default())
+        .add_plugin(ScreenFrameDiagnosticsPlugin)
+        .add_startup_system(debug_setup)
         .add_state(GameState::Edit);
 
     #[cfg(not(debug_assertions))]

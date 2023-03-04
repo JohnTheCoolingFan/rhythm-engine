@@ -1,5 +1,7 @@
+use core::iter::once as iter_once;
+
 use crate::{
-    automation::Weight,
+    automation::{sequence::*, *},
     harmonizer::arranger::{ChannelCoverage, CoverageRange},
     harmonizer::*,
     hit::*,
@@ -44,7 +46,7 @@ struct Group {
 
 #[derive(Educe)]
 #[educe(PartialEq, Ord, Eq, PartialOrd)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Tuning {
     #[educe(Ord(rank = 0))]
     Scale {
@@ -64,8 +66,11 @@ enum Tuning {
     },
     #[educe(Ord(rank = 3))]
     Warp { target: GroupID },
+    #[educe(Ord(rank = 4))]
+    NA,
 }
 
+#[derive(Debug)]
 struct Route {
     target_groups: Vec<(GroupID, Vec<usize>)>,
     tunings: Vec<Tuning>,
@@ -146,13 +151,16 @@ fn modulate(
             .map(InertPoint::new)
             .collect();
 
-        let flattened = routes.iter().flat_map(|Route { channels, target_groups, tunings }| {
-            channels
+        let flattened = routes.iter().flat_map(|Route { channels, target_groups, tunings }| channels
+            .iter()
+            .cartesian_product(target_groups.iter())
+            .map(|(channel, (group, tuning_indices))| (tuning_indices, (channel, group)))
+            .flat_map(move |(indices, pairs)| indices
                 .iter()
-                .cartesian_product(target_groups.iter())
-                .map(|(channel, (group, tuning_indices))| (tuning_indices, (channel, group)))
-                .flat_map(move |(indices, pairs)| indices.iter().map(move |i| (tunings[*i], pairs)))
-        });
+                .map(move |i| (tunings[*i], pairs))
+                .chain(iter_once((Tuning::NA, pairs)).filter(|_| indices.is_empty()))
+            )
+        );
 
         flattened.for_each(|(tuning, (channel, group))| {
             // TODO: Warping
@@ -393,10 +401,11 @@ impl Plugin for SilhouettePlugin {
 #[cfg(debug_assertions)]
 pub mod debug {
     use super::*;
+    use crate::harmonizer::arranger::Sources;
 
     #[rustfmt::skip]
     pub fn silhouettes_debug_setup(mut commands: Commands) {
-        let [cloud, activation, source, instance] = [(); 4].map(|_| commands.spawn_empty().id());
+        let [cloud, activation] = [(); 2].map(|_| commands.spawn_empty().id());
 
         commands.get_entity(cloud).unwrap().insert((
             ModulationCache::default(),
@@ -416,6 +425,7 @@ pub mod debug {
                     Route { target_groups: vec![(0, vec![])], channels: vec![0], tunings: vec![], },
                     Route { target_groups: vec![(1, vec![])], channels: vec![1], tunings: vec![], },
                     Route { target_groups: vec![(2, vec![])], channels: vec![2], tunings: vec![], },
+                    Route { target_groups: vec![(3, vec![])], channels: vec![3], tunings: vec![], },
                 ],
             }
         ));
@@ -433,12 +443,72 @@ pub mod debug {
             }
         ));
 
+        let [red_source, red_instance] = [(); 2].map(|_| commands.spawn_empty().id());
 
+        commands.get_entity(red_source).unwrap().insert((
+            vec![Anchor { x: p32(0.), val: RGBA([1., 0., 0., 1.].map(t32)), ..default() }]
+                .pipe(Automation)
+                .pipe(Sequence),
+        ));
 
-        commands.get_entity(instance).unwrap().insert((
+        commands.get_entity(red_instance).unwrap().insert((
             TemporalOffsets { start: p32(0.), duration: p32(1000.) },
             ChannelCoverage(vec![CoverageRange::new(0, 0)].into()),
-            //PrimarySequence(Sources)
+            PrimarySequence(Sources::<Sequence::<RGBA>> {
+                main: GenID::new(red_source),
+                delegation: None,
+            })
+        ));
+
+        let [green_source, green_instance] = [(); 2].map(|_| commands.spawn_empty().id());
+
+        commands.get_entity(green_source).unwrap().insert((
+            vec![Anchor { x: p32(0.), val: RGBA([0., 1., 0., 1.].map(t32)), ..default() }]
+                .pipe(Automation)
+                .pipe(Sequence),
+        ));
+
+        commands.get_entity(green_instance).unwrap().insert((
+            TemporalOffsets { start: p32(0.), duration: p32(1000.) },
+            ChannelCoverage(vec![CoverageRange::new(1, 1)].into()),
+            PrimarySequence(Sources::<Sequence::<RGBA>> {
+                main: GenID::new(green_source),
+                delegation: None,
+            })
+        ));
+
+        let [blue_source, blue_instance] = [(); 2].map(|_| commands.spawn_empty().id());
+
+        commands.get_entity(blue_source).unwrap().insert((
+            vec![Anchor { x: p32(0.), val: RGBA([0., 0., 1., 1.].map(t32)), ..default() }]
+                .pipe(Automation)
+                .pipe(Sequence),
+        ));
+
+        commands.get_entity(blue_instance).unwrap().insert((
+            TemporalOffsets { start: p32(0.), duration: p32(1000.) },
+            ChannelCoverage(vec![CoverageRange::new(2, 2)].into()),
+            PrimarySequence(Sources::<Sequence::<RGBA>> {
+                main: GenID::new(blue_source),
+                delegation: None,
+            })
+        ));
+
+        let [lumin_source, lumin_instance] = [(); 2].map(|_| commands.spawn_empty().id());
+
+        commands.get_entity(lumin_source).unwrap().insert((
+            vec![Anchor { x: p32(0.), val: Luminosity::new(t32(1.)), ..default() }]
+                .pipe(Automation)
+                .pipe(Sequence),
+        ));
+
+        commands.get_entity(lumin_instance).unwrap().insert((
+            TemporalOffsets { start: p32(0.), duration: p32(1000.) },
+            ChannelCoverage(vec![CoverageRange::new(3, 3)].into()),
+            PrimarySequence(Sources::<Sequence::<Luminosity>> {
+                main: GenID::new(lumin_source),
+                delegation: None,
+            })
         ));
     }
 }

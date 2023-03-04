@@ -65,7 +65,7 @@ where
 }
 
 #[derive(Default, Deref, DerefMut, Component)]
-pub struct Automation<T: Default>(pub TinyVec<[Anchor<T>; 6]>);
+pub struct Automation<T: Default>(pub Vec<Anchor<T>>);
 
 impl Automation<T32> {
     #[rustfmt::skip]
@@ -127,7 +127,7 @@ mod tests {
     #[test]
     #[rustfmt::skip]
     fn play_automation() {
-        let automation = Automation(tiny_vec![
+        let automation = Automation(vec![
             Anchor { x: p32(0.0), val: t32(0.), weight:  Constant },
             Anchor { x: p32(1.0), val: t32(1.0), weight: Quadratic(r32(0.)) },
             Anchor { x: p32(2.0), val: t32(0.5), weight: Constant },
