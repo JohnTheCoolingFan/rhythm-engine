@@ -10,15 +10,12 @@ test-case = "2.2.1"
 pretty_assertions = "1.2.1"
 
 [dependencies]
-bevy_screen_diagnostics = "0.1"
+bevy_screen_diagnostics = "0.2"
 derive_more = "0.99.17"
 educe = "0.4.20"
-bevy = { version = "0.9.0", features = ["dynamic"] }
-bevy_kira_audio = "0.13.0"
-bevy_system_graph = "0.4.0"
-bevy_egui = "0.17.1"
-leafwing-input-manager = "0.7"
-iyes_loopless = "0.8"
+bevy = { version = "0.10", features = ["dynamic_linking"] }
+bevy_kira_audio = "0.15"
+bevy_egui = "0.20"
 noisy_float = "0.2.0"
 tinyvec = "1.5.1"
 itertools = "0.10.5"

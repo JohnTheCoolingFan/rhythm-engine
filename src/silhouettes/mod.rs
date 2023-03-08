@@ -10,8 +10,6 @@ use crate::{
     utils::*,
 };
 
-use bevy_system_graph::SystemGraph;
-
 use bevy::{
     prelude::*,
     render::{
@@ -62,7 +60,7 @@ enum Tuning {
     Translation {
         angle: R32,
         dilation: R32,
-        twist: bool,
+        flip: bool,
     },
     #[educe(Ord(rank = 3))]
     Warp { target: GroupID },
@@ -221,15 +219,15 @@ fn modulate(
                     })
                 },
                 Modulation::Translation(shift) => {
-                    let (angle, dilation, twist) = match tuning {
-                        Tuning::Translation { angle, dilation, twist } => (angle, dilation, twist),
+                    let (angle, dilation, flip) = match tuning {
+                        Tuning::Translation { angle, dilation, flip } => (angle, dilation, flip),
                         _ => (r32(0.), r32(1.), false),
                     };
 
                     let tuned_shift = shift
                         .rotate_about(Vec2::default(), r32(angle.raw().to_radians()))
                         .scale_about(Vec2::default(), dilation)
-                        .tap_mut(|vec| if twist { vec.x = -vec.x });
+                        .tap_mut(|vec| if flip { vec.x = -vec.x });
 
                     indices.for_each(|index| cache[index].pos += tuned_shift)
                 },
@@ -360,16 +358,7 @@ fn render(
                                 // TODO: Remove second collect when bumping to 0.10
                                 // - Backface culling removed in 0.10 for 2d
                                 // - Workaround for 0.9
-                                .tap_mut(|mesh| geometry
-                                    .indices
-                                    .iter()
-                                    .copied()
-                                    .rev()
-                                    .collect::<Vec<_>>()
-                                    .pipe(U16)
-                                    .pipe(Some)
-                                    .pipe(|indices| mesh.set_indices(indices))
-                                )
+                                .tap_mut(|mesh| mesh.set_indices(Some(U16(geometry.indices))))
                                 .pipe(|mesh| meshes.add(mesh))
                                 .conv::<Mesh2dHandle>(),
                             material: materials.add(ColorMaterial::default()),
@@ -389,11 +378,11 @@ pub struct SilhouettePlugin;
 impl Plugin for SilhouettePlugin {
     fn build(&self, game: &mut App) {
         game.init_resource::<LuminositySettings>()
-            .add_system_set(SystemGraph::new()
-                .tap(|sysg| { sysg.root(modulate).then(render); })
-                .conv::<SystemSet>()
-                .with_run_criteria(map_selected)
-                .after("harmonizer")
+            .add_systems(
+                (modulate, render)
+                .chain()
+                .distributive_run_if(map_selected)
+                .after(HarmonizerSet::PostArrange)
             );
     }
 }
@@ -497,7 +486,7 @@ pub mod debug {
         let [lumin_source, lumin_instance] = [(); 2].map(|_| commands.spawn_empty().id());
 
         commands.get_entity(lumin_source).unwrap().insert((
-            vec![Anchor { x: p32(0.), val: Luminosity::new(t32(1.)), ..default() }]
+            vec![Anchor { x: p32(0.), val: Luminosity::new(t32(1.0)), ..default() }]
                 .pipe(Automation)
                 .pipe(Sequence),
         ));

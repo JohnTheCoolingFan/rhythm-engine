@@ -4,8 +4,10 @@
 #![allow(dead_code)]
 
 use bevy::{
-    core_pipeline::{bloom::BloomSettings, clear_color::ClearColorConfig},
-    ecs::schedule::ShouldRun,
+    core_pipeline::{
+        bloom::{BloomCompositeMode, BloomPrefilterSettings, BloomSettings},
+        clear_color::ClearColorConfig,
+    },
     prelude::*,
 };
 
@@ -36,26 +38,31 @@ impl Default for Settings {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Default, Hash, States)]
 enum GameState {
+    #[cfg(not(debug_assertions))]
+    #[default]
     Browse,
+    #[cfg(debug_assertions)]
+    #[default]
     Edit,
     Play,
     Paused,
 }
 
-fn map_selected(game_state: Res<State<GameState>>) -> ShouldRun {
-    match game_state.current() {
-        GameState::Edit | GameState::Play => ShouldRun::Yes,
-        _ => ShouldRun::No,
-    }
+fn map_selected(game_state: Res<State<GameState>>) -> bool {
+    matches!(game_state.0, GameState::Edit | GameState::Play)
 }
 
 fn setup(mut commands: Commands) {
     commands.spawn((
         BloomSettings {
-            intensity: 0.45,
-            knee: 0.1,
+            intensity: 0.3,
+            composite_mode: BloomCompositeMode::Additive,
+            prefilter_settings: BloomPrefilterSettings {
+                threshold: 1.,
+                threshold_softness: 0.1,
+            },
             ..BloomSettings::default()
         },
         Camera2dBundle {
@@ -84,16 +91,13 @@ fn main() {
         .add_plugin(EditorPlugin)
         .add_plugin(SilhouettePlugin)
         .init_resource::<Settings>()
+        .add_state::<GameState>()
         .add_startup_system(setup);
 
     #[cfg(debug_assertions)]
     game.add_plugin(ScreenDiagnosticsPlugin::default())
         .add_plugin(ScreenFrameDiagnosticsPlugin)
-        .add_startup_system(debug_setup)
-        .add_state(GameState::Edit);
-
-    #[cfg(not(debug_assertions))]
-    game.add_state(GameState::Browse);
+        .add_startup_system(debug_setup);
 
     game.run()
 }

@@ -82,7 +82,6 @@ pub fn produce_repetitions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy_system_graph::*;
     use pretty_assertions::assert_eq;
     use tap::Pipe;
     use test_case::test_case;
@@ -211,15 +210,10 @@ mod tests {
         let mut game = App::new();
         game.init_resource::<HitRegister>();
         game.insert_resource(TimeTables { song_time: time, ..Default::default() });
-        game.add_system_set(
-            SystemGraph::new().tap(|sysg| {
-                sysg.root(respond_to_hits)
-                    .then(produce_repetitions);
-            })
-            .conv::<SystemSet>()
-        );
+        game.add_system(respond_to_hits);
+        game.add_system(produce_repetitions.after(respond_to_hits));
 
-        game.world.spawn((offsets.clone(), coverage.clone(), repeater));
+        game.world.spawn((offsets, coverage.clone(), repeater));
         game.update();
 
         game.world

@@ -4,7 +4,7 @@ mod tools;
 
 use crate::{utils::*, GameState};
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext};
+use bevy_egui::{egui, EguiContexts};
 
 #[derive(Default)]
 enum Selection {
@@ -43,18 +43,18 @@ struct Opacity {
     background_participant: P32,
 }
 
-fn tools(mut egui_context: ResMut<EguiContext>) {
+fn tools(mut contexts: EguiContexts) {
     egui::SidePanel::left("tools")
         .resizable(false)
-        .show(egui_context.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut(), |ui| {
             ui.label("tools");
         });
 }
 
-fn playlist(mut egui_context: ResMut<EguiContext>) {
+fn playlist(mut contexts: EguiContexts) {
     egui::TopBottomPanel::bottom("playlist")
         .resizable(true)
-        .show(egui_context.ctx_mut(), |ui| {
+        .show(contexts.ctx_mut(), |ui| {
             ui.label("playlist");
         });
 }
@@ -63,10 +63,9 @@ pub struct EditorPlugin;
 
 impl Plugin for EditorPlugin {
     fn build(&self, game: &mut App) {
-        game.init_resource::<Focus>().add_system_set(
-            SystemSet::on_update(GameState::Edit)
-                .with_system(playlist)
-                .with_system(tools),
-        );
+        /*game.init_resource::<Focus>().add_systems(
+            (playlist, tools)
+                .run_if(|state: Res<State<GameState>>| matches!(state.0, GameState::Edit)),
+        );*/
     }
 }

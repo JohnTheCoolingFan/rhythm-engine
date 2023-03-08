@@ -2,6 +2,7 @@ pub mod arranger;
 pub mod repeater;
 
 use arranger::*;
+use repeater::*;
 
 use crate::{
     automation::{sequence::*, spline::*, *},
@@ -15,9 +16,8 @@ use core::iter::once as iter_once;
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use bevy_system_graph::*;
 use noisy_float::prelude::*;
-use tap::{Conv, Tap, TapOptional};
+use tap::TapOptional;
 
 pub enum Modulation {
     Invalid,
@@ -199,9 +199,26 @@ pub fn harmonize(
 
 pub struct HarmonizerPlugin;
 
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+pub enum HarmonizerSet {
+    PreArrange,
+    Arrange,
+    PostArrange,
+}
+
 #[rustfmt::skip]
 impl Plugin for HarmonizerPlugin {
     fn build(&self, game: &mut App) {
+        use HarmonizerSet::*;
+
+        let arrangement_systems = (
+            arrange_sequences::<Spline>,
+            arrange_sequences::<RGBA>,
+            arrange_sequences::<Luminosity>,
+            arrange_sequences::<Scale>,
+            arrange_sequences::<Rotation>
+        );
+
         game.init_resource::<TimeTables>()
             .init_resource::<HitRegister>()
             .init_resource::<SequenceArrangements<Spline>>()
@@ -210,22 +227,20 @@ impl Plugin for HarmonizerPlugin {
             .init_resource::<SequenceArrangements<Scale>>()
             .init_resource::<SequenceArrangements<Rotation>>()
             .init_resource::<Table<Option<Modulation>>>()
-            .add_system_set(
-                SystemGraph::new().tap(|sysg| {
-                    sysg.root(respond_to_hits)
-                        .then(repeater::produce_repetitions)
-                        .fork((
-                            arrange_sequences::<Spline>,
-                            arrange_sequences::<RGBA>,
-                            arrange_sequences::<Luminosity>,
-                            arrange_sequences::<Scale>,
-                            arrange_sequences::<Rotation>
-                        ))
-                        .join(harmonize);
-                })
-                .conv::<SystemSet>()
-                .with_run_criteria(map_selected)
-                .label("harmonizer")
+            .configure_sets((PreArrange, Arrange, PostArrange).chain())
+            .add_systems((respond_to_hits, produce_repetitions)
+                .chain()
+                .in_set(PreArrange)
+                .distributive_run_if(map_selected)
+            )
+            .add_systems(arrangement_systems
+                .chain()
+                .in_set(Arrange)
+                .distributive_run_if(map_selected)
+            )
+            .add_system(harmonize
+                .in_set(PostArrange)
+                .run_if(map_selected)
             );
     }
 }

@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy_egui::*;
 
 fn sheet_clusters<T: Default + Component>(
-    mut egui_context: ResMut<EguiContext>,
+    contexts: EguiContexts,
     instances: SequenceSheets<T>,
     focus: Res<Focus>,
 ) {
