@@ -355,9 +355,6 @@ fn render(
                             mesh: Mesh::new(TriangleList)
                                 .tap_mut(|mesh| mesh.insert_attribute(POS, geometry.vertices))
                                 .tap_mut(|mesh| mesh.insert_attribute(COLOR, colors))
-                                // TODO: Remove second collect when bumping to 0.10
-                                // - Backface culling removed in 0.10 for 2d
-                                // - Workaround for 0.9
                                 .tap_mut(|mesh| mesh.set_indices(Some(U16(geometry.indices))))
                                 .pipe(|mesh| meshes.add(mesh))
                                 .conv::<Mesh2dHandle>(),
