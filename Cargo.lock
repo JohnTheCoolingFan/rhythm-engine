@@ -1181,6 +1181,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1db59621ec70f09c5e9b597b220c7a2b43611f4710dc03ceb8748637775692c"
 
 [[package]]
+name = "catppuccin-egui"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e508ad60790f1336e5ab24da9b809826e7ea9171281cc70e894f514f37791317"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3256,6 +3265,7 @@ dependencies = [
  "bevy_egui",
  "bevy_kira_audio",
  "bevy_screen_diagnostics",
+ "catppuccin-egui",
  "derive_more",
  "educe",
  "itertools",

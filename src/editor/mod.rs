@@ -43,6 +43,10 @@ struct Opacity {
     background_participant: P32,
 }
 
+fn theme(mut contexts: EguiContexts) {
+    catppuccin_egui::set_theme(contexts.ctx_mut(), catppuccin_egui::MACCHIATO);
+}
+
 fn tools(mut contexts: EguiContexts) {
     egui::SidePanel::left("tools")
         .resizable(false)
@@ -56,6 +60,7 @@ fn playlist(mut contexts: EguiContexts) {
         .resizable(true)
         .show(contexts.ctx_mut(), |ui| {
             ui.label("playlist");
+            ui.add(egui::Separator::default())
         });
 }
 
@@ -63,9 +68,9 @@ pub struct EditorPlugin;
 
 impl Plugin for EditorPlugin {
     fn build(&self, game: &mut App) {
-        /*game.init_resource::<Focus>().add_systems(
-            (playlist, tools)
-                .run_if(|state: Res<State<GameState>>| matches!(state.0, GameState::Edit)),
-        );*/
+        game.init_resource::<Focus>()
+            .add_systems((theme, playlist, tools).distributive_run_if(
+                |state: Res<State<GameState>>| matches!(state.0, GameState::Edit),
+            ));
     }
 }

@@ -4,12 +4,15 @@ name = "rhythm-engine"
 version = "0.1.0"
 authors = ["iiYese iiyese@outlook.com"]
 edition = "2021"
+license = "AGPL-3.0"
+license-file = "LICENSE"
 
 [dev-dependencies]
 test-case = "2.2.1"
 pretty_assertions = "1.2.1"
 
 [dependencies]
+catppuccin-egui = "2.0"
 bevy_screen_diagnostics = "0.2"
 derive_more = "0.99.17"
 educe = "0.4.20"
