@@ -23,24 +23,11 @@ impl ClampedTime {
     }
 }
 
-#[derive(Resource)]
-pub struct TimeTables {
-    pub song_time: P32,
-    pub seek_times: Table<P32>,
-    pub clamped_times: Table<ClampedTime>,
-    pub delegations: Table<Delegated>,
-}
+#[derive(Clone, Copy, Default, Deref, DerefMut, PartialEq, Eq, Debug, Resource)]
+pub struct SongTime(pub P32);
 
-impl Default for TimeTables {
-    fn default() -> Self {
-        TimeTables {
-            song_time: p32(0.),
-            seek_times: Table([(); MAX_CHANNELS].map(|_| p32(0.))),
-            delegations: Table([(); MAX_CHANNELS].map(|_| Delegated(false))),
-            clamped_times: Table([(); MAX_CHANNELS].map(|_| ClampedTime::new(p32(0.)))),
-        }
-    }
-}
+#[derive(Clone, Copy, Default, Deref, DerefMut, PartialEq, Eq, Debug)]
+pub struct SeekTime(pub P32);
 
 #[derive(Clone, Component)]
 pub struct TemporalOffsets {

@@ -44,10 +44,11 @@ impl Repeater {
 #[rustfmt::skip]
 pub fn produce_repetitions(
     repeaters: Query<(&TemporalOffsets, &ChannelCoverage, &Repeater)>,
-    mut time_tables: ResMut<TimeTables>,
+    song_time: Res<SongTime>,
+    seek_times: Res<Table<SeekTime>>,
+    mut clamped_times: ResMut<Table<ClampedTime>>,
 ) {
-    let TimeTables { song_time, seek_times, clamped_times, .. } = &mut *time_tables;
-    **clamped_times = seek_times.map(ClampedTime::new);
+    **clamped_times = seek_times.map(|t| ClampedTime::new(*t));
 
     repeaters
         .iter()
@@ -55,7 +56,7 @@ pub fn produce_repetitions(
         .filter(|(.., Repeater { period, .. })| f32::EPSILON < period.raw())
         .for_each(|(offsets, coverage, Repeater { ping_pong, period, floor, ceil })| {
             coverage.iter().for_each(|index| {
-                if let Some(time) = [seek_times[index], *song_time]
+                if let Some(time) = [*seek_times[index], **song_time]
                     .iter()
                     .find(|time| offsets.scheduled_at(**time))
                 {
@@ -208,17 +209,20 @@ mod tests {
         expected: ClampedTime
     ) {
         let mut game = App::new();
-        game.init_resource::<HitRegister>();
-        game.insert_resource(TimeTables { song_time: time, ..Default::default() });
-        game.add_system(respond_to_hits);
-        game.add_system(produce_repetitions.after(respond_to_hits));
+
+        game.init_resource::<HitRegister>()
+            .insert_resource(SongTime(time))
+            .init_resource::<Table<SeekTime>>()
+            .init_resource::<Table<ClampedTime>>()
+            .init_resource::<Table<Delegated>>()
+            .add_systems((respond_to_hits, produce_repetitions).chain());
 
         game.world.spawn((offsets, coverage.clone(), repeater));
+
         game.update();
 
         game.world
-            .resource::<TimeTables>()
-            .clamped_times
+            .resource::<Table<ClampedTime>>()
             .pipe_ref(|clamped_times| coverage.iter().map(|index| clamped_times[index]))
             .for_each(|clamped_time| assert_eq!(expected, clamped_time));
     }

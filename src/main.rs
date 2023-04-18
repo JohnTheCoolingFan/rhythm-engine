@@ -63,7 +63,7 @@ fn setup(mut commands: Commands) {
                 threshold: 1.,
                 threshold_softness: 0.1,
             },
-            ..BloomSettings::default()
+            ..default()
         },
         Camera2dBundle {
             camera: Camera {

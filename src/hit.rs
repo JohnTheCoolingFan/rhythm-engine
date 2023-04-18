@@ -69,7 +69,9 @@ pub struct Delegated(pub bool);
 #[rustfmt::skip]
 pub fn respond_to_hits(
     hits: Res<HitRegister>,
-    mut time_tables: ResMut<TimeTables>,
+    song_time: Res<SongTime>,
+    mut seek_times: ResMut<Table<SeekTime>>,
+    mut delegations: ResMut<Table<Delegated>>,
     mut responses: Query<(
         &TemporalOffsets,
         &ChannelCoverage,
@@ -77,14 +79,12 @@ pub fn respond_to_hits(
         &mut ResponseState
     )>,
 ) {
-    let song_time = time_tables.song_time;
-
-    time_tables.seek_times.fill_with(|| song_time);
-    time_tables.delegations.fill_with(|| Delegated(false));
+    seek_times.fill_with(|| SeekTime(**song_time));
+    delegations.fill_with(|| Delegated(false));
 
     responses
         .iter_mut()
-        .filter(|(offsets, ..)| offsets.playable_at(song_time))
+        .filter(|(offsets, ..)| offsets.playable_at(**song_time))
         .for_each(|(offsets, coverage, Response { kind, layer }, mut state)| {
             use ResponseKind::*;
             use ResponseState::*;
@@ -101,8 +101,8 @@ pub fn respond_to_hits(
 
             let adjusted_offset = match (kind, &*state) {
                 (Commence, Active(active)) if !active => offsets.start,
-                (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&song_time) => hit + ex,
-                _ => song_time
+                (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&**song_time) => hit + ex,
+                _ => **song_time
             };
 
             let delegation = match (kind, &mut *state) {
@@ -111,8 +111,8 @@ pub fn respond_to_hits(
             };
 
             coverage.iter().for_each(|index| {
-                time_tables.seek_times[index] = adjusted_offset;
-                *time_tables.delegations[index] = delegation;
+                *seek_times[index] = adjusted_offset;
+                *delegations[index] = delegation;
             })
         });
 }
@@ -130,7 +130,12 @@ mod tests {
     fn hit_layers_and_scheduling(time: f32, layer: u8, expected: ResponseState) {
         let mut game = App::new();
         game.add_system(respond_to_hits);
-        game.insert_resource(TimeTables { song_time: p32(time), ..Default::default() });
+
+        game.insert_resource(SongTime(p32(time)))
+            .insert_resource(Table::<SeekTime>::default())
+            .insert_resource(Table::<ClampedTime>::default())
+            .insert_resource(Table::<Delegated>::default());
+
         game.world.spawn((
             ResponseState::None,
             Response { kind: ResponseKind::Commence, layer: 0 },
@@ -186,7 +191,11 @@ mod tests {
         ]);
 
         // First hit
-        game.insert_resource(TimeTables { song_time: p32(100.), ..Default::default() });
+        game.insert_resource(SongTime(p32(100.)))
+            .insert_resource(Table::<SeekTime>::default())
+            .insert_resource(Table::<ClampedTime>::default())
+            .insert_resource(Table::<Delegated>::default());
+
         game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
             object_time: p32(100.),
             hit_time: p32(100.),
@@ -198,26 +207,34 @@ mod tests {
             assert_ne!(ResponseState::None, *state)
         });
         assert_eq!(
-            game.world.resource::<TimeTables>().seek_times[..4],
-            [100.; 4].map(p32)
+            game.world.resource::<Table<SeekTime>>()[..4],
+            [100.; 4].map(|t| SeekTime(p32(t)))
         );
         assert_eq!(
-            game.world.resource::<TimeTables>().delegations[..4],
+            game.world.resource::<Table<Delegated>>()[..4],
             [false, true, true, false].map(Delegated)
         );
 
         // State after first hit and before second
-        game.insert_resource(TimeTables { song_time: p32(200.), ..Default::default() });
+        game.insert_resource(SongTime(p32(200.)))
+            .insert_resource(Table::<SeekTime>::default())
+            .insert_resource(Table::<ClampedTime>::default())
+            .insert_resource(Table::<Delegated>::default());
+
         game.insert_resource(HitRegister([None, None, None, None]));
 
         game.update();
         assert_eq!(
-            game.world.resource::<TimeTables>().seek_times[..4],
-            [200., 200., 200., 150.].map(p32)
+            game.world.resource::<Table<SeekTime>>()[..4],
+            [200., 200., 200., 150.].map(|t| SeekTime(p32(t)))
         );
 
         // Second hit
-        game.insert_resource(TimeTables { song_time: p32(300.), ..Default::default() });
+        game.insert_resource(SongTime(p32(300.)))
+            .insert_resource(Table::<SeekTime>::default())
+            .insert_resource(Table::<ClampedTime>::default())
+            .insert_resource(Table::<Delegated>::default());
+
         game.insert_resource(HitRegister([None, None, None, Some(HitInfo {
             object_time: p32(300.),
             hit_time: p32(300.),
@@ -226,11 +243,11 @@ mod tests {
 
         game.update();
         assert_eq!(
-            game.world.resource::<TimeTables>().seek_times[..4],
-            [300., 300., 300., 300.].map(p32)
+            game.world.resource::<Table<SeekTime>>()[..4],
+            [300., 300., 300., 300.].map(|t| SeekTime(p32(t)))
         );
         assert_eq!(
-            game.world.resource::<TimeTables>().delegations[..4],
+            game.world.resource::<Table<Delegated>>()[..4],
             [false, true, false, false].map(Delegated)
         );
     }

@@ -86,21 +86,22 @@ pub type SequenceSheets<'w, 's, T> = Query<'w, 's, (
 #[rustfmt::skip]
 pub fn arrange_sequences<T: Default + Component>(
     mut arrangements: ResMut<SequenceArrangements<T>>,
-    time_tables: ResMut<TimeTables>,
+    seek_times: Res<Table<SeekTime>>,
+    clamped_times: Res<Table<ClampedTime>>,
+    delegations: Res<Table<Delegated>>,
     instances: SequenceSheets<T>,
 ) {
     arrangements.fill_with(|| None);
     instances.iter().for_each(|(offsets, coverage, primary, secondary)| {
-        coverage.iter().for_each(|index| arrangements[index] = time_tables
-            .clamped_times[index]
+        coverage.iter().for_each(|index| arrangements[index] = clamped_times[index]
             .offset
             .pipe(iter_once)
-            .chain(iter_once(time_tables.seek_times[index]))
+            .chain(iter_once(*seek_times[index]))
             .find(|time| offsets.playable_at(*time))
             .map(|time| Arrangement {
                 offset: time - offsets.start,
-                primary: primary.pick(*time_tables.delegations[index]),
-                secondary: secondary.map(|sources| sources.pick(*time_tables.delegations[index])),
+                primary: primary.pick(*delegations[index]),
+                secondary: secondary.map(|sources| sources.pick(*delegations[index])),
             })
         )
     })

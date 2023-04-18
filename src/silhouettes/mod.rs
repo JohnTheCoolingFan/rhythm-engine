@@ -129,7 +129,7 @@ pub struct Activation {
 
 #[rustfmt::skip]
 fn modulate(
-    time_tables: ResMut<TimeTables>,
+    song_time: Res<SongTime>,
     modulations: Res<Table<Option<Modulation>>>,
     activations: Query<&TemporalOffsets, With<Activation>>,
     mut clouds: Query<(&PointCloud, &mut ModulationCache)>,
@@ -137,7 +137,7 @@ fn modulate(
     let joined = clouds.iter_mut().filter(|(cloud, _)| cloud.children
         .iter()
         .flat_map(|entity| activations.get(*entity).ok())
-        .any(|offsets| offsets.playable_at(time_tables.song_time))
+        .any(|offsets| offsets.playable_at(**song_time))
     );
 
     joined.for_each(|(PointCloud { points, groups, routes, .. }, mut cache)| {
@@ -271,7 +271,7 @@ impl LuminositySettings {
 
 #[rustfmt::skip]
 fn render(
-    time_tables: ResMut<TimeTables>,
+    song_time: Res<SongTime>,
     luminosity_settings: Res<LuminositySettings>,
     activations: Query<(Entity, &TemporalOffsets, &Activation)>,
     clouds: Query<(&PointCloud, &ModulationCache)>,
@@ -282,7 +282,7 @@ fn render(
 
     activations
         .iter()
-        .filter(|(_, offsets, ..)| offsets.playable_at(time_tables.song_time))
+        .filter(|(_, offsets, ..)| offsets.playable_at(**song_time))
         .flat_map(|(entity, offsets, activation)| clouds
             .get(activation.parent)
             .map(|parent| (entity, offsets, activation, parent))

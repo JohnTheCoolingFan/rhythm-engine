@@ -129,7 +129,9 @@ pub struct Performers<'w, 's> {
 #[rustfmt::skip]
 pub fn harmonize(
     mut modulations: ResMut<Table<Option<Modulation>>>,
-    time_tables: ResMut<TimeTables>,
+    seek_times: Res<Table<SeekTime>>,
+    clamped_times: Res<Table<ClampedTime>>,
+    delegations: Res<Table<Delegated>>,
     performers: Performers,
     automation_sources: Query<&Automation<T32>>,
     automations: Query<(
@@ -138,7 +140,6 @@ pub fn harmonize(
         &Sources<Automation<T32>>,
     )>,
 ) {
-    let TimeTables { seek_times, clamped_times, delegations, .. } = *time_tables;
 
     modulations.fill_with(|| None);
 
@@ -151,7 +152,7 @@ pub fn harmonize(
     // And because they do not have primary and secondary smenatics like sequences
     automations.iter().for_each(|(offsets, coverage, automation)| {
         coverage.iter().for_each(|index| {
-            if let Some(t) = [clamped_times[index], ClampedTime::new(seek_times[index])]
+            if let Some(t) = [clamped_times[index], ClampedTime::new(*seek_times[index])]
                 .iter_mut()
                 .find(|clamped_time| offsets.playable_at(clamped_time.offset))
                 .tap_some_mut(|clamped_time| clamped_time.offset -= offsets.start)
@@ -211,15 +212,10 @@ impl Plugin for HarmonizerPlugin {
     fn build(&self, game: &mut App) {
         use HarmonizerSet::*;
 
-        let arrangement_systems = (
-            arrange_sequences::<Spline>,
-            arrange_sequences::<RGBA>,
-            arrange_sequences::<Luminosity>,
-            arrange_sequences::<Scale>,
-            arrange_sequences::<Rotation>
-        );
-
-        game.init_resource::<TimeTables>()
+        game.init_resource::<SongTime>()
+            .init_resource::<Table<SeekTime>>()
+            .init_resource::<Table<ClampedTime>>()
+            .init_resource::<Table<Delegated>>()
             .init_resource::<HitRegister>()
             .init_resource::<SequenceArrangements<Spline>>()
             .init_resource::<SequenceArrangements<RGBA>>()
@@ -233,8 +229,13 @@ impl Plugin for HarmonizerPlugin {
                 .in_set(PreArrange)
                 .distributive_run_if(map_selected)
             )
-            .add_systems(arrangement_systems
-                .chain()
+            .add_systems((
+                    arrange_sequences::<Spline>,
+                    arrange_sequences::<RGBA>,
+                    arrange_sequences::<Luminosity>,
+                    arrange_sequences::<Scale>,
+                    arrange_sequences::<Rotation>
+                )
                 .in_set(Arrange)
                 .distributive_run_if(map_selected)
             )
