@@ -32,6 +32,7 @@ use tap::{Conv, Pipe, Tap};
 
 type VertexID = usize;
 type GroupID = usize;
+type TuningID = usize;
 
 #[derive(Educe)]
 #[educe(PartialEq, Ord, Eq, PartialOrd)]
@@ -70,7 +71,7 @@ enum Tuning {
 
 #[derive(Debug)]
 struct Route {
-    target_groups: Vec<(GroupID, Vec<usize>)>,
+    target_groups: Vec<(GroupID, Vec<TuningID>)>,
     tunings: Vec<Tuning>,
     channels: Vec<u8>,
 }
