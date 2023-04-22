@@ -4,16 +4,19 @@
 #![allow(dead_code)]
 
 use bevy::{
+    asset::FileAssetIo,
     core_pipeline::{
         bloom::{BloomCompositeMode, BloomPrefilterSettings, BloomSettings},
         clear_color::ClearColorConfig,
     },
     prelude::*,
 };
+use noisy_float::prelude::*;
 
 use bevy_egui::EguiPlugin;
 use bevy_screen_diagnostics::{ScreenDiagnosticsPlugin, ScreenFrameDiagnosticsPlugin};
 
+mod audio;
 mod automation;
 mod editor;
 mod harmonizer;
@@ -23,6 +26,7 @@ mod silhouettes;
 mod timing;
 mod utils;
 
+use audio::*;
 use editor::*;
 use harmonizer::HarmonizerPlugin;
 use silhouettes::*;
@@ -55,6 +59,9 @@ fn map_selected(game_state: Res<State<GameState>>) -> bool {
 }
 
 fn setup(mut commands: Commands) {
+    // TODO: Create dir structure
+    let path = FileAssetIo::get_base_path();
+
     commands.spawn((
         BloomSettings {
             intensity: 0.3,
@@ -76,6 +83,13 @@ fn setup(mut commands: Commands) {
             ..default()
         },
     ));
+
+    commands.add(|world: &mut World| {
+        world.send_event(ChartLoadEvent {
+            chart_id: "000".into(),
+            start_from: r64(0.),
+        })
+    })
 }
 
 fn debug_setup(commands: Commands) {
@@ -85,13 +99,14 @@ fn debug_setup(commands: Commands) {
 fn main() {
     let mut game = App::new();
 
-    game.add_plugins(DefaultPlugins)
+    game.add_state::<GameState>()
+        .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
         .add_plugin(HarmonizerPlugin)
-        .add_plugin(EditorPlugin)
         .add_plugin(SilhouettePlugin)
+        .add_plugin(AudioPlugin)
+        .add_plugin(EditorPlugin)
         .init_resource::<Settings>()
-        .add_state::<GameState>()
         .add_startup_system(setup);
 
     #[cfg(debug_assertions)]
