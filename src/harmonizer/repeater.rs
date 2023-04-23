@@ -1,5 +1,5 @@
 use super::*;
-use crate::{automation::*, utils::*};
+use crate::{audio::SongInfo, automation::*, utils::*};
 use noisy_float::prelude::*;
 
 pub struct RepeaterClamp {
@@ -44,7 +44,7 @@ impl Repeater {
 #[rustfmt::skip]
 pub fn produce_repetitions(
     repeaters: Query<(&TemporalOffsets, &ChannelCoverage, &Repeater)>,
-    song_time: Res<SongTime>,
+    song_info: Res<SongInfo>,
     seek_times: Res<Table<SeekTime>>,
     mut clamped_times: ResMut<Table<ClampedTime>>,
 ) {
@@ -56,7 +56,7 @@ pub fn produce_repetitions(
         .filter(|(.., Repeater { period, .. })| f32::EPSILON < period.raw())
         .for_each(|(offsets, coverage, Repeater { ping_pong, period, floor, ceil })| {
             coverage.iter().for_each(|index| {
-                if let Some(time) = [*seek_times[index], **song_time]
+                if let Some(time) = [*seek_times[index], song_info.pos]
                     .iter()
                     .find(|time| offsets.scheduled_at(**time))
                 {
@@ -211,7 +211,7 @@ mod tests {
         let mut game = App::new();
 
         game.init_resource::<HitRegister>()
-            .insert_resource(SongTime(time))
+            .insert_resource(SongInfo { pos: time, ..default() })
             .init_resource::<Table<SeekTime>>()
             .init_resource::<Table<ClampedTime>>()
             .init_resource::<Table<Delegated>>()

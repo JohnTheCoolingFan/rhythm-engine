@@ -1,14 +1,20 @@
-use crate::GameState;
-use bevy::prelude::*;
-use bevy_kira_audio::prelude::{AudioPlugin as KiraAudio, *};
+use crate::{utils::*, GameState};
+use bevy::{asset::FileAssetIo, prelude::*};
+pub use bevy_kira_audio::prelude::{
+    AudioInstance as KiraInstance, AudioPlugin as KiraPlugin, AudioSource as KiraSource, *,
+};
 use noisy_float::prelude::R64;
-use tap::Pipe;
+use tap::{Pipe, Tap};
 
 #[derive(Resource, Default)]
 struct SongChannel;
 
-#[derive(Resource, Default, Deref, DerefMut)]
-pub struct SongHandle(Handle<AudioInstance>);
+#[derive(Resource, Default, Debug)]
+pub struct SongInfo {
+    pub pos: P32,
+    pub dur: P32,
+    pub handle: Handle<AudioInstance>,
+}
 
 #[derive(Default, Debug)]
 pub struct ChartLoadEvent {
@@ -16,24 +22,42 @@ pub struct ChartLoadEvent {
     pub start_from: R64,
 }
 
-#[rustfmt::skip]
 fn load_chart_song(
     state: Res<State<GameState>>,
-    asset_server: Res<AssetServer>,
     song_channel: Res<AudioChannel<SongChannel>>,
     mut chart_load_events: EventReader<ChartLoadEvent>,
-    mut handle: ResMut<SongHandle>,
+    mut kira_sources: ResMut<Assets<KiraSource>>,
+    mut song_info: ResMut<SongInfo>,
 ) {
-    if let Some(ChartLoadEvent { chart_id, start_from }) = chart_load_events.iter().last() {
-        *handle = song_channel
-            .play(asset_server.load(format!("charts/{}/song.ogg", chart_id)))
-            .start_from(start_from.raw())
-            .handle()
-            .pipe(SongHandle);
+    let Some(ChartLoadEvent { chart_id, start_from }) = chart_load_events
+        .iter()
+        .last()
+    else {
+        return
+    };
 
-        if matches!(state.0, GameState::Edit) {
-            song_channel.pause();
-        }
+    let Ok(source) = FileAssetIo::get_base_path()
+        .tap_mut(|path| path.push("assets"))
+        .tap_mut(|path| path.push("charts"))
+        .tap_mut(|path| path.push(chart_id))
+        .tap_mut(|path| path.push("song.ogg"))
+        .pipe(|path| StaticSoundData::from_file(path, StaticSoundSettings::default()))
+        .map(|sound| KiraSource { sound })
+    else {
+        error!("Could not load audio file");
+        return;
+    };
+
+    song_info.dur = source.sound.duration().as_secs_f32().pipe(p32);
+
+    song_info.handle = song_channel
+        .play(kira_sources.add(source))
+        .start_from(start_from.raw())
+        .handle();
+
+    if matches!(state.0, GameState::Edit) {
+        #[cfg(not(debug_assertions))]
+        song_channel.pause();
     }
 }
 
@@ -41,8 +65,8 @@ pub struct AudioPlugin;
 
 impl Plugin for AudioPlugin {
     fn build(&self, game: &mut App) {
-        game.add_plugin(KiraAudio)
-            .init_resource::<SongHandle>()
+        game.add_plugin(KiraPlugin)
+            .init_resource::<SongInfo>()
             .add_audio_channel::<SongChannel>()
             .add_event::<ChartLoadEvent>()
             .add_system(load_chart_song);

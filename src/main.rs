@@ -83,17 +83,17 @@ fn setup(mut commands: Commands) {
             ..default()
         },
     ));
+}
 
+fn debug_setup(mut commands: Commands) {
     commands.add(|world: &mut World| {
         world.send_event(ChartLoadEvent {
             chart_id: "000".into(),
             start_from: r64(0.),
         })
-    })
-}
+    });
 
-fn debug_setup(commands: Commands) {
-    silhouettes::debug::silhouettes_debug_setup(commands)
+    silhouettes::debug::silhouettes_debug_setup(commands);
 }
 
 fn main() {
@@ -101,10 +101,10 @@ fn main() {
 
     game.add_state::<GameState>()
         .add_plugins(DefaultPlugins)
+        .add_plugin(AudioPlugin)
         .add_plugin(EguiPlugin)
         .add_plugin(HarmonizerPlugin)
         .add_plugin(SilhouettePlugin)
-        .add_plugin(AudioPlugin)
         .add_plugin(EditorPlugin)
         .init_resource::<Settings>()
         .add_startup_system(setup);

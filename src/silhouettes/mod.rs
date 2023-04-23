@@ -1,6 +1,7 @@
 use core::iter::once as iter_once;
 
 use crate::{
+    audio::SongInfo,
     automation::{sequence::*, *},
     harmonizer::arranger::{ChannelCoverage, CoverageRange},
     harmonizer::*,
@@ -130,7 +131,7 @@ pub struct Activation {
 
 #[rustfmt::skip]
 fn modulate(
-    song_time: Res<SongTime>,
+    song_info: Res<SongInfo>,
     modulations: Res<Table<Option<Modulation>>>,
     activations: Query<&TemporalOffsets, With<Activation>>,
     mut clouds: Query<(&PointCloud, &mut ModulationCache)>,
@@ -138,7 +139,7 @@ fn modulate(
     let joined = clouds.iter_mut().filter(|(cloud, _)| cloud.children
         .iter()
         .flat_map(|entity| activations.get(*entity).ok())
-        .any(|offsets| offsets.playable_at(**song_time))
+        .any(|offsets| offsets.playable_at(song_info.pos))
     );
 
     joined.for_each(|(PointCloud { points, groups, routes, .. }, mut cache)| {
@@ -272,7 +273,7 @@ impl LuminositySettings {
 
 #[rustfmt::skip]
 fn render(
-    song_time: Res<SongTime>,
+    song_info: Res<SongInfo>,
     luminosity_settings: Res<LuminositySettings>,
     activations: Query<(Entity, &TemporalOffsets, &Activation)>,
     clouds: Query<(&PointCloud, &ModulationCache)>,
@@ -283,7 +284,7 @@ fn render(
 
     activations
         .iter()
-        .filter(|(_, offsets, ..)| offsets.playable_at(**song_time))
+        .filter(|(_, offsets, ..)| offsets.playable_at(song_info.pos))
         .flat_map(|(entity, offsets, activation)| clouds
             .get(activation.parent)
             .map(|parent| (entity, offsets, activation, parent))

@@ -212,8 +212,7 @@ impl Plugin for HarmonizerPlugin {
     fn build(&self, game: &mut App) {
         use HarmonizerSet::*;
 
-        game.init_resource::<SongTime>()
-            .init_resource::<Table<SeekTime>>()
+        game.init_resource::<Table<SeekTime>>()
             .init_resource::<Table<ClampedTime>>()
             .init_resource::<Table<Delegated>>()
             .init_resource::<HitRegister>()

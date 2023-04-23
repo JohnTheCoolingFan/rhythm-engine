@@ -1,4 +1,4 @@
-use crate::{harmonizer::arranger::*, timing::*, utils::*};
+use crate::{audio::SongInfo, harmonizer::arranger::*, timing::*, utils::*};
 use bevy::prelude::*;
 
 use derive_more::From;
@@ -69,7 +69,7 @@ pub struct Delegated(pub bool);
 #[rustfmt::skip]
 pub fn respond_to_hits(
     hits: Res<HitRegister>,
-    song_time: Res<SongTime>,
+    song_info: Res<SongInfo>,
     mut seek_times: ResMut<Table<SeekTime>>,
     mut delegations: ResMut<Table<Delegated>>,
     mut responses: Query<(
@@ -79,12 +79,12 @@ pub fn respond_to_hits(
         &mut ResponseState
     )>,
 ) {
-    seek_times.fill_with(|| SeekTime(**song_time));
+    seek_times.fill_with(|| SeekTime(song_info.pos));
     delegations.fill_with(|| Delegated(false));
 
     responses
         .iter_mut()
-        .filter(|(offsets, ..)| offsets.playable_at(**song_time))
+        .filter(|(offsets, ..)| offsets.playable_at(song_info.pos))
         .for_each(|(offsets, coverage, Response { kind, layer }, mut state)| {
             use ResponseKind::*;
             use ResponseState::*;
@@ -101,8 +101,8 @@ pub fn respond_to_hits(
 
             let adjusted_offset = match (kind, &*state) {
                 (Commence, Active(active)) if !active => offsets.start,
-                (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&**song_time) => hit + ex,
-                _ => **song_time
+                (Follow(ex), &Hit(hit)) if !(hit..hit + ex).contains(&song_info.pos) => hit + ex,
+                _ => song_info.pos
             };
 
             let delegation = match (kind, &mut *state) {
@@ -131,7 +131,7 @@ mod tests {
         let mut game = App::new();
         game.add_system(respond_to_hits);
 
-        game.insert_resource(SongTime(p32(time)))
+        game.insert_resource(SongInfo { pos: p32(time), ..default() })
             .insert_resource(Table::<SeekTime>::default())
             .insert_resource(Table::<ClampedTime>::default())
             .insert_resource(Table::<Delegated>::default());
@@ -191,7 +191,7 @@ mod tests {
         ]);
 
         // First hit
-        game.insert_resource(SongTime(p32(100.)))
+        game.insert_resource(SongInfo { pos: p32(100.), ..default() })
             .insert_resource(Table::<SeekTime>::default())
             .insert_resource(Table::<ClampedTime>::default())
             .insert_resource(Table::<Delegated>::default());
@@ -216,7 +216,7 @@ mod tests {
         );
 
         // State after first hit and before second
-        game.insert_resource(SongTime(p32(200.)))
+        game.insert_resource(SongInfo { pos: p32(200.), ..default() })
             .insert_resource(Table::<SeekTime>::default())
             .insert_resource(Table::<ClampedTime>::default())
             .insert_resource(Table::<Delegated>::default());
@@ -230,7 +230,7 @@ mod tests {
         );
 
         // Second hit
-        game.insert_resource(SongTime(p32(300.)))
+        game.insert_resource(SongInfo { pos: p32(300.), ..default() })
             .insert_resource(Table::<SeekTime>::default())
             .insert_resource(Table::<ClampedTime>::default())
             .insert_resource(Table::<Delegated>::default());

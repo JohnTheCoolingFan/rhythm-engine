@@ -23,9 +23,6 @@ impl ClampedTime {
     }
 }
 
-#[derive(Clone, Copy, Default, Deref, DerefMut, PartialEq, Eq, Debug, Resource)]
-pub struct SongTime(pub P32);
-
 #[derive(Clone, Copy, Default, Deref, DerefMut, PartialEq, Eq, Debug)]
 pub struct SeekTime(pub P32);
 
