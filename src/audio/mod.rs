@@ -13,7 +13,8 @@ struct SongChannel;
 pub struct SongInfo {
     pub pos: P32,
     pub dur: P32,
-    pub handle: Handle<AudioInstance>,
+    pub title: String,
+    pub handle: Handle<KiraInstance>,
 }
 
 #[derive(Default, Debug)]
@@ -48,17 +49,27 @@ fn load_chart_song(
         return;
     };
 
-    song_info.dur = source.sound.duration().as_secs_f32().pipe(p32);
-
-    song_info.handle = song_channel
-        .play(kira_sources.add(source))
-        .start_from(start_from.raw())
-        .handle();
+    *song_info = SongInfo {
+        dur: source.sound.duration().as_secs_f32().pipe(p32),
+        pos: p32(start_from.raw() as f32),
+        title: chart_id.to_string(),
+        handle: song_channel
+            .play(kira_sources.add(source))
+            .start_from(start_from.raw())
+            .handle(),
+    };
 
     if matches!(state.0, GameState::Edit) {
         #[cfg(not(debug_assertions))]
         song_channel.pause();
     }
+}
+
+pub fn upadte_song_pos(mut song_info: ResMut<SongInfo>, instances: Res<Assets<KiraInstance>>) {
+    song_info.pos = instances
+        .get(&song_info.handle)
+        .and_then(|instance| instance.state().position())
+        .map_or(song_info.pos, |pos| p32(pos as f32))
 }
 
 pub struct AudioPlugin;
@@ -69,6 +80,7 @@ impl Plugin for AudioPlugin {
             .init_resource::<SongInfo>()
             .add_audio_channel::<SongChannel>()
             .add_event::<ChartLoadEvent>()
+            .add_system(upadte_song_pos)
             .add_system(load_chart_song);
     }
 }

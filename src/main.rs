@@ -10,6 +10,7 @@ use bevy::{
         clear_color::ClearColorConfig,
     },
     prelude::*,
+    window::PresentMode,
 };
 use noisy_float::prelude::*;
 
@@ -100,7 +101,17 @@ fn main() {
     let mut game = App::new();
 
     game.add_state::<GameState>()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Rhythm Engine".into(),
+                resolution: (1920., 1080.).into(),
+                present_mode: PresentMode::AutoVsync,
+                fit_canvas_to_parent: true,
+                prevent_default_event_handling: false,
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugin(AudioPlugin)
         .add_plugin(EguiPlugin)
         .add_plugin(HarmonizerPlugin)

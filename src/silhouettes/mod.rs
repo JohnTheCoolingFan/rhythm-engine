@@ -86,7 +86,7 @@ pub struct PointCloud {
 }
 
 #[derive(Clone, Copy, Default, Debug)]
-struct InertPoint {
+pub struct InertPoint {
     pos: Vec2,
     color: Option<[f32; 4]>,
     lumin: Option<T32>,
@@ -103,7 +103,7 @@ impl InertPoint {
 }
 
 #[derive(Deref, DerefMut, Component, Default, Debug)]
-struct ModulationCache(Vec<InertPoint>);
+pub struct ModulationCache(Vec<InertPoint>);
 
 enum Silhouette {
     Polygon,
@@ -240,7 +240,7 @@ fn modulate(
 }
 
 #[derive(Resource)]
-struct LuminositySettings {
+pub struct LuminositySettings {
     vividness_curve: Weight,
     vividness_threshold: R32,
     brightness_curve: Weight,
@@ -272,7 +272,7 @@ impl LuminositySettings {
 }
 
 #[rustfmt::skip]
-fn render(
+pub fn render(
     song_info: Res<SongInfo>,
     luminosity_settings: Res<LuminositySettings>,
     activations: Query<(Entity, &TemporalOffsets, &Activation)>,
