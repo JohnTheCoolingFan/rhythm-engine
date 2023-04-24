@@ -301,3 +301,67 @@ impl<'a, const Z: u8> FillVertexConstructor<[f32; 3]> for ColorCtor<'a, Z> {
         vertex.position().to_array().pipe(|[x, y]| [x, y, Z as f32])
     }
 }
+
+/// This entire module is a hack to make windows function as panels.
+/// Tile based UI is difficult to express with ECS functions so this is the next best thing.
+/// - Start with the maximal available realestate
+/// - Split and subtract the area needed by the current widget
+/// - Consume and pipe realestate through systems or allocate to resources used by each system
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Realestate {
+    min_x: P32,
+    min_y: P32,
+    max_x: P32,
+    max_y: P32,
+}
+
+impl Realestate {
+    fn new((min_x, min_y): (P32, P32), (max_x, max_y): (P32, P32)) -> Self {
+        assert!(min_x <= max_x);
+        assert!(min_y <= max_y);
+        Self {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+        }
+    }
+
+    fn vsplit<const N: usize>(self, proportions: [P32; N]) -> [Self; N] {
+        let (denom, available_x, mut scan_x) = (
+            proportions.iter().sum::<P32>(),
+            self.max_x - self.min_x,
+            self.min_x,
+        );
+
+        proportions.map(|p| Self {
+            min_y: self.min_y,
+            max_y: self.max_y,
+            min_x: scan_x,
+            max_x: (scan_x + available_x * (p / denom))
+                .raw()
+                .clamp(self.min_x.raw(), self.max_x.raw())
+                .pipe(p32)
+                .tap(|new_max| scan_x = *new_max),
+        })
+    }
+
+    fn hsplit<const N: usize>(self, proportions: [P32; N]) -> [Self; N] {
+        let (denom, available_y, mut scan_y) = (
+            proportions.iter().sum::<P32>(),
+            self.max_y - self.min_y,
+            self.min_y,
+        );
+
+        proportions.map(|p| Self {
+            min_x: self.min_x,
+            max_x: self.max_x,
+            min_y: scan_y,
+            max_y: (scan_y + available_y * (p / denom))
+                .raw()
+                .clamp(self.min_y.raw(), self.max_y.raw())
+                .pipe(p32)
+                .tap(|new_max| scan_y = *new_max),
+        })
+    }
+}
