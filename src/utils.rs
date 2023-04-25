@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_egui::egui::{Pos2, Rect};
+use bevy_egui::egui;
 use derive_more::{Deref, From};
 use educe::*;
 use itertools::Itertools;
@@ -314,20 +314,20 @@ impl<'a, const Z: u8> FillVertexConstructor<[f32; 3]> for ColorCtor<'a, Z> {
 /// - Consume and pipe realestate through systems or allocate to resources used by each system
 #[derive(Debug, PartialEq, Eq, Resource)]
 pub struct Realestate<T = ()> {
-    pub min_x: P32,
-    pub min_y: P32,
-    pub max_x: P32,
-    pub max_y: P32,
+    pub x0: P32,
+    pub y0: P32,
+    pub x1: P32,
+    pub y1: P32,
     _phantom: PhantomData<T>,
 }
 
 impl<T> Clone for Realestate<T> {
     fn clone(&self) -> Self {
         Realestate {
-            min_x: self.min_x,
-            max_x: self.max_x,
-            min_y: self.min_y,
-            max_y: self.max_y,
+            x0: self.x0,
+            x1: self.x1,
+            y0: self.y0,
+            y1: self.y1,
             _phantom: PhantomData,
         }
     }
@@ -335,71 +335,69 @@ impl<T> Clone for Realestate<T> {
 
 impl<T> Copy for Realestate<T> {}
 
+#[rustfmt::skip]
 impl<T> Default for Realestate<T> {
     fn default() -> Self {
+        Self { x0: p32(0.), x1: p32(0.), y0: p32(0.), y1: p32(0.), _phantom: PhantomData }
+    }
+}
+
+#[rustfmt::skip]
+impl<T> From<Realestate<T>> for egui::Rect {
+    fn from(Realestate { x0, y0, x1, y1, .. }: Realestate<T>) -> Self {
         Self {
-            min_x: p32(0.),
-            max_x: p32(0.),
-            min_y: p32(0.),
-            max_y: p32(0.),
-            _phantom: PhantomData,
+            min: egui::Pos2 { x: x0.raw(), y: y0.raw() },
+            max: egui::Pos2 { x: x1.raw(), y: y1.raw() }
         }
     }
 }
 
 #[rustfmt::skip]
-impl<T> From<Realestate<T>> for Rect {
-    fn from(Realestate { min_x, min_y, max_x, max_y, .. }: Realestate<T>) -> Self {
-        Self {
-            min: Pos2 { x: min_x.raw(), y: min_y.raw() },
-            max: Pos2 { x: max_x.raw(), y: max_y.raw() }
-        }
-    }
-}
-
 impl<T> Realestate<T> {
-    pub fn new((min_x, min_y): (P32, P32), (max_x, max_y): (P32, P32)) -> Self {
-        assert!(min_x <= max_x);
-        assert!(min_y <= max_y);
-        Self {
-            min_x,
-            min_y,
-            max_x,
-            max_y,
-            _phantom: PhantomData,
-        }
+    pub fn new((x0, y0): (P32, P32), (x1, y1): (P32, P32)) -> Self {
+        assert!(x0 <= x1);
+        assert!(y0 <= y1);
+        Self { x0, y0, x1, y1, _phantom: PhantomData }
     }
 
     pub fn into<U>(self) -> Realestate<U> {
         Realestate {
-            min_x: self.min_x,
-            max_x: self.max_x,
-            min_y: self.min_y,
-            max_y: self.max_y,
+            x0: self.x0,
+            x1: self.x1,
+            y0: self.y0,
+            y1: self.y1,
             _phantom: PhantomData,
         }
     }
 
     pub fn height(self) -> P32 {
-        self.max_y - self.min_y
+        self.y1 - self.y0
     }
 
     pub fn width(self) -> P32 {
-        self.max_x - self.min_x
+        self.x1 - self.x0
+    }
+
+    pub fn pos(self) -> egui::Pos2 {
+        egui::pos2(self.x0.raw(), self.y0.raw())
+    }
+
+    pub fn size(self) -> egui::Vec2 {
+        egui::vec2(self.width().raw(), self.height().raw())
     }
 
     pub fn vertical_split<const N: usize>(self, proportions: [P32; N]) -> [Self; N] {
         let (denom, available_x, mut scan_x) = (
             proportions.iter().sum::<P32>(),
-            self.max_x - self.min_x,
-            self.min_x,
+            self.x1 - self.x0,
+            self.x0
         );
 
         proportions.map(|p| Self {
-            min_x: scan_x,
-            max_x: (scan_x + available_x * (p / denom))
+            x0: scan_x,
+            x1: (scan_x + available_x * (p / denom))
                 .raw()
-                .clamp(self.min_x.raw(), self.max_x.raw())
+                .clamp(self.x0.raw(), self.x1.raw())
                 .pipe(p32)
                 .tap(|new_max| scan_x = *new_max),
             ..self
@@ -409,18 +407,24 @@ impl<T> Realestate<T> {
     pub fn horizontal_split<const N: usize>(self, proportions: [P32; N]) -> [Self; N] {
         let (denom, available_y, mut scan_y) = (
             proportions.iter().sum::<P32>(),
-            self.max_y - self.min_y,
-            self.min_y,
+            self.y1 - self.y0,
+            self.y0
         );
 
         proportions.map(|p| Self {
-            min_y: scan_y,
-            max_y: (scan_y + available_y * (p / denom))
+            y0: scan_y,
+            y1: (scan_y + available_y * (p / denom))
                 .raw()
-                .clamp(self.min_y.raw(), self.max_y.raw())
+                .clamp(self.y0.raw(), self.y1.raw())
                 .pipe(p32)
                 .tap(|new_max| scan_y = *new_max),
             ..self
         })
     }
+}
+
+// Bug: [https://github.com/emilk/egui/issues/498]
+pub fn fixed_layout_bug_workaround(ui: &mut egui::Ui) {
+    ui.set_width(ui.available_width());
+    ui.set_height(ui.available_height());
 }

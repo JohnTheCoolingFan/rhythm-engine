@@ -10,7 +10,7 @@ use bevy::{
         clear_color::ClearColorConfig,
     },
     prelude::*,
-    window::PresentMode,
+    window::{PresentMode, WindowResolution},
 };
 use noisy_float::prelude::*;
 
@@ -64,15 +64,6 @@ fn setup(world: &mut World) {
     // TODO: Create dir structure
     let path = FileAssetIo::get_base_path();
 
-    *world.query::<&mut Window>().get_single_mut(world).unwrap() = Window {
-        title: "Rhythm Engine".into(),
-        resolution: (1920., 1080.).into(),
-        present_mode: PresentMode::AutoVsync,
-        prevent_default_event_handling: false,
-        fit_canvas_to_parent: true,
-        ..default()
-    };
-
     world.spawn((
         BloomSettings {
             intensity: 0.3,
@@ -86,6 +77,16 @@ fn setup(world: &mut World) {
             ..default()
         },
     ));
+
+    *world.query::<&mut Window>().get_single_mut(world).unwrap() = Window {
+        title: "Rhythm Engine".into(),
+        resolution: WindowResolution::new(1920., 1080.).with_scale_factor_override(1.),
+        present_mode: PresentMode::AutoVsync,
+        prevent_default_event_handling: false,
+        fit_canvas_to_parent: true,
+        resizable: false,
+        ..default()
+    };
 }
 
 fn debug_setup(world: &mut World) {
@@ -96,6 +97,7 @@ fn debug_setup(world: &mut World) {
     });
 }
 
+#[rustfmt::skip]
 fn main() {
     let mut game = App::new();
 

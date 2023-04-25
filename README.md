@@ -17,6 +17,7 @@ Status: ***WIP***
 - [x] Core tooling refactors
 - [x] Visual programming additions
 - [ ] Editor
+- [ ] Fix resolution and UI scaling
 - [ ] Serialization
 - [ ] Play
 - [ ] Scores

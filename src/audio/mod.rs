@@ -7,7 +7,7 @@ use noisy_float::prelude::R64;
 use tap::{Pipe, Tap};
 
 #[derive(Resource, Default)]
-struct SongChannel;
+pub struct SongChannel;
 
 #[derive(Resource, Default, Debug)]
 pub struct SongInfo {
@@ -56,6 +56,7 @@ fn load_chart_song(
         handle: song_channel
             .play(kira_sources.add(source))
             .start_from(start_from.raw())
+            .looped()
             .handle(),
     };
 
@@ -65,7 +66,7 @@ fn load_chart_song(
     }
 }
 
-pub fn upadte_song_pos(mut song_info: ResMut<SongInfo>, instances: Res<Assets<KiraInstance>>) {
+pub fn update_playback(mut song_info: ResMut<SongInfo>, instances: Res<Assets<KiraInstance>>) {
     song_info.pos = instances
         .get(&song_info.handle)
         .and_then(|instance| instance.state().position())
@@ -80,7 +81,7 @@ impl Plugin for AudioPlugin {
             .init_resource::<SongInfo>()
             .add_audio_channel::<SongChannel>()
             .add_event::<ChartLoadEvent>()
-            .add_system(upadte_song_pos)
+            .add_system(update_playback)
             .add_system(load_chart_song);
     }
 }

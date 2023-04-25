@@ -5,7 +5,7 @@ use arranger::*;
 use repeater::*;
 
 use crate::{
-    audio::upadte_song_pos,
+    audio::update_playback,
     automation::{sequence::*, spline::*, *},
     hit::*,
     map_selected,
@@ -225,7 +225,7 @@ impl Plugin for HarmonizerPlugin {
             .init_resource::<Table<Option<Modulation>>>()
             .configure_sets((PreArrange, Arrange, PostArrange)
                 .chain()
-                .after(upadte_song_pos)
+                .after(update_playback)
             )
             .add_systems((respond_to_hits, produce_repetitions)
                 .chain()
