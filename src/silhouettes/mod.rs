@@ -392,10 +392,10 @@ pub mod debug {
     use crate::harmonizer::arranger::Sources;
 
     #[rustfmt::skip]
-    pub fn silhouettes_debug_setup(mut commands: Commands) {
-        let [cloud, activation] = [(); 2].map(|_| commands.spawn_empty().id());
+    pub fn silhouettes_debug_setup(world: &mut World) {
+        let [cloud, activation] = [(); 2].map(|_| world.spawn_empty().id());
 
-        commands.get_entity(cloud).unwrap().insert((
+        world.get_entity_mut(cloud).unwrap().insert((
             ModulationCache::default(),
             PointCloud {
                 children: vec![activation],
@@ -418,7 +418,7 @@ pub mod debug {
             }
         ));
 
-        commands.get_entity(activation).unwrap().insert((
+        world.get_entity_mut(activation).unwrap().insert((
             TemporalOffsets { start: p32(0.), duration: p32(1000.) },
             Activation {
                 z: r32(0.),
@@ -431,70 +431,70 @@ pub mod debug {
             }
         ));
 
-        let [red_source, red_instance] = [(); 2].map(|_| commands.spawn_empty().id());
+        let [red_source, red_instance] = [(); 2].map(|_| world.spawn_empty().id());
 
-        commands.get_entity(red_source).unwrap().insert((
+        world.get_entity_mut(red_source).unwrap().insert((
             vec![Anchor { x: p32(0.), val: RGBA([1., 0., 0., 1.].map(t32)), ..default() }]
                 .pipe(Automation)
                 .pipe(Sequence),
         ));
 
-        commands.get_entity(red_instance).unwrap().insert((
+        world.get_entity_mut(red_instance).unwrap().insert((
             TemporalOffsets { start: p32(0.), duration: p32(1000.) },
             ChannelCoverage(vec![CoverageRange::new(0, 0)].into()),
             PrimarySequence(Sources::<Sequence::<RGBA>> {
-                main: GenID::new(red_source),
+                main: GenID::from(red_source),
                 delegation: None,
             })
         ));
 
-        let [green_source, green_instance] = [(); 2].map(|_| commands.spawn_empty().id());
+        let [green_source, green_instance] = [(); 2].map(|_| world.spawn_empty().id());
 
-        commands.get_entity(green_source).unwrap().insert((
+        world.get_entity_mut(green_source).unwrap().insert((
             vec![Anchor { x: p32(0.), val: RGBA([0., 1., 0., 1.].map(t32)), ..default() }]
                 .pipe(Automation)
                 .pipe(Sequence),
         ));
 
-        commands.get_entity(green_instance).unwrap().insert((
+        world.get_entity_mut(green_instance).unwrap().insert((
             TemporalOffsets { start: p32(0.), duration: p32(1000.) },
             ChannelCoverage(vec![CoverageRange::new(1, 1)].into()),
             PrimarySequence(Sources::<Sequence::<RGBA>> {
-                main: GenID::new(green_source),
+                main: GenID::from(green_source),
                 delegation: None,
             })
         ));
 
-        let [blue_source, blue_instance] = [(); 2].map(|_| commands.spawn_empty().id());
+        let [blue_source, blue_instance] = [(); 2].map(|_| world.spawn_empty().id());
 
-        commands.get_entity(blue_source).unwrap().insert((
+        world.get_entity_mut(blue_source).unwrap().insert((
             vec![Anchor { x: p32(0.), val: RGBA([0., 0., 1., 1.].map(t32)), ..default() }]
                 .pipe(Automation)
                 .pipe(Sequence),
         ));
 
-        commands.get_entity(blue_instance).unwrap().insert((
+        world.get_entity_mut(blue_instance).unwrap().insert((
             TemporalOffsets { start: p32(0.), duration: p32(1000.) },
             ChannelCoverage(vec![CoverageRange::new(2, 2)].into()),
             PrimarySequence(Sources::<Sequence::<RGBA>> {
-                main: GenID::new(blue_source),
+                main: GenID::from(blue_source),
                 delegation: None,
             })
         ));
 
-        let [lumin_source, lumin_instance] = [(); 2].map(|_| commands.spawn_empty().id());
+        let [lumin_source, lumin_instance] = [(); 2].map(|_| world.spawn_empty().id());
 
-        commands.get_entity(lumin_source).unwrap().insert((
+        world.get_entity_mut(lumin_source).unwrap().insert((
             vec![Anchor { x: p32(0.), val: Luminosity::new(t32(1.0)), ..default() }]
                 .pipe(Automation)
                 .pipe(Sequence),
         ));
 
-        commands.get_entity(lumin_instance).unwrap().insert((
+        world.get_entity_mut(lumin_instance).unwrap().insert((
             TemporalOffsets { start: p32(0.), duration: p32(1000.) },
             ChannelCoverage(vec![CoverageRange::new(3, 3)].into()),
             PrimarySequence(Sources::<Sequence::<Luminosity>> {
-                main: GenID::new(lumin_source),
+                main: GenID::from(lumin_source),
                 delegation: None,
             })
         ));

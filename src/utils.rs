@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_egui::egui::{Pos2, Rect};
 use derive_more::{Deref, From};
 use educe::*;
 use itertools::Itertools;
@@ -188,17 +189,21 @@ pub struct GenID<T> {
     _phantom: PhantomData<T>,
 }
 
-#[rustfmt::skip]
-impl<T> GenID<T> {
-    pub fn new(id: Entity) -> Self {
-        Self { id, _phantom: PhantomData }
+impl<T> From<Entity> for GenID<T> {
+    fn from(value: Entity) -> Self {
+        Self {
+            id: value,
+            _phantom: PhantomData,
+        }
     }
 }
 
-#[rustfmt::skip]
 impl<T> Clone for GenID<T> {
     fn clone(&self) -> Self {
-        Self { id: self.id, _phantom: PhantomData }
+        Self {
+            id: self.id,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -302,21 +307,58 @@ impl<'a, const Z: u8> FillVertexConstructor<[f32; 3]> for ColorCtor<'a, Z> {
     }
 }
 
-/// This entire module is a hack to make windows function as panels.
-/// Tile based UI is difficult to express with ECS functions so this is the next best thing.
+/// This is a hack to make windows function as panels.
+/// Tile based UI is difficult to express with ECS functions so this solves that.
 /// - Start with the maximal available realestate
 /// - Split and subtract the area needed by the current widget
 /// - Consume and pipe realestate through systems or allocate to resources used by each system
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Realestate {
-    min_x: P32,
-    min_y: P32,
-    max_x: P32,
-    max_y: P32,
+#[derive(Debug, PartialEq, Eq, Resource)]
+pub struct Realestate<T = ()> {
+    pub min_x: P32,
+    pub min_y: P32,
+    pub max_x: P32,
+    pub max_y: P32,
+    _phantom: PhantomData<T>,
 }
 
-impl Realestate {
-    fn new((min_x, min_y): (P32, P32), (max_x, max_y): (P32, P32)) -> Self {
+impl<T> Clone for Realestate<T> {
+    fn clone(&self) -> Self {
+        Realestate {
+            min_x: self.min_x,
+            max_x: self.max_x,
+            min_y: self.min_y,
+            max_y: self.max_y,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> Copy for Realestate<T> {}
+
+impl<T> Default for Realestate<T> {
+    fn default() -> Self {
+        Self {
+            min_x: p32(0.),
+            max_x: p32(0.),
+            min_y: p32(0.),
+            max_y: p32(0.),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+#[rustfmt::skip]
+impl<T> From<Realestate<T>> for Rect {
+    fn from(Realestate { min_x, min_y, max_x, max_y, .. }: Realestate<T>) -> Self {
+        Self {
+            min: Pos2 { x: min_x.raw(), y: min_y.raw() },
+            max: Pos2 { x: max_x.raw(), y: max_y.raw() }
+        }
+    }
+}
+
+impl<T> Realestate<T> {
+    pub fn new((min_x, min_y): (P32, P32), (max_x, max_y): (P32, P32)) -> Self {
         assert!(min_x <= max_x);
         assert!(min_y <= max_y);
         Self {
@@ -324,10 +366,29 @@ impl Realestate {
             min_y,
             max_x,
             max_y,
+            _phantom: PhantomData,
         }
     }
 
-    fn vsplit<const N: usize>(self, proportions: [P32; N]) -> [Self; N] {
+    pub fn into<U>(self) -> Realestate<U> {
+        Realestate {
+            min_x: self.min_x,
+            max_x: self.max_x,
+            min_y: self.min_y,
+            max_y: self.max_y,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn height(self) -> P32 {
+        self.max_y - self.min_y
+    }
+
+    pub fn width(self) -> P32 {
+        self.max_x - self.min_x
+    }
+
+    pub fn vertical_split<const N: usize>(self, proportions: [P32; N]) -> [Self; N] {
         let (denom, available_x, mut scan_x) = (
             proportions.iter().sum::<P32>(),
             self.max_x - self.min_x,
@@ -335,18 +396,17 @@ impl Realestate {
         );
 
         proportions.map(|p| Self {
-            min_y: self.min_y,
-            max_y: self.max_y,
             min_x: scan_x,
             max_x: (scan_x + available_x * (p / denom))
                 .raw()
                 .clamp(self.min_x.raw(), self.max_x.raw())
                 .pipe(p32)
                 .tap(|new_max| scan_x = *new_max),
+            ..self
         })
     }
 
-    fn hsplit<const N: usize>(self, proportions: [P32; N]) -> [Self; N] {
+    pub fn horizontal_split<const N: usize>(self, proportions: [P32; N]) -> [Self; N] {
         let (denom, available_y, mut scan_y) = (
             proportions.iter().sum::<P32>(),
             self.max_y - self.min_y,
@@ -354,14 +414,13 @@ impl Realestate {
         );
 
         proportions.map(|p| Self {
-            min_x: self.min_x,
-            max_x: self.max_x,
             min_y: scan_y,
             max_y: (scan_y + available_y * (p / denom))
                 .raw()
                 .clamp(self.min_y.raw(), self.max_y.raw())
                 .pipe(p32)
                 .tap(|new_max| scan_y = *new_max),
+            ..self
         })
     }
 }

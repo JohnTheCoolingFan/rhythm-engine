@@ -59,59 +59,48 @@ fn map_selected(game_state: Res<State<GameState>>) -> bool {
     matches!(game_state.0, GameState::Edit | GameState::Play)
 }
 
-fn setup(mut commands: Commands) {
+#[rustfmt::skip]
+fn setup(world: &mut World) {
     // TODO: Create dir structure
     let path = FileAssetIo::get_base_path();
 
-    commands.spawn((
+    *world.query::<&mut Window>().get_single_mut(world).unwrap() = Window {
+        title: "Rhythm Engine".into(),
+        resolution: (1920., 1080.).into(),
+        present_mode: PresentMode::AutoVsync,
+        prevent_default_event_handling: false,
+        fit_canvas_to_parent: true,
+        ..default()
+    };
+
+    world.spawn((
         BloomSettings {
             intensity: 0.3,
             composite_mode: BloomCompositeMode::Additive,
-            prefilter_settings: BloomPrefilterSettings {
-                threshold: 1.,
-                threshold_softness: 0.1,
-            },
+            prefilter_settings: BloomPrefilterSettings { threshold: 1., threshold_softness: 0.1 },
             ..default()
         },
         Camera2dBundle {
-            camera: Camera {
-                hdr: true,
-                ..default()
-            },
-            camera_2d: Camera2d {
-                clear_color: ClearColorConfig::Custom(Color::rgb(0.0, 0.0, 0.0)),
-            },
+            camera: Camera { hdr: true, ..default() },
+            camera_2d: Camera2d { clear_color: ClearColorConfig::Custom(Color::rgb(0., 0., 0.)) },
             ..default()
         },
     ));
 }
 
-fn debug_setup(mut commands: Commands) {
-    commands.add(|world: &mut World| {
-        world.send_event(ChartLoadEvent {
-            chart_id: "000".into(),
-            start_from: r64(0.),
-        })
+fn debug_setup(world: &mut World) {
+    silhouettes::debug::silhouettes_debug_setup(world);
+    world.send_event(ChartLoadEvent {
+        chart_id: "000".into(),
+        start_from: r64(0.),
     });
-
-    silhouettes::debug::silhouettes_debug_setup(commands);
 }
 
 fn main() {
     let mut game = App::new();
 
     game.add_state::<GameState>()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Rhythm Engine".into(),
-                resolution: (1920., 1080.).into(),
-                present_mode: PresentMode::AutoVsync,
-                fit_canvas_to_parent: true,
-                prevent_default_event_handling: false,
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(DefaultPlugins)
         .add_plugin(AudioPlugin)
         .add_plugin(EguiPlugin)
         .add_plugin(HarmonizerPlugin)
